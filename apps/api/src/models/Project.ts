@@ -4,8 +4,9 @@ export interface IProject extends Document {
     organizationId: mongoose.Types.ObjectId;
     clientId?: mongoose.Types.ObjectId;
     name: string;
-    description?: string;
-    status: 'active' | 'completed' | 'archived' | 'on_hold';
+    description?: any;
+    status: 'active' | 'completed' | 'archived' | 'on_hold' | 'draft';
+    visibility: 'public' | 'private';
     startDate?: Date;
     endDate?: Date;
 }
@@ -14,8 +15,9 @@ const ProjectSchema: Schema = new Schema({
     organizationId: { type: Schema.Types.ObjectId, ref: 'Organization', required: true, index: true },
     clientId: { type: Schema.Types.ObjectId, ref: 'Client' },
     name: { type: String, required: true },
-    description: { type: String },
-    status: { type: String, enum: ['active', 'completed', 'archived', 'on_hold'], default: 'active' },
+    description: { type: Schema.Types.Mixed },
+    status: { type: String, enum: ['active', 'completed', 'archived', 'on_hold', 'draft'], default: 'active' },
+    visibility: { type: String, enum: ['public', 'private'], default: 'private' },
     startDate: { type: Date },
     endDate: { type: Date },
 }, { timestamps: true });

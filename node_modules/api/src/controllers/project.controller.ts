@@ -22,8 +22,15 @@ export const getProjects = async (req: AuthRequest, res: Response) => {
 export const createProject = async (req: AuthRequest, res: Response) => {
     try {
         const validated = ProjectSchema.parse(req.body);
+
+        let clientId = validated.clientId;
+        if (req.user!.role === 'client') {
+            clientId = req.user!.clientId?.toString();
+        }
+
         const project = await Project.create({
             ...validated,
+            clientId,
             organizationId: req.user!.organizationId,
         });
         res.status(201).json(project);
