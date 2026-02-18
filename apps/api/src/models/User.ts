@@ -18,6 +18,7 @@ const UserSchema: Schema = new Schema({
     clientId: { type: Schema.Types.ObjectId, ref: 'Client' },
     firstName: { type: String, required: true },
     lastName: { type: String, required: true },
+    isActive: { type: Boolean, default: true },
 }, { timestamps: true });
 
 // Compound index for email to be unique is already handled by Schema definition

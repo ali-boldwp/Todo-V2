@@ -68,9 +68,78 @@ export const createClient = async (req: AuthRequest, res: Response) => {
             await client.save();
         }
 
+
         res.status(201).json(client);
     } catch (error: any) {
         if (error.issues) return res.status(400).json({ errors: error.issues });
         res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
+
+export const toggleClientStatus = async (req: AuthRequest, res: Response) => {
+    try {
+        const { status } = req.body;
+        const client = await Client.findOne({
+            _id: req.params.id,
+            organizationId: req.user!.organizationId
+        });
+
+        if (!client) return res.status(404).json({ message: 'Client not found' });
+
+        client.status = status;
+        await client.save();
+
+        if (client.userId) {
+            await User.findByIdAndUpdate(client.userId, {
+                isActive: status === 'active'
+            });
+        }
+
+        res.json(client);
+    } catch (error) {
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+export const resetClientPassword = async (req: AuthRequest, res: Response) => {
+    try {
+        const client = await Client.findOne({
+            _id: req.params.id,
+            organizationId: req.user!.organizationId
+        });
+
+        if (!client) return res.status(404).json({ message: 'Client not found' });
+        if (!client.userId) return res.status(400).json({ message: 'Client has no associated user account' });
+
+        const newPassword = Math.random().toString(36).slice(-8).concat('Aa1!'); // Generate stronger password
+        const salt = await bcrypt.genSalt(10);
+        const passwordHash = await bcrypt.hash(newPassword, salt);
+
+        await User.findByIdAndUpdate(client.userId, { passwordHash });
+
+        res.json({ message: 'Password reset successfully', password: newPassword });
+    } catch (error) {
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+export const deleteClient = async (req: AuthRequest, res: Response) => {
+    try {
+        const client = await Client.findOne({
+            _id: req.params.id,
+            organizationId: req.user!.organizationId
+        });
+
+        if (!client) return res.status(404).json({ message: 'Client not found' });
+
+        if (client.userId) {
+            await User.findByIdAndDelete(client.userId);
+        }
+
+        await Client.findByIdAndDelete(client._id);
+
+        res.json({ message: 'Client deleted successfully' });
+    } catch (error) {
+        res.status(500).json({ message: 'Server error' });
     }
 };

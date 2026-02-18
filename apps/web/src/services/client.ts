@@ -11,7 +11,23 @@ export const createClient = async (data: ClientInput) => {
     return response.data;
 };
 
+
 export const getClient = async (id: string) => {
     const response = await api.get(`/clients/${id}`);
+    return response.data;
+};
+
+export const toggleClientStatus = async (id: string, status: 'active' | 'suspended') => {
+    const response = await api.patch(`/clients/${id}/status`, { status });
+    return response.data;
+};
+
+export const resetClientPassword = async (id: string) => {
+    const response = await api.post(`/clients/${id}/reset-password`);
+    return response.data;
+};
+
+export const deleteClient = async (id: string) => {
+    const response = await api.delete(`/clients/${id}`);
     return response.data;
 };

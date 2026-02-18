@@ -15,6 +15,7 @@ const ClientSchema: Schema = new Schema({
     userId: { type: Schema.Types.ObjectId, ref: 'User' },
     name: { type: String, required: true },
     type: { type: String, enum: ['internal', 'external'], default: 'external' },
+    status: { type: String, enum: ['active', 'suspended'], default: 'active' },
     email: { type: String },
     phone: { type: String },
     address: { type: String },
