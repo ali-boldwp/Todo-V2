@@ -8,6 +8,7 @@ export interface IUser extends Document {
     clientId?: mongoose.Types.ObjectId;
     firstName: string;
     lastName: string;
+    isActive: boolean;
 }
 
 const UserSchema: Schema = new Schema({

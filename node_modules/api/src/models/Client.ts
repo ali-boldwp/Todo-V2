@@ -5,6 +5,7 @@ export interface IClient extends Document {
     userId?: mongoose.Types.ObjectId;
     name: string;
     type: 'internal' | 'external';
+    status: 'active' | 'suspended';
     email?: string;
     phone?: string;
     address?: string;
