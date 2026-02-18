@@ -6,7 +6,7 @@
         "dev": "nodemon --exec ts-node src/index.ts",
         "build": "tsc",
         "start": "node dist/index.js",
-        "seed:admin": "ts-node scripts/ensureAdmin.ts"
+        "seed:admin": "ts-node --project tsconfig.scripts.json scripts/ensureAdmin.ts"
     },
     "dependencies": {
         "express": "^4.18.2",
