@@ -1,0 +1,12 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const time_controller_1 = require("../controllers/time.controller");
+const auth_1 = require("../middleware/auth");
+const router = (0, express_1.Router)();
+router.use(auth_1.authenticate);
+router.get('/', time_controller_1.getTimeEntries);
+router.post('/', time_controller_1.createTimeEntry);
+router.post('/start', time_controller_1.startTimer);
+router.post('/stop', time_controller_1.stopTimer);
+exports.default = router;

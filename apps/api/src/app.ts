@@ -1,0 +1,53 @@
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import pino from 'pino';
+
+export const logger = pino({
+    transport: {
+        target: 'pino-pretty',
+    },
+});
+
+const app = express();
+
+import authRoutes from './routes/auth.routes';
+import coreRoutes from './routes/core.routes';
+import taskRoutes from './routes/task.routes';
+import commentRoutes from './routes/comment.routes';
+import planningRoutes from './routes/planning.routes';
+import timeRoutes from './routes/time.routes';
+import attendanceRoutes from './routes/attendance.routes';
+import payrollRoutes from './routes/payroll.routes';
+import githubRoutes from './routes/github.routes';
+
+app.use(helmet());
+app.use(cors());
+app.use(express.json());
+
+app.use('/api/auth', authRoutes);
+app.use('/api', coreRoutes);
+app.use('/api/tasks', taskRoutes);
+app.use('/api/comments', commentRoutes);
+app.use('/api/planning', planningRoutes);
+app.use('/api/time', timeRoutes);
+app.use('/api/attendance', attendanceRoutes);
+app.use('/api/payroll', payrollRoutes);
+app.use('/api/github', githubRoutes);
+
+app.get('/health', (_req, res) => {
+    res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Serve static files in production
+if (process.env.NODE_ENV === 'production') {
+    const path = require('path');
+    const buildPath = path.join(__dirname, '../../web/dist');
+    app.use(express.static(buildPath));
+
+    app.get('*', (_req, res) => {
+        res.sendFile(path.join(buildPath, 'index.html'));
+    });
+}
+
+export default app;

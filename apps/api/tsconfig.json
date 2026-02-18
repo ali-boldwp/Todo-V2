@@ -1,0 +1,19 @@
+{
+    "extends": "../../tsconfig.json",
+    "compilerOptions": {
+        "outDir": "./dist",
+        "rootDir": "./src",
+        "noEmit": false,
+        "module": "commonjs",
+        "moduleResolution": "node",
+        "allowImportingTsExtensions": false,
+        "esModuleInterop": true,
+        "types": [
+            "node",
+            "express"
+        ]
+    },
+    "include": [
+        "src/**/*"
+    ]
+}
