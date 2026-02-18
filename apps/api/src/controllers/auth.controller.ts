@@ -37,7 +37,7 @@ export const register = async (req: Request, res: Response) => {
 
         // Generate Token
         const token = jwt.sign(
-            { userId: user._id, organizationId: org._id, role: user.role },
+            { userId: user._id, organizationId: org._id, role: user.role, clientId: user.clientId },
             process.env.JWT_SECRET || 'secret',
             { expiresIn: '1d' }
         );
@@ -66,7 +66,7 @@ export const login = async (req: Request, res: Response) => {
         }
 
         const token = jwt.sign(
-            { userId: user._id, organizationId: user.organizationId, role: user.role },
+            { userId: user._id, organizationId: user.organizationId, role: user.role, clientId: user.clientId },
             process.env.JWT_SECRET || 'secret',
             { expiresIn: '1d' }
         );

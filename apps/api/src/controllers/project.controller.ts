@@ -5,7 +5,14 @@ import { ProjectSchema } from '@devmanager/shared/dist/project.schema';
 
 export const getProjects = async (req: AuthRequest, res: Response) => {
     try {
-        const projects = await Project.find({ organizationId: req.user!.organizationId }).populate('clientId', 'name');
+        const query: any = { organizationId: req.user!.organizationId };
+
+        // If user is a client, only show their projects
+        if (req.user!.role === 'client' && req.user!.clientId) {
+            query.clientId = req.user!.clientId;
+        }
+
+        const projects = await Project.find(query).populate('clientId', 'name');
         res.json(projects);
     } catch (error) {
         res.status(500).json({ message: 'Server error' });

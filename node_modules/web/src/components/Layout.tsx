@@ -21,8 +21,8 @@ const SidebarItem = ({ to, icon: Icon, label }: { to: string; icon: any; label: 
         <Link
             to={to}
             className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${isActive
-                    ? 'bg-indigo-50 text-indigo-600'
-                    : 'text-gray-600 hover:bg-gray-50'
+                ? 'bg-indigo-50 text-indigo-600'
+                : 'text-gray-600 hover:bg-gray-50'
                 }`}
         >
             <Icon size={20} />
@@ -57,11 +57,16 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                     <SidebarItem to="/" icon={LayoutDashboard} label="Dashboard" />
                     <SidebarItem to="/projects" icon={FolderKanban} label="Projects" />
                     <SidebarItem to="/tasks" icon={CheckSquare} label="My Work" />
-                    <SidebarItem to="/clients" icon={Users} label="Clients" />
-                    <SidebarItem to="/time" icon={Clock} label="Time Tracking" />
-                    <SidebarItem to="/attendance" icon={CalendarDays} label="Attendance" />
-                    <SidebarItem to="/payroll" icon={Banknote} label="Payroll" />
-                    <SidebarItem to="/github" icon={Github} label="GitHub" />
+
+                    {user?.role !== 'client' && (
+                        <>
+                            <SidebarItem to="/clients" icon={Users} label="Clients" />
+                            <SidebarItem to="/time" icon={Clock} label="Time Tracking" />
+                            <SidebarItem to="/attendance" icon={CalendarDays} label="Attendance" />
+                            <SidebarItem to="/payroll" icon={Banknote} label="Payroll" />
+                            <SidebarItem to="/github" icon={Github} label="GitHub" />
+                        </>
+                    )}
                 </nav>
 
                 <div className="p-4 border-t border-gray-100">

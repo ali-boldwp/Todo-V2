@@ -8,6 +8,7 @@ import Time from './pages/Time';
 import Attendance from './pages/Attendance';
 import Payroll from './pages/Payroll';
 import GithubIntegration from './pages/GithubIntegration';
+import Clients from './pages/Clients';
 import Layout from './components/Layout';
 
 const Dashboard = () => {
@@ -54,6 +55,14 @@ const AppRoutes = () => {
                 element={
                     <ProtectedRoute>
                         <ProjectDetails />
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/clients"
+                element={
+                    <ProtectedRoute>
+                        <Clients />
                     </ProtectedRoute>
                 }
             />

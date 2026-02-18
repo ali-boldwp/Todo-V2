@@ -2,6 +2,7 @@ import mongoose, { Document, Schema } from 'mongoose';
 
 export interface IClient extends Document {
     organizationId: mongoose.Types.ObjectId;
+    userId?: mongoose.Types.ObjectId;
     name: string;
     type: 'internal' | 'external';
     email?: string;
@@ -11,6 +12,7 @@ export interface IClient extends Document {
 
 const ClientSchema: Schema = new Schema({
     organizationId: { type: Schema.Types.ObjectId, ref: 'Organization', required: true, index: true },
+    userId: { type: Schema.Types.ObjectId, ref: 'User' },
     name: { type: String, required: true },
     type: { type: String, enum: ['internal', 'external'], default: 'external' },
     email: { type: String },
