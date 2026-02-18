@@ -17,5 +17,19 @@ services:
     ports:
       - "6379:6379"
 
+  app:
+    build: .
+    container_name: devmanager_app
+    ports:
+      - "3030:3030"
+    environment:
+      - PORT=3030
+      - MONGO_URI=mongodb://admin:password123@mongo:27017/devmanager?authSource=admin
+      - REDIS_URL=redis://redis:6379
+      - JWT_SECRET=supersecretkey
+    depends_on:
+      - mongo
+      - redis
+
 volumes:
   mongo_data:

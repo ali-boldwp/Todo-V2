@@ -17,8 +17,8 @@ RUN npm ci
 COPY . .
 
 # Build all workspaces
-# VITE_API_URL set to /api for production since API serves the frontend
-ENV VITE_API_URL=/api
+# VITE_API_URL set to beta domain for production
+ENV VITE_API_URL=https://beta.devregion.com/api
 RUN npm run build
 
 # Production runtime stage
