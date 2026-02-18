@@ -18,9 +18,7 @@ const UserSchema: Schema = new Schema({
     lastName: { type: String, required: true },
 }, { timestamps: true });
 
-// Compound index for email to be unique probably globally or per org? 
-// Usually email is unique globally in SaaS, or unique per org. 
-// Let's assume global unique for login simplicity for now.
-UserSchema.index({ email: 1 }, { unique: true });
+// Compound index for email to be unique is already handled by Schema definition
+// UserSchema.index({ email: 1 }, { unique: true });
 
 export default mongoose.model<IUser>('User', UserSchema);
