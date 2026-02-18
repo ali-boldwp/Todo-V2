@@ -43,6 +43,7 @@ COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/apps/api/dist ./apps/api/dist
 COPY --from=builder /app/apps/api/package.json ./apps/api/package.json
 COPY --from=builder /app/apps/api/scripts ./apps/api/scripts
+COPY --from=builder /app/apps/api/src ./apps/api/src
 
 # Web static files (to be served by API)
 COPY --from=builder /app/apps/web/dist ./apps/web/dist
