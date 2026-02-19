@@ -19,7 +19,7 @@ const renderDescription = (desc: any) => {
 };
 
 const Projects: React.FC = () => {
-    const { user } = useAuth();
+    // const { user } = useAuth(); // user is not used anymore
     const { data: projects, isLoading } = useQuery({ queryKey: ['projects'], queryFn: getProjects });
     const queryClient = useQueryClient();
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -43,14 +43,7 @@ const Projects: React.FC = () => {
         },
     });
 
-    const onSubmit = (data: ProjectInput) => {
-        mutation.mutate({
-            ...data,
-            description: editorData,
-            visibility,
-            status: status === 'draft' ? 'draft' : 'active'
-        });
-    };
+
 
     const handleSaveAsDraft = (data: ProjectInput) => {
         // We need to set status here for the closure, but also directly call onSubmit 
