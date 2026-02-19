@@ -21,6 +21,11 @@ export const createProject = async (data: ProjectInput) => {
     return response.data;
 };
 
+export const updateProject = async (id: string, data: Partial<ProjectInput>) => {
+    const response = await api.put(`/projects/${id}`, data);
+    return response.data;
+};
+
 export const getProject = async (id: string) => {
     const response = await api.get(`/projects/${id}`);
     return response.data;

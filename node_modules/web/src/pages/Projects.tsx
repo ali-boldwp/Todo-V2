@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getProjects, createProject } from '../services/core';
+import { getProjects, createProject, updateProject } from '../services/core';
 import { ProjectInput } from '@devmanager/shared/dist/index';
 import { Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
@@ -8,6 +8,8 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { ProjectSchema } from '@devmanager/shared/dist/index';
 
 import RichTextEditor from '../components/RichTextEditor';
+import Drawer from '../components/Drawer';
+import Switch from '../components/Switch';
 
 // Helper to check if description is JSON (EditorJS output)
 const renderDescription = (desc: any) => {
@@ -21,43 +23,73 @@ const renderDescription = (desc: any) => {
 const Projects: React.FC = () => {
     const { data: projects, isLoading } = useQuery({ queryKey: ['projects'], queryFn: getProjects });
     const queryClient = useQueryClient();
-    const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isDrawerOpen, setIsDrawerOpen] = useState(false);
     const [editorData, setEditorData] = useState<any>(null);
     const [visibility, setVisibility] = useState<'public' | 'private'>('private');
+    const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
 
     const { register, handleSubmit, reset, formState: { errors } } = useForm<ProjectInput>({
         resolver: zodResolver(ProjectSchema),
+        defaultValues: {
+            status: 'draft',
+            priority: 'medium',
+            visibility: 'private'
+        }
     });
 
-    const mutation = useMutation({
+    const createMutation = useMutation({
         mutationFn: createProject,
-        onSuccess: () => {
+        onSuccess: (data: any) => {
             queryClient.invalidateQueries({ queryKey: ['projects'] });
-            setIsModalOpen(false);
-            reset();
-            setEditorData(null);
-            setVisibility('private');
+            setCurrentProjectId(data._id);
         },
     });
 
+    const updateMutation = useMutation({
+        mutationFn: ({ id, data }: { id: string, data: Partial<ProjectInput> }) => updateProject(id, data),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['projects'] });
+        },
+    });
 
-
-    const handleSaveAsDraft = (data: ProjectInput) => {
-        mutation.mutate({
-            ...data,
-            description: editorData,
-            visibility,
-            status: 'draft'
-        });
+    // Auto-create on name blur
+    const handleNameBlur = async (e: React.FocusEvent<HTMLInputElement>) => {
+        const name = e.target.value;
+        if (name && !currentProjectId) {
+            createMutation.mutate({
+                name,
+                status: 'draft',
+                visibility: 'private',
+                priority: 'medium'
+            });
+        }
     };
 
-    const handlePublish = (data: ProjectInput) => {
-        mutation.mutate({
-            ...data,
-            description: editorData,
-            visibility,
-            status: 'active'
-        });
+    const handleSave = (data: ProjectInput) => {
+        if (currentProjectId) {
+            updateMutation.mutate({
+                id: currentProjectId,
+                data: {
+                    ...data,
+                    description: editorData,
+                    visibility,
+                }
+            });
+            setIsDrawerOpen(false);
+            resetForm();
+        }
+    };
+
+    const resetForm = () => {
+        reset();
+        setEditorData(null);
+        setVisibility('private');
+        setCurrentProjectId(null);
+    };
+
+    const handleDrawerClose = () => {
+        setIsDrawerOpen(false);
+        resetForm();
     };
 
     if (isLoading) return <div>Loading...</div>;
@@ -67,7 +99,7 @@ const Projects: React.FC = () => {
             <div className="flex justify-between items-center mb-6">
                 <h1 className="text-2xl font-bold">Projects</h1>
                 <button
-                    onClick={() => setIsModalOpen(true)}
+                    onClick={() => setIsDrawerOpen(true)}
                     className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700"
                 >
                     New Project
@@ -78,7 +110,12 @@ const Projects: React.FC = () => {
                 {projects?.map((project: any) => (
                     <Link to={`/projects/${project._id}`} key={project._id} className="block">
                         <div className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow">
-                            <h3 className="text-xl font-semibold mb-2">{project.name}</h3>
+                            <div className="flex justify-between items-start mb-2">
+                                <h3 className="text-xl font-semibold">{project.name}</h3>
+                                <span className={`px-2 py-0.5 rounded text-xs ${project.priority === 'high' ? 'bg-red-100 text-red-800' : project.priority === 'low' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}`}>
+                                    {project.priority || 'medium'}
+                                </span>
+                            </div>
                             <p className="text-gray-600 mb-4">{renderDescription(project.description)}</p>
                             <div className="flex gap-2">
                                 <span className={`px-2 py-1 rounded text-sm ${project.status === 'active' ? 'bg-green-100 text-green-800' : project.status === 'draft' ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-800'}`}>
@@ -95,80 +132,94 @@ const Projects: React.FC = () => {
                 ))}
             </div>
 
-            {isModalOpen && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-lg p-6 w-full max-w-md">
-                        <h2 className="text-xl font-bold mb-4">Create Project</h2>
-                        <form className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700">Name</label>
-                                <input {...register('name')} className="mt-1 block w-full border rounded p-2" />
-                                {errors.name && <p className="text-red-500 text-xs">{errors.name.message}</p>}
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
-                                <div className="border border-gray-300 rounded-lg p-2 min-h-[200px]">
-                                    <RichTextEditor
-                                        onChange={(data) => setEditorData(data)}
-                                        data={editorData}
-                                    />
-                                </div>
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-2">Visibility</label>
-                                <div className="flex gap-4">
-                                    <label className="flex items-center">
-                                        <input
-                                            type="radio"
-                                            value="private"
-                                            checked={visibility === 'private'}
-                                            onChange={() => setVisibility('private')}
-                                            className="mr-2"
-                                        />
-                                        Private
-                                    </label>
-                                    <label className="flex items-center">
-                                        <input
-                                            type="radio"
-                                            value="public"
-                                            checked={visibility === 'public'}
-                                            onChange={() => setVisibility('public')}
-                                            className="mr-2"
-                                        />
-                                        Public
-                                    </label>
-                                </div>
-                            </div>
-
-                            <div className="flex justify-end space-x-2 pt-4">
-                                <button
-                                    type="button"
-                                    onClick={() => setIsModalOpen(false)}
-                                    className="px-4 py-2 border rounded text-gray-700 hover:bg-gray-50"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={handleSubmit(handleSaveAsDraft)}
-                                    className="px-4 py-2 bg-gray-600 text-white rounded hover:bg-gray-700"
-                                >
-                                    Save as Draft
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={handleSubmit(handlePublish)}
-                                    className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
-                                >
-                                    Publish
-                                </button>
-                            </div>
-                        </form>
+            <Drawer
+                isOpen={isDrawerOpen}
+                onClose={handleDrawerClose}
+                title="Create Project"
+            >
+                <form className="space-y-6">
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700">Name</label>
+                        <input
+                            {...register('name')}
+                            onBlur={handleNameBlur}
+                            className="mt-1 block w-full border rounded p-2"
+                            placeholder="Enter project name to start..."
+                        />
+                        {errors.name && <p className="text-red-500 text-xs">{errors.name.message}</p>}
                     </div>
-                </div>
-            )}
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700">Deadline</label>
+                            <input
+                                type="date"
+                                {...register('endDate')}
+                                className="mt-1 block w-full border rounded p-2"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700">Priority</label>
+                            <select
+                                {...register('priority')}
+                                className="mt-1 block w-full border rounded p-2"
+                            >
+                                <option value="low">Low</option>
+                                <option value="medium">Medium</option>
+                                <option value="high">High</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
+                        <div className="border border-gray-300 rounded-lg p-2 min-h-[200px]">
+                            <RichTextEditor
+                                onChange={(data) => setEditorData(data)}
+                                data={editorData}
+                            />
+                        </div>
+                    </div>
+
+                    <div className="flex justify-between items-center">
+                        <div className="flex items-center gap-4">
+                            <Switch
+                                checked={visibility === 'public'}
+                                onChange={(checked) => setVisibility(checked ? 'public' : 'private')}
+                                label={visibility === 'public' ? 'Public' : 'Private'}
+                            />
+                        </div>
+
+                        <div className="w-1/3">
+                            <label className="block text-sm font-medium text-gray-700">Status</label>
+                            <select
+                                {...register('status')}
+                                className="mt-1 block w-full border rounded p-2"
+                            >
+                                <option value="draft">Draft</option>
+                                <option value="active">Active</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div className="flex justify-end space-x-2 pt-4 border-t mt-8">
+                        <button
+                            type="button"
+                            onClick={handleDrawerClose}
+                            className="px-4 py-2 border rounded text-gray-700 hover:bg-gray-50"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            type="button"
+                            onClick={handleSubmit(handleSave)}
+                            className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
+                        >
+                            Save Project
+                        </button>
+                    </div>
+                </form>
+            </Drawer>
         </div>
     );
 };

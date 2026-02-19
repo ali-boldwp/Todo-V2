@@ -11,9 +11,9 @@ export declare const TaskSchema: z.ZodObject<{
 }, "strip", z.ZodTypeAny, {
     status: "todo" | "in_progress" | "review" | "done";
     type: "task" | "bug" | "feature";
+    priority: "low" | "medium" | "high" | "urgent";
     projectId: string;
     title: string;
-    priority: "low" | "medium" | "high" | "urgent";
     description?: string | undefined;
     assigneeId?: string | undefined;
     dueDate?: string | undefined;

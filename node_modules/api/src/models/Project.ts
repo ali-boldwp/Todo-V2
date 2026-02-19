@@ -7,6 +7,7 @@ export interface IProject extends Document {
     description?: any;
     status: 'active' | 'completed' | 'archived' | 'on_hold' | 'draft';
     visibility: 'public' | 'private';
+    priority: 'low' | 'medium' | 'high';
     startDate?: Date;
     endDate?: Date;
 }
@@ -18,6 +19,7 @@ const ProjectSchema: Schema = new Schema({
     description: { type: Schema.Types.Mixed },
     status: { type: String, enum: ['active', 'completed', 'archived', 'on_hold', 'draft'], default: 'active' },
     visibility: { type: String, enum: ['public', 'private'], default: 'private' },
+    priority: { type: String, enum: ['low', 'medium', 'high'], default: 'medium' },
     startDate: { type: Date },
     endDate: { type: Date },
 }, { timestamps: true });

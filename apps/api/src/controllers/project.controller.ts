@@ -53,3 +53,22 @@ export const getProject = async (req: AuthRequest, res: Response) => {
         res.status(500).json({ message: 'Server error' });
     }
 };
+
+export const updateProject = async (req: AuthRequest, res: Response) => {
+    try {
+        const validated = ProjectSchema.partial().parse(req.body);
+
+        const project = await Project.findOneAndUpdate(
+            { _id: req.params.id, organizationId: req.user!.organizationId },
+            validated,
+            { new: true }
+        );
+
+        if (!project) return res.status(404).json({ message: 'Project not found' });
+
+        res.json(project);
+    } catch (error: any) {
+        if (error.issues) return res.status(400).json({ errors: error.issues });
+        res.status(500).json({ message: 'Server error' });
+    }
+};

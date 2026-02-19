@@ -5,6 +5,7 @@ export const ProjectSchema = z.object({
     description: z.any().optional(),
     status: z.enum(['active', 'completed', 'archived', 'on_hold', 'draft']).default('active'),
     visibility: z.enum(['public', 'private']).default('private'),
+    priority: z.enum(['low', 'medium', 'high']).default('medium'),
     startDate: z.string().optional(),
     endDate: z.string().optional(),
 });
