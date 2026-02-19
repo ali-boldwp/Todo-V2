@@ -6,7 +6,7 @@ import { Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ProjectSchema } from '@devmanager/shared/dist/index';
-import { useAuth } from '../context/AuthContext';
+
 import RichTextEditor from '../components/RichTextEditor';
 
 // Helper to check if description is JSON (EditorJS output)
@@ -19,13 +19,11 @@ const renderDescription = (desc: any) => {
 };
 
 const Projects: React.FC = () => {
-    // const { user } = useAuth(); // user is not used anymore
     const { data: projects, isLoading } = useQuery({ queryKey: ['projects'], queryFn: getProjects });
     const queryClient = useQueryClient();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editorData, setEditorData] = useState<any>(null);
     const [visibility, setVisibility] = useState<'public' | 'private'>('private');
-    const [status, setStatus] = useState<'active' | 'draft'>('active');
 
     const { register, handleSubmit, reset, formState: { errors } } = useForm<ProjectInput>({
         resolver: zodResolver(ProjectSchema),
@@ -39,15 +37,12 @@ const Projects: React.FC = () => {
             reset();
             setEditorData(null);
             setVisibility('private');
-            setStatus('active');
         },
     });
 
 
 
     const handleSaveAsDraft = (data: ProjectInput) => {
-        // We need to set status here for the closure, but also directly call onSubmit 
-        // because setStatus is async and might not update before onSubmit reads it if we just called setStatus
         mutation.mutate({
             ...data,
             description: editorData,
