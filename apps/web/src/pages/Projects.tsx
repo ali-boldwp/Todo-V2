@@ -95,35 +95,59 @@ const Projects: React.FC = () => {
     if (isLoading) return <div>Loading...</div>;
 
     return (
-        <div className="p-6">
-            <div className="flex justify-between items-center mb-6">
-                <h1 className="text-2xl font-bold">Projects</h1>
+        <div className="p-8 max-w-[1600px] mx-auto">
+            <div className="flex justify-between items-center mb-8">
+                <div className="flex items-center space-x-3">
+                    <h1 className="text-xl font-semibold text-gray-900">Projects</h1>
+                    <span className="text-sm text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{projects?.length || 0}</span>
+                </div>
                 <button
                     onClick={() => setIsDrawerOpen(true)}
-                    className="bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700"
+                    className="bg-gray-900 hover:bg-gray-800 text-white px-3 py-1.5 rounded-md text-sm font-medium transition-colors shadow-sm flex items-center"
                 >
-                    New Project
+                    <span className="mr-1.5">+</span> New Project
                 </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {projects?.map((project: any) => (
-                    <Link to={`/projects/${project._id}`} key={project._id} className="block">
-                        <div className="bg-white p-6 rounded-lg shadow hover:shadow-md transition-shadow">
-                            <div className="flex justify-between items-start mb-2">
-                                <h3 className="text-xl font-semibold">{project.name}</h3>
-                                <span className={`px-2 py-0.5 rounded text-xs ${project.priority === 'high' ? 'bg-red-100 text-red-800' : project.priority === 'low' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800'}`}>
-                                    {project.priority || 'medium'}
+                    <Link to={`/projects/${project._id}`} key={project._id} className="block group">
+                        <div className="bg-white border border-gray-200 rounded-lg p-4 hover:border-gray-300 hover:shadow-sm transition-all h-full flex flex-col relative">
+                            <div className="flex justify-between items-start mb-3">
+                                <div className="flex items-center space-x-2">
+                                    <div className={`w-2 h-2 rounded-full ${project.status === 'active' ? 'bg-yellow-400' :
+                                            project.status === 'completed' ? 'bg-green-500' :
+                                                project.status === 'draft' ? 'bg-gray-300' : 'bg-blue-400'
+                                        }`} />
+                                    <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">
+                                        {project.status || 'active'}
+                                    </span>
+                                </div>
+                                <span className={`px-1.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider ${project.priority === 'high' ? 'bg-red-50 text-red-600' :
+                                        project.priority === 'low' ? 'bg-blue-50 text-blue-600' :
+                                            'bg-gray-50 text-gray-600'
+                                    }`}>
+                                    {project.priority || 'MED'}
                                 </span>
                             </div>
-                            <p className="text-gray-600 mb-4">{renderDescription(project.description)}</p>
-                            <div className="flex gap-2">
-                                <span className={`px-2 py-1 rounded text-sm ${project.status === 'active' ? 'bg-green-100 text-green-800' : project.status === 'draft' ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-800'}`}>
-                                    {project.status || 'active'}
-                                </span>
-                                {project.visibility && (
-                                    <span className={`px-2 py-1 rounded text-sm ${project.visibility === 'public' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800'}`}>
-                                        {project.visibility}
+
+                            <h3 className="text-sm font-semibold text-gray-900 mb-1 group-hover:text-indigo-600 transition-colors">
+                                {project.name}
+                            </h3>
+
+                            <p className="text-xs text-gray-500 line-clamp-2 mb-4 flex-1">
+                                {renderDescription(project.description) || "No description"}
+                            </p>
+
+                            <div className="flex items-center justify-between pt-3 border-t border-gray-50 mt-auto">
+                                <div className="flex items-center -space-x-1.5">
+                                    {/* Mock Avatars */}
+                                    <div className="w-5 h-5 rounded-full bg-red-100 border border-white flex items-center justify-center text-[8px] text-red-700 font-bold">JD</div>
+                                    <div className="w-5 h-5 rounded-full bg-blue-100 border border-white flex items-center justify-center text-[8px] text-blue-700 font-bold">AS</div>
+                                </div>
+                                {project.endDate && (
+                                    <span className="text-[10px] text-gray-400">
+                                        {new Date(project.endDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
                                     </span>
                                 )}
                             </div>
