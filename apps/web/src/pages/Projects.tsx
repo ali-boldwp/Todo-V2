@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getProjects, createProject, updateProject } from '../services/core';
 import { ProjectInput } from '@devmanager/shared/dist/index';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ProjectSchema } from '@devmanager/shared/dist/index';
@@ -21,9 +21,22 @@ const renderDescription = (desc: any) => {
 };
 
 const Projects: React.FC = () => {
+    const [searchParams, setSearchParams] = useSearchParams();
     const { data: projects, isLoading } = useQuery({ queryKey: ['projects'], queryFn: getProjects });
     const queryClient = useQueryClient();
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+
+    // Check for create action
+    React.useEffect(() => {
+        if (searchParams.get('action') === 'create') {
+            setIsDrawerOpen(true);
+            setSearchParams(prev => {
+                const newParams = new URLSearchParams(prev);
+                newParams.delete('action');
+                return newParams;
+            });
+        }
+    }, [searchParams, setSearchParams]);
     const [editorData, setEditorData] = useState<any>(null);
     const [visibility, setVisibility] = useState<'public' | 'private'>('private');
     const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
@@ -116,16 +129,16 @@ const Projects: React.FC = () => {
                             <div className="flex justify-between items-start mb-3">
                                 <div className="flex items-center space-x-2">
                                     <div className={`w-2 h-2 rounded-full ${project.status === 'active' ? 'bg-yellow-400' :
-                                            project.status === 'completed' ? 'bg-green-500' :
-                                                project.status === 'draft' ? 'bg-gray-300' : 'bg-blue-400'
+                                        project.status === 'completed' ? 'bg-green-500' :
+                                            project.status === 'draft' ? 'bg-gray-300' : 'bg-blue-400'
                                         }`} />
                                     <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">
                                         {project.status || 'active'}
                                     </span>
                                 </div>
                                 <span className={`px-1.5 py-0.5 rounded text-[10px] uppercase font-bold tracking-wider ${project.priority === 'high' ? 'bg-red-50 text-red-600' :
-                                        project.priority === 'low' ? 'bg-blue-50 text-blue-600' :
-                                            'bg-gray-50 text-gray-600'
+                                    project.priority === 'low' ? 'bg-blue-50 text-blue-600' :
+                                        'bg-gray-50 text-gray-600'
                                     }`}>
                                     {project.priority || 'MED'}
                                 </span>
@@ -159,54 +172,71 @@ const Projects: React.FC = () => {
             <Drawer
                 isOpen={isDrawerOpen}
                 onClose={handleDrawerClose}
-                title="Create Project"
+                title="Create New Project"
             >
-                <form className="space-y-6">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700">Name</label>
-                        <input
-                            {...register('name')}
-                            onBlur={handleNameBlur}
-                            className="mt-1 block w-full border rounded p-2"
-                            placeholder="Enter project name to start..."
-                        />
-                        {errors.name && <p className="text-red-500 text-xs">{errors.name.message}</p>}
+                <form className="space-y-8">
+                    {/* Project Name & Description */}
+                    <div className="space-y-6">
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">Project Name</label>
+                            <input
+                                {...register('name')}
+                                onBlur={handleNameBlur}
+                                className="w-full bg-gray-50 border-gray-100 rounded-xl px-4 py-3 text-lg font-medium focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all outline-none placeholder:text-gray-400"
+                                placeholder="e.g. Website Redesign"
+                            />
+                            {errors.name && <p className="text-red-500 text-xs mt-1 ml-1">{errors.name.message}</p>}
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-semibold text-gray-700 mb-2">Description</label>
+                            <div className="bg-gray-50 border border-gray-100 rounded-xl p-1 overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500 focus-within:bg-white transition-all min-h-[150px]">
+                                <RichTextEditor
+                                    onChange={(data) => setEditorData(data)}
+                                    data={editorData}
+                                />
+                            </div>
+                        </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="h-px bg-gray-100" />
+
+                    {/* Meta Information */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">Deadline</label>
+                            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Target Date</label>
                             <input
                                 type="date"
                                 {...register('endDate')}
-                                className="mt-1 block w-full border rounded p-2"
+                                className="w-full bg-gray-50 border-gray-100 rounded-lg px-3 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 outline-none transition-all"
                             />
                         </div>
+
                         <div>
-                            <label className="block text-sm font-medium text-gray-700">Priority</label>
-                            <select
-                                {...register('priority')}
-                                className="mt-1 block w-full border rounded p-2"
-                            >
-                                <option value="low">Low</option>
-                                <option value="medium">Medium</option>
-                                <option value="high">High</option>
-                            </select>
+                            <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Priority</label>
+                            <div className="relative">
+                                <select
+                                    {...register('priority')}
+                                    className="w-full bg-gray-50 border-gray-100 rounded-lg px-3 py-2.5 text-sm appearance-none focus:ring-2 focus:ring-indigo-500 outline-none transition-all cursor-pointer"
+                                >
+                                    <option value="low">Low Priority</option>
+                                    <option value="medium">Medium Priority</option>
+                                    <option value="high">High Priority</option>
+                                </select>
+                                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                                    ▼
+                                </div>
+                            </div>
                         </div>
                     </div>
 
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">Description</label>
-                        <div className="border border-gray-300 rounded-lg p-2 min-h-[200px]">
-                            <RichTextEditor
-                                onChange={(data) => setEditorData(data)}
-                                data={editorData}
-                            />
-                        </div>
-                    </div>
-
-                    <div className="flex justify-between items-center">
-                        <div className="flex items-center gap-4">
+                    {/* Settings */}
+                    <div className="bg-gray-50 rounded-xl p-4 space-y-4">
+                        <div className="flex items-center justify-between">
+                            <div className="flex flex-col">
+                                <span className="text-sm font-semibold text-gray-900">Visibility</span>
+                                <span className="text-xs text-gray-500">Who can see this project?</span>
+                            </div>
                             <Switch
                                 checked={visibility === 'public'}
                                 onChange={(checked) => setVisibility(checked ? 'public' : 'private')}
@@ -214,11 +244,14 @@ const Projects: React.FC = () => {
                             />
                         </div>
 
-                        <div className="w-1/3">
-                            <label className="block text-sm font-medium text-gray-700">Status</label>
+                        <div className="flex items-center justify-between border-t border-gray-200 pt-4">
+                            <div className="flex flex-col">
+                                <span className="text-sm font-semibold text-gray-900">Initial Status</span>
+                                <span className="text-xs text-gray-500">Start as draft or active?</span>
+                            </div>
                             <select
                                 {...register('status')}
-                                className="mt-1 block w-full border rounded p-2"
+                                className="bg-white border text-sm border-gray-200 rounded-lg px-3 py-1.5 focus:ring-2 focus:ring-indigo-500 outline-none"
                             >
                                 <option value="draft">Draft</option>
                                 <option value="active">Active</option>
@@ -226,20 +259,21 @@ const Projects: React.FC = () => {
                         </div>
                     </div>
 
-                    <div className="flex justify-end space-x-2 pt-4 border-t mt-8">
+                    {/* Actions */}
+                    <div className="flex justify-end pt-6 gap-3">
                         <button
                             type="button"
                             onClick={handleDrawerClose}
-                            className="px-4 py-2 border rounded text-gray-700 hover:bg-gray-50"
+                            className="px-6 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 transition-colors"
                         >
                             Cancel
                         </button>
                         <button
                             type="button"
                             onClick={handleSubmit(handleSave)}
-                            className="px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700"
+                            className="px-6 py-2.5 rounded-lg text-sm font-medium bg-gray-900 text-white hover:bg-gray-800 transition-all shadow-lg shadow-gray-900/20 active:scale-95"
                         >
-                            Save Project
+                            Create Project
                         </button>
                     </div>
                 </form>

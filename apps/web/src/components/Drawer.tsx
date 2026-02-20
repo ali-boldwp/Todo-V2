@@ -28,8 +28,8 @@ const Drawer: React.FC<DrawerProps> = ({ isOpen, onClose, title, children }) => 
             {/* Backdrop */}
             <div
                 className={clsx(
-                    "fixed inset-0 bg-black/50 transition-opacity duration-300 ease-in-out",
-                    isOpen ? "opacity-100" : "opacity-0"
+                    "fixed inset-0 bg-black/30 backdrop-blur-sm transition-opacity duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]",
+                    isOpen ? "opacity-100" : "opacity-0 pointer-events-none"
                 )}
                 onClick={onClose}
             />
@@ -37,20 +37,20 @@ const Drawer: React.FC<DrawerProps> = ({ isOpen, onClose, title, children }) => 
             {/* Drawer */}
             <div
                 className={clsx(
-                    "relative w-full max-w-md bg-white h-full shadow-xl transition-transform duration-300 ease-in-out transform",
+                    "relative w-full max-w-lg bg-white/90 backdrop-blur-xl h-full shadow-2xl transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] transform border-l border-white/20",
                     isOpen ? "translate-x-0" : "translate-x-full"
                 )}
             >
-                <div className="flex items-center justify-between p-4 border-b">
-                    <h2 className="text-xl font-semibold">{title}</h2>
+                <div className="flex items-center justify-between p-6 border-b border-gray-100/50">
+                    <h2 className="text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-gray-900 to-gray-600">{title}</h2>
                     <button
                         onClick={onClose}
-                        className="p-1 hover:bg-gray-100 rounded-full transition-colors"
+                        className="p-2 hover:bg-gray-100/50 rounded-full transition-colors text-gray-500 hover:text-gray-900"
                     >
-                        <X size={24} />
+                        <X size={24} strokeWidth={1.5} />
                     </button>
                 </div>
-                <div className="p-4 h-[calc(100vh-64px)] overflow-y-auto">
+                <div className="p-6 h-[calc(100vh-80px)] overflow-y-auto">
                     {children}
                 </div>
             </div>

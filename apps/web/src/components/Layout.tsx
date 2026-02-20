@@ -6,16 +6,13 @@ import {
     FolderKanban,
     Users,
     CheckSquare,
-    Clock,
     LogOut,
-    CalendarDays,
-    Banknote,
-    Github
+
 } from 'lucide-react';
 import Header from './Header';
 
-import { getProjects } from '../services/core';
-import { useQuery } from '@tanstack/react-query';
+
+
 
 const SidebarRailItem = ({ icon: Icon, label, active }: { icon: any; label: string; active?: boolean }) => (
     <div className={`w-10 h-10 flex items-center justify-center rounded-lg mb-2 cursor-pointer transition-colors group relative ${active ? 'bg-gray-200 text-gray-900' : 'text-gray-500 hover:bg-gray-200 hover:text-gray-900'}`}>
@@ -26,7 +23,7 @@ const SidebarRailItem = ({ icon: Icon, label, active }: { icon: any; label: stri
     </div>
 );
 
-const SidebarItem = ({ to, icon: Icon, label, alert }: { to: string; icon: any; label: string; alert?: boolean }) => {
+const SidebarItem = ({ to, icon: Icon, label }: { to: string; icon: any; label: string }) => {
     const location = useLocation();
     const isActive = location.pathname === to || (to !== '/' && location.pathname.startsWith(to));
 
@@ -56,14 +53,8 @@ const SectionHeader = ({ label, plus }: { label: string; plus?: boolean }) => (
 );
 
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const { user, logout } = useAuth();
+    const { user } = useAuth();
     const navigate = useNavigate();
-    const { data: projects } = useQuery({ queryKey: ['projects'], queryFn: getProjects });
-
-    const handleLogout = () => {
-        logout();
-        navigate('/login');
-    };
 
     return (
         <div className="flex h-screen bg-white">
@@ -105,34 +96,16 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                     <SidebarItem to="/tasks" icon={CheckSquare} label="Your work" />
 
                     <div className="pt-2">
-                        <SectionHeader label="Workspace" />
+                        <SectionHeader label="Projects" />
                         <div className="space-y-0.5">
-                            {user?.role !== 'client' && (
-                                <>
-                                    <SidebarItem to="/clients" icon={Users} label="Clients" />
-                                    <SidebarItem to="/time" icon={Clock} label="Time Tracking" />
-                                    <SidebarItem to="/attendance" icon={CalendarDays} label="Attendance" />
-                                    <SidebarItem to="/payroll" icon={Banknote} label="Payroll" />
-                                    <SidebarItem to="/github" icon={Github} label="GitHub" />
-                                </>
-                            )}
                             <SidebarItem to="/projects" icon={FolderKanban} label="All Projects" />
-                        </div>
-                    </div>
-
-                    <div className="pt-2">
-                        <SectionHeader label="Projects" plus />
-                        <div className="space-y-0.5">
-                            {projects?.slice(0, 5).map((project: any) => (
-                                <Link
-                                    key={project._id}
-                                    to={`/projects/${project._id}`}
-                                    className="flex items-center px-3 py-1.5 rounded-md text-gray-600 hover:bg-[#EAEBEB] hover:text-gray-900 text-[13px] transition-colors"
-                                >
-                                    <span className="w-1.5 h-1.5 rounded bg-gray-400 mr-3 flex-shrink-0"></span>
-                                    <span className="truncate">{project.name}</span>
-                                </Link>
-                            ))}
+                            <button
+                                onClick={() => navigate('/projects?action=create')}
+                                className="w-full flex items-center px-3 py-1.5 rounded-md transition-colors text-[13px] font-medium text-gray-600 hover:bg-[#EAEBEB] hover:text-gray-900"
+                            >
+                                <span className="mr-3 text-gray-500 font-bold text-lg leading-none flex items-center justify-center w-4">+</span>
+                                <span className="flex-1 truncate">New Project</span>
+                            </button>
                         </div>
                     </div>
                 </div>
