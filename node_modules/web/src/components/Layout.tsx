@@ -1,12 +1,19 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useQuery } from '@tanstack/react-query';
+import { getProjects } from '../services/core';
 import {
     LayoutDashboard,
     FolderKanban,
     Users,
     CheckSquare,
     LogOut,
+    ChevronRight,
+    LayoutGrid,
+    Layers,
+    Zap,
+    Settings,
 } from 'lucide-react';
 import Header from './Header';
 
@@ -39,8 +46,8 @@ const SidebarItem = ({
         <Link
             to={to}
             className={`flex items-center px-3 py-1.5 rounded-md transition-colors text-[13px] font-medium ${isActive
-                    ? 'bg-[#EAEBEB] text-gray-900'
-                    : 'text-gray-600 hover:bg-[#EAEBEB] hover:text-gray-900'
+                ? 'bg-[#EAEBEB] text-gray-900'
+                : 'text-gray-600 hover:bg-[#EAEBEB] hover:text-gray-900'
                 }`}
         >
             {Icon && <Icon size={16} className="mr-3 text-gray-500" strokeWidth={2} />}
@@ -55,9 +62,95 @@ const SectionHeader = ({ label }: { label: string }) => (
     </div>
 );
 
+const PROJECT_SUB_ITEMS = [
+    { label: 'Overview', path: 'overview', icon: LayoutGrid },
+    { label: 'Board', path: 'board', icon: Layers },
+    { label: 'Backlog', path: 'backlog', icon: CheckSquare },
+    { label: 'Sprints', path: 'sprints', icon: Zap },
+    { label: 'Settings', path: 'settings', icon: Settings },
+];
+
+const ProjectNavItem = ({
+    project,
+    isOpen,
+    onToggle,
+}: {
+    project: any;
+    isOpen: boolean;
+    onToggle: () => void;
+}) => {
+    const location = useLocation();
+    const basePath = `/projects/${project._id}`;
+    const isParentActive = location.pathname.startsWith(basePath);
+
+    return (
+        <div>
+            {/* Project row */}
+            <button
+                onClick={onToggle}
+                className={`w-full flex items-center px-3 py-1.5 rounded-md transition-colors text-[13px] font-medium ${isParentActive
+                    ? 'bg-[#EAEBEB] text-gray-900'
+                    : 'text-gray-600 hover:bg-[#EAEBEB] hover:text-gray-900'
+                    }`}
+            >
+                <ChevronRight
+                    size={14}
+                    className={`mr-1.5 text-gray-400 transition-transform duration-200 flex-shrink-0 ${isOpen ? 'rotate-90' : ''}`}
+                />
+                <span className="flex-1 truncate text-left">{project.name}</span>
+            </button>
+
+            {/* Sub-menu */}
+            {isOpen && (
+                <div className="ml-4 mt-0.5 space-y-0.5 border-l border-gray-200 pl-2">
+                    {PROJECT_SUB_ITEMS.map((item) => {
+                        const to = `${basePath}/${item.path}`;
+                        const isActive = location.pathname === to || location.pathname.startsWith(to + '/');
+                        return (
+                            <Link
+                                key={item.path}
+                                to={to}
+                                className={`flex items-center px-2 py-1 rounded-md transition-colors text-[12px] font-medium ${isActive
+                                    ? 'bg-[#EAEBEB] text-gray-900'
+                                    : 'text-gray-500 hover:bg-[#EAEBEB] hover:text-gray-800'
+                                    }`}
+                            >
+                                <item.icon size={13} className="mr-2 flex-shrink-0" strokeWidth={2} />
+                                <span className="truncate">{item.label}</span>
+                            </Link>
+                        );
+                    })}
+                </div>
+            )}
+        </div>
+    );
+};
+
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const { user } = useAuth();
     const navigate = useNavigate();
+    const location = useLocation();
+
+    const { data: projects } = useQuery({ queryKey: ['projects'], queryFn: getProjects });
+
+    // Derive which project ID is active from the URL
+    const activeProjectId = (() => {
+        const match = location.pathname.match(/^\/projects\/([^/]+)/);
+        return match ? match[1] : null;
+    })();
+
+    const [openProjectId, setOpenProjectId] = useState<string | null>(activeProjectId);
+
+    // Sync open project when URL changes (e.g. navigation, back/forward)
+    useEffect(() => {
+        if (activeProjectId) {
+            setOpenProjectId(activeProjectId);
+        }
+    }, [activeProjectId]);
+
+    const handleProjectToggle = (id: string) => {
+        setOpenProjectId(prev => (prev === id ? null : id));
+    };
 
     return (
         <div className="flex h-screen bg-white">
@@ -99,7 +192,16 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                     <div className="pt-2">
                         <SectionHeader label="Projects" />
                         <div className="space-y-0.5">
-                            <SidebarItem to="/projects" icon={FolderKanban} label="All Projects" exact />
+                            {/* Per-project items */}
+                            {projects?.map((project: any) => (
+                                <ProjectNavItem
+                                    key={project._id}
+                                    project={project}
+                                    isOpen={openProjectId === project._id}
+                                    onToggle={() => handleProjectToggle(project._id)}
+                                />
+                            ))}
+
                             <button
                                 onClick={() => navigate('/projects?action=create')}
                                 className="w-full flex items-center px-3 py-1.5 rounded-md transition-colors text-[13px] font-medium text-gray-600 hover:bg-[#EAEBEB] hover:text-gray-900"

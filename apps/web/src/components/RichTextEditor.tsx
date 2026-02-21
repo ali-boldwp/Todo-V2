@@ -41,7 +41,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ data, onChange, readOnl
         };
     }, []);
 
-    return <div id={holder} className="border border-gray-300 rounded-lg p-4 min-h-[200px] prose max-w-none" />;
+    return <div id={holder} className="min-h-[200px] prose max-w-none w-full h-full focus:outline-none" />;
 };
 
 export default RichTextEditor;
