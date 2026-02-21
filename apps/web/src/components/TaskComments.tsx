@@ -46,59 +46,63 @@ const TaskComments: React.FC<{ taskId: string }> = ({ taskId }) => {
         commentMutation.mutate(newComment.trim());
     };
 
-    if (isLoading) return <div className="p-4 text-center text-gray-400 text-sm">Loading comments...</div>;
+    if (isLoading) return <div className="p-4 text-center text-gray-400 text-xs">Loading activity...</div>;
 
     return (
-        <div className="flex flex-col h-full bg-gray-50/50 rounded-xl overflow-hidden border border-gray-100">
-            <div className="px-4 py-3 border-b border-gray-100 bg-white">
-                <h3 className="text-sm font-semibold text-gray-700">Comments</h3>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
-                {comments?.length === 0 ? (
-                    <div className="text-center py-8">
-                        <p className="text-xs text-gray-400 italic">No comments yet. Start the conversation!</p>
-                    </div>
-                ) : (
-                    comments?.map((comment) => (
-                        <div key={comment._id} className="flex space-x-3">
-                            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold text-xs">
-                                {comment.userId.firstName[0]}{comment.userId.lastName[0]}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                                <div className="flex items-center space-x-2">
-                                    <span className="text-xs font-bold text-gray-900">
-                                        {comment.userId.firstName} {comment.userId.lastName}
-                                    </span>
-                                    <span className="text-[10px] text-gray-400">
-                                        {formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}
-                                    </span>
-                                </div>
-                                <p className="text-sm text-gray-600 mt-1 leading-relaxed">
-                                    {comment.content}
-                                </p>
-                            </div>
+        <div className="space-y-6">
+            <div className="space-y-6">
+                {comments?.map((comment) => (
+                    <div key={comment._id} className="flex space-x-3 group">
+                        <div className="flex-shrink-0 w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-gray-500 font-bold text-[10px] mt-0.5">
+                            {comment.userId.firstName[0]}
                         </div>
-                    ))
-                )}
+                        <div className="flex-1 min-w-0">
+                            <div className="flex items-center space-x-2">
+                                <span className="text-xs font-bold text-gray-900">
+                                    {comment.userId.firstName} {comment.userId.lastName}
+                                </span>
+                                <span className="text-[10px] text-gray-400">
+                                    {formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}
+                                </span>
+                            </div>
+                            <p className="text-sm text-gray-600 mt-1 leading-relaxed">
+                                {comment.content}
+                            </p>
+                        </div>
+                    </div>
+                ))}
             </div>
 
-            <form onSubmit={handleSubmit} className="p-4 bg-white border-t border-gray-100">
-                <div className="relative">
-                    <input
-                        type="text"
-                        value={newComment}
-                        onChange={(e) => setNewComment(e.target.value)}
-                        placeholder="Write a comment..."
-                        className="w-full pl-4 pr-12 py-2.5 bg-gray-50 border-none rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 transition-all outline-none"
-                    />
-                    <button
-                        type="submit"
-                        disabled={!newComment.trim() || commentMutation.isPending}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:bg-gray-300 transition-all active:scale-95"
-                    >
-                        <Send size={16} />
-                    </button>
+            {/* Styled Add Comment Box matching the image */}
+            <form onSubmit={handleSubmit} className="relative mt-8 group">
+                <div className="flex space-x-3">
+                    <div className="flex-shrink-0 w-6 h-6 rounded-full bg-gray-50 flex items-center justify-center text-gray-300 font-bold text-[10px] mt-2">
+                        +
+                    </div>
+                    <div className="flex-1 bg-gray-50/50 rounded-lg border border-gray-100 focus-within:bg-white focus-within:border-gray-200 transition-all p-3">
+                        <input
+                            type="text"
+                            value={newComment}
+                            onChange={(e) => setNewComment(e.target.value)}
+                            placeholder="Add comment"
+                            className="w-full bg-transparent border-none p-0 text-sm focus:ring-0 placeholder-gray-400 outline-none"
+                        />
+                        <div className="flex items-center justify-between mt-3">
+                            <div className="flex items-center space-x-2 text-gray-400">
+                                {/* Placeholders for rich text icons as seen in the image */}
+                                <span className="text-xs font-bold p-1 hover:text-gray-600 cursor-pointer transition-colors">B</span>
+                                <span className="text-xs italic p-1 hover:text-gray-600 cursor-pointer transition-colors">i</span>
+                                <span className="text-xs underline p-1 hover:text-gray-600 cursor-pointer transition-colors">U</span>
+                            </div>
+                            <button
+                                type="submit"
+                                disabled={!newComment.trim() || commentMutation.isPending}
+                                className="px-3 py-1 bg-gray-100 text-gray-400 text-xs font-bold rounded hover:bg-gray-200 hover:text-gray-900 disabled:opacity-50 transition-all"
+                            >
+                                Comment
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </form>
         </div>
