@@ -10,6 +10,7 @@ export interface IProject extends Document {
     priority: 'low' | 'medium' | 'high';
     startDate?: Date;
     endDate?: Date;
+    members: mongoose.Types.ObjectId[];
 }
 
 const ProjectSchema: Schema = new Schema({
@@ -22,6 +23,7 @@ const ProjectSchema: Schema = new Schema({
     priority: { type: String, enum: ['low', 'medium', 'high'], default: 'medium' },
     startDate: { type: Date },
     endDate: { type: Date },
+    members: [{ type: Schema.Types.ObjectId, ref: 'User' }],
 }, { timestamps: true });
 
 export default mongoose.model<IProject>('Project', ProjectSchema);

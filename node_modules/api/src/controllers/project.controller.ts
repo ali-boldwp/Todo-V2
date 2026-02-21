@@ -7,9 +7,17 @@ export const getProjects = async (req: AuthRequest, res: Response) => {
     try {
         const query: any = { organizationId: req.user!.organizationId };
 
-        // If user is a client, only show their projects
-        if (req.user!.role === 'client' && req.user!.clientId) {
-            query.clientId = req.user!.clientId;
+        // If user is not admin, apply visibility filters
+        if (req.user!.role !== 'admin') {
+            if (req.user!.role === 'client' && req.user!.clientId) {
+                query.clientId = req.user!.clientId;
+            } else {
+                // For regular users, show public projects OR those they are members of
+                query.$or = [
+                    { visibility: 'public' },
+                    { members: req.user!._id }
+                ];
+            }
         }
 
         const projects = await Project.find(query).populate('clientId', 'name');
@@ -42,10 +50,24 @@ export const createProject = async (req: AuthRequest, res: Response) => {
 
 export const getProject = async (req: AuthRequest, res: Response) => {
     try {
-        const project = await Project.findOne({
+        const query: any = {
             _id: req.params.id,
             organizationId: req.user!.organizationId
-        }).populate('clientId', 'name');
+        };
+
+        // If not admin, check visibility/membership
+        if (req.user!.role !== 'admin') {
+            if (req.user!.role === 'client') {
+                query.clientId = req.user!.clientId;
+            } else {
+                query.$or = [
+                    { visibility: 'public' },
+                    { members: req.user!._id }
+                ];
+            }
+        }
+
+        const project = await Project.findOne(query).populate('clientId', 'name');
 
         if (!project) return res.status(404).json({ message: 'Project not found' });
         res.json(project);

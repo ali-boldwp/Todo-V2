@@ -11,7 +11,7 @@ import {
     LogOut,
     ChevronRight,
     LayoutGrid,
-    Layers,
+    ListTodo,
     Zap,
     Settings,
 } from 'lucide-react';
@@ -64,7 +64,7 @@ const SectionHeader = ({ label }: { label: string }) => (
 
 const PROJECT_SUB_ITEMS = [
     { label: 'Overview', path: 'overview', icon: LayoutGrid },
-    { label: 'Board', path: 'board', icon: Layers },
+    { label: 'Tasks', path: 'tasks', icon: ListTodo },
     { label: 'Backlog', path: 'backlog', icon: CheckSquare },
     { label: 'Sprints', path: 'sprints', icon: Zap },
     { label: 'Settings', path: 'settings', icon: Settings },

@@ -2,7 +2,8 @@ import React, { useState, useCallback } from 'react';
 import { useParams, Routes, Route } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getProject, updateProject } from '../services/core';
-import ProjectBoard from './ProjectBoard';
+import ProjectTasks from './ProjectTasks';
+import ProjectSettings from './ProjectSettings';
 import Sprints from './Sprints';
 import RichTextEditor from '../components/RichTextEditor';
 
@@ -65,8 +66,9 @@ const ProjectDetails: React.FC = () => {
             <Routes>
                 <Route path="/" element={<ProjectOverview project={project} />} />
                 <Route path="/overview" element={<ProjectOverview project={project} />} />
-                <Route path="/board" element={<ProjectBoard />} />
+                <Route path="/tasks" element={<ProjectTasks />} />
                 <Route path="/sprints" element={<Sprints />} />
+                <Route path="/settings" element={<ProjectSettings project={project} />} />
                 <Route path="*" element={<div className="text-gray-400 text-sm">Module coming soon...</div>} />
             </Routes>
         </div>
