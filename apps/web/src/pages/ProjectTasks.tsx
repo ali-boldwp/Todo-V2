@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getTasks, createTask, updateTask } from '../services/task';
+import { getTasks, updateTask } from '../services/task';
+import CreateTaskDrawer from '../components/CreateTaskDrawer';
 import {
     Plus,
     MoreHorizontal,
@@ -46,34 +47,24 @@ const ProjectTasks: React.FC = () => {
         queryFn: () => getTasks(projectId!)
     });
     const queryClient = useQueryClient();
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [newTaskTitle, setNewTaskTitle] = useState('');
+    const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+    const [selectedTask, setSelectedTask] = useState<any>(null);
     const [searchTerm, setSearchTerm] = useState('');
 
-    const createMutation = useMutation({
-        mutationFn: createTask,
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['tasks', projectId] });
-            setIsModalOpen(false);
-            setNewTaskTitle('');
-        },
-    });
 
     const updateMutation = useMutation({
         mutationFn: ({ id, data }: { id: string, data: any }) => updateTask(id, data),
         onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tasks', projectId] }),
     });
 
-    const handleCreate = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!projectId) return;
-        createMutation.mutate({
-            projectId,
-            title: newTaskTitle,
-            status: 'todo',
-            priority: 'medium',
-            type: 'task',
-        } as any);
+    const handleOpenCreate = () => {
+        setSelectedTask(null);
+        setIsDrawerOpen(true);
+    };
+
+    const handleOpenEdit = (task: any) => {
+        setSelectedTask(task);
+        setIsDrawerOpen(true);
     };
 
     if (isLoading) return <div className="p-8 text-gray-500">Loading tasks...</div>;
@@ -105,7 +96,7 @@ const ProjectTasks: React.FC = () => {
                         <Filter className="w-4 h-4" />
                     </button>
                     <button
-                        onClick={() => setIsModalOpen(true)}
+                        onClick={handleOpenCreate}
                         className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center"
                     >
                         <Plus className="w-4 h-4 mr-1.5" />
@@ -139,7 +130,11 @@ const ProjectTasks: React.FC = () => {
                             </tr>
                         ) : (
                             filteredTasks?.map((task: any) => (
-                                <tr key={task._id} className="group hover:bg-gray-50/50 transition-colors cursor-pointer">
+                                <tr
+                                    key={task._id}
+                                    onClick={() => handleOpenEdit(task)}
+                                    className="group hover:bg-gray-50/50 transition-colors cursor-pointer"
+                                >
                                     <td className="px-6 py-3.5">
                                         <div className="flex items-center space-x-3">
                                             <div className="flex-shrink-0">
@@ -179,47 +174,13 @@ const ProjectTasks: React.FC = () => {
                 </table>
             </div>
 
-            {/* Modal */}
-            {isModalOpen && (
-                <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-[100]">
-                    <div className="bg-white rounded-xl shadow-2xl border border-gray-100 w-full max-w-md animate-in fade-in zoom-in duration-200">
-                        <div className="px-6 py-4 border-b border-gray-50 flex justify-between items-center">
-                            <h3 className="text-lg font-bold text-gray-900">Create New Task</h3>
-                            <button onClick={() => setIsModalOpen(false)} className="text-gray-400 hover:text-gray-600 font-bold text-xl">&times;</button>
-                        </div>
-                        <form onSubmit={handleCreate} className="p-6">
-                            <div className="mb-6">
-                                <label className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">Task Title</label>
-                                <input
-                                    autoFocus
-                                    className="w-full bg-gray-50 border-gray-100 rounded-lg px-4 py-2.5 text-sm focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all outline-none"
-                                    placeholder="What needs to be done?"
-                                    value={newTaskTitle}
-                                    onChange={(e) => setNewTaskTitle(e.target.value)}
-                                    required
-                                />
-                            </div>
-
-                            <div className="flex justify-end space-x-3">
-                                <button
-                                    type="button"
-                                    onClick={() => setIsModalOpen(false)}
-                                    className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="submit"
-                                    disabled={createMutation.isPending}
-                                    className="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 shadow-lg shadow-indigo-600/20 active:scale-95 transition-all disabled:opacity-50"
-                                >
-                                    {createMutation.isPending ? 'Creating...' : 'Create Task'}
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                </div>
-            )}
+            {/* Task Drawer */}
+            <CreateTaskDrawer
+                isOpen={isDrawerOpen}
+                onClose={() => setIsDrawerOpen(false)}
+                task={selectedTask}
+                initialProjectId={projectId}
+            />
         </div>
     );
 };

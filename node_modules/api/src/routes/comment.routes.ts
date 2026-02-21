@@ -6,7 +6,7 @@ const router = Router();
 
 router.use(authenticate);
 
-router.get('/', getComments);
-router.post('/', createComment);
+router.get('/:taskId', getComments);
+router.post('/:taskId', createComment);
 
 export default router;
