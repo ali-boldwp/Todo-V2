@@ -4,6 +4,7 @@ import EditorJS, { OutputData } from '@editorjs/editorjs';
 import Header from '@editorjs/header';
 // @ts-ignore
 import List from '@editorjs/list';
+import './RichTextEditor.css';
 
 interface RichTextEditorProps {
     data?: OutputData;
@@ -21,9 +22,24 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ data, onChange, readOnl
                 holder: holder,
                 readOnly: readOnly,
                 data: data,
+                defaultBlock: 'paragraph',
+                inlineToolbar: true,
                 tools: {
-                    header: Header,
-                    list: List,
+                    paragraph: {
+                        inlineToolbar: true,
+                    },
+                    header: {
+                        class: Header as any,
+                        inlineToolbar: true,
+                        config: {
+                            levels: [1, 2, 3, 4, 5, 6],
+                            defaultLevel: 2,
+                        },
+                    },
+                    list: {
+                        class: List as any,
+                        inlineToolbar: true,
+                    },
                 },
                 onChange: async () => {
                     const content = await editor.save();
