@@ -1,0 +1,33 @@
+.codex-editor .ce-block__content .ce-header {
+    font-weight: 700;
+    line-height: 1.25;
+}
+
+.codex-editor .ce-block__content h1.ce-header {
+    font-size: 2rem;
+}
+
+.codex-editor .ce-block__content h2.ce-header {
+    font-size: 1.5rem;
+}
+
+.codex-editor .ce-block__content h3.ce-header {
+    font-size: 1.25rem;
+}
+
+.codex-editor .ce-block__content h4.ce-header {
+    font-size: 1.125rem;
+}
+
+.codex-editor .ce-block__content h5.ce-header {
+    font-size: 1rem;
+}
+
+.codex-editor .ce-block__content h6.ce-header {
+    font-size: 0.875rem;
+}
+
+.codex-editor .ce-block__content .ce-paragraph {
+    font-size: 1rem;
+    line-height: 1.5;
+}
