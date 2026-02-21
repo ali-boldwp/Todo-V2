@@ -15,7 +15,7 @@ export const getProjects = async (req: AuthRequest, res: Response) => {
                 // For regular users, show public projects OR those they are members of
                 query.$or = [
                     { visibility: 'public' },
-                    { members: req.user!._id }
+                    { members: req.user!.userId }
                 ];
             }
         }
@@ -62,7 +62,7 @@ export const getProject = async (req: AuthRequest, res: Response) => {
             } else {
                 query.$or = [
                     { visibility: 'public' },
-                    { members: req.user!._id }
+                    { members: req.user!.userId }
                 ];
             }
         }
