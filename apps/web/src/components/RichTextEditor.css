@@ -1,3 +1,9 @@
+.codex-editor .ce-block__content,
+.codex-editor .ce-toolbar__content {
+    max-width: 100% !important;
+    width: 100%;
+}
+
 .codex-editor .ce-block__content .ce-header {
     font-weight: 700;
     line-height: 1.25;
