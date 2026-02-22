@@ -9,6 +9,9 @@ export const ProjectSchema = z.object({
     priority: z.enum(['low', 'medium', 'high']).default('medium'),
     startDate: z.string().optional(),
     endDate: z.string().optional(),
+    githubRepoOwner: z.string().optional(),
+    githubRepoName: z.string().optional(),
+    createGithubRepo: z.boolean().optional(),
 });
 
 export type ProjectInput = z.infer<typeof ProjectSchema>;

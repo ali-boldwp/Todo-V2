@@ -11,7 +11,8 @@ import {
     PlayCircle,
     Search,
     Filter,
-    ArrowUpDown
+    ArrowUpDown,
+    Info
 } from 'lucide-react';
 
 const PRIORITY_STYLES: any = {
@@ -47,10 +48,9 @@ const ProjectTasks: React.FC = () => {
         queryFn: () => getTasks(projectId!)
     });
     const queryClient = useQueryClient();
-    const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+    const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false);
     const [selectedTask, setSelectedTask] = useState<any>(null);
     const [searchTerm, setSearchTerm] = useState('');
-
 
     const updateMutation = useMutation({
         mutationFn: ({ id, data }: { id: string, data: any }) => updateTask(id, data),
@@ -59,12 +59,12 @@ const ProjectTasks: React.FC = () => {
 
     const handleOpenCreate = () => {
         setSelectedTask(null);
-        setIsDrawerOpen(true);
+        setIsCreateDrawerOpen(true);
     };
 
     const handleOpenEdit = (task: any) => {
         setSelectedTask(task);
-        setIsDrawerOpen(true);
+        setIsCreateDrawerOpen(true);
     };
 
     if (isLoading) return <div className="p-8 text-gray-500">Loading tasks...</div>;
@@ -138,7 +138,13 @@ const ProjectTasks: React.FC = () => {
                                     <td className="px-6 py-3.5">
                                         <div className="flex items-center space-x-3">
                                             <div className="flex-shrink-0">
-                                                {STATUS_ICONS[task.status] || <Circle className="w-4 h-4 text-gray-400" />}
+                                                {task.needsClarification ? (
+                                                    <span title="Clarification required">
+                                                        <Info className="w-4 h-4 text-red-500" />
+                                                    </span>
+                                                ) : (
+                                                    STATUS_ICONS[task.status] || <Circle className="w-4 h-4 text-gray-400" />
+                                                )}
                                             </div>
                                             <span className="text-sm font-medium text-gray-900 group-hover:text-indigo-600 transition-colors">
                                                 {task.title}
@@ -174,10 +180,10 @@ const ProjectTasks: React.FC = () => {
                 </table>
             </div>
 
-            {/* Task Drawer */}
+            {/* Create / Edit Task Drawer */}
             <CreateTaskDrawer
-                isOpen={isDrawerOpen}
-                onClose={() => setIsDrawerOpen(false)}
+                isOpen={isCreateDrawerOpen}
+                onClose={() => { setIsCreateDrawerOpen(false); setSelectedTask(null); }}
                 task={selectedTask}
                 initialProjectId={projectId}
             />

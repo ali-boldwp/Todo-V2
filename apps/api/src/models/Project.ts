@@ -1,7 +1,6 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
 export interface IProject extends Document {
-    organizationId: mongoose.Types.ObjectId;
     clientId?: mongoose.Types.ObjectId;
     name: string;
     description?: any;
@@ -11,10 +10,21 @@ export interface IProject extends Document {
     startDate?: Date;
     endDate?: Date;
     members: mongoose.Types.ObjectId[];
+    githubRepoOwner?: string;
+    githubRepoName?: string;
+    documents: {
+        _id?: mongoose.Types.ObjectId;
+        title: string;
+        description: string;
+        fileData: string;
+        mimeType: string;
+        fileName: string;
+        uploadedBy: mongoose.Types.ObjectId;
+        uploadedAt: Date;
+    }[];
 }
 
 const ProjectSchema: Schema = new Schema({
-    organizationId: { type: Schema.Types.ObjectId, ref: 'Organization', required: true, index: true },
     clientId: { type: Schema.Types.ObjectId, ref: 'Client' },
     name: { type: String, required: true },
     description: { type: Schema.Types.Mixed },
@@ -24,6 +34,17 @@ const ProjectSchema: Schema = new Schema({
     startDate: { type: Date },
     endDate: { type: Date },
     members: [{ type: Schema.Types.ObjectId, ref: 'User' }],
+    githubRepoOwner: { type: String },
+    githubRepoName: { type: String },
+    documents: [{
+        title: { type: String, required: true },
+        description: { type: String },
+        fileData: { type: String, required: true },
+        mimeType: { type: String, required: true },
+        fileName: { type: String, required: true },
+        uploadedBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+        uploadedAt: { type: Date, default: Date.now }
+    }]
 }, { timestamps: true });
 
 export default mongoose.model<IProject>('Project', ProjectSchema);

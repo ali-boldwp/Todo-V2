@@ -1,7 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import Login from './pages/Login';
-import Register from './pages/Register';
 import Projects from './pages/Projects';
 import ProjectDetails from './pages/ProjectDetails';
 import Time from './pages/Time';
@@ -9,7 +8,10 @@ import Attendance from './pages/Attendance';
 import Payroll from './pages/Payroll';
 import GithubIntegration from './pages/GithubIntegration';
 import Clients from './pages/Clients';
+import Team from './pages/Team';
 import Layout from './components/Layout';
+import LoadingScreen from './components/LoadingScreen';
+import { useState, useEffect } from 'react';
 
 const Dashboard = () => {
     const { user } = useAuth();
@@ -29,11 +31,39 @@ const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
     return <Layout>{children}</Layout>;
 };
 
+const AdminRoute = ({ children }: { children: JSX.Element }) => {
+    const { isAuthenticated, user } = useAuth();
+    if (!isAuthenticated) {
+        return <Navigate to="/login" />;
+    }
+    if (!user) {
+        return null;
+    }
+    if (user?.role !== 'admin') {
+        return <Navigate to="/" />;
+    }
+    return <Layout>{children}</Layout>;
+};
+
+const AdminOrManagerRoute = ({ children }: { children: JSX.Element }) => {
+    const { isAuthenticated, user } = useAuth();
+    if (!isAuthenticated) {
+        return <Navigate to="/login" />;
+    }
+    if (!user) {
+        return null;
+    }
+    if (user?.role !== 'admin' && user?.role !== 'manager') {
+        return <Navigate to="/" />;
+    }
+    return <Layout>{children}</Layout>;
+};
+
 const AppRoutes = () => {
     return (
         <Routes>
             <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
+            <Route path="/register" element={<Navigate to="/login" replace />} />
             <Route
                 path="/"
                 element={
@@ -61,9 +91,9 @@ const AppRoutes = () => {
             <Route
                 path="/clients"
                 element={
-                    <ProtectedRoute>
+                    <AdminOrManagerRoute>
                         <Clients />
-                    </ProtectedRoute>
+                    </AdminOrManagerRoute>
                 }
             />
             <Route
@@ -93,9 +123,17 @@ const AppRoutes = () => {
             <Route
                 path="/github"
                 element={
-                    <ProtectedRoute>
+                    <AdminRoute>
                         <GithubIntegration />
-                    </ProtectedRoute>
+                    </AdminRoute>
+                }
+            />
+            <Route
+                path="/team"
+                element={
+                    <AdminRoute>
+                        <Team />
+                    </AdminRoute>
                 }
             />
         </Routes>
@@ -103,6 +141,21 @@ const AppRoutes = () => {
 };
 
 const App = () => {
+    const [isLoading, setIsLoading] = useState(true);
+
+    useEffect(() => {
+        // Simulate a majestic initial app load to show off the fancy new loading screen 
+        // and allow contexts/queries to initialize smoothly.
+        const timer = setTimeout(() => {
+            setIsLoading(false);
+        }, 100);
+        return () => clearTimeout(timer);
+    }, []);
+
+    if (isLoading) {
+        return <LoadingScreen />;
+    }
+
     return (
         <AuthProvider>
             <AppRoutes />

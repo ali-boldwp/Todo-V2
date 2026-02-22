@@ -1,7 +1,6 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
 export interface ITimeEntry extends Document {
-    organizationId: mongoose.Types.ObjectId;
     userId: mongoose.Types.ObjectId;
     taskId?: mongoose.Types.ObjectId;
     projectId?: mongoose.Types.ObjectId;
@@ -13,7 +12,6 @@ export interface ITimeEntry extends Document {
 }
 
 const TimeEntrySchema: Schema = new Schema({
-    organizationId: { type: Schema.Types.ObjectId, ref: 'Organization', required: true, index: true },
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     taskId: { type: Schema.Types.ObjectId, ref: 'Task' },
     projectId: { type: Schema.Types.ObjectId, ref: 'Project' },

@@ -7,10 +7,7 @@ export const getSalaryStructure = async (req: AuthRequest, res: Response) => {
     try {
         // Admin can see others, user can see own
         const userId = req.query.userId || req.user!.userId;
-        const structure = await SalaryStructure.findOne({
-            organizationId: req.user!.organizationId,
-            userId
-        });
+        const structure = await SalaryStructure.findOne({ userId });
         res.json(structure);
     } catch (error) {
         res.status(500).json({ message: 'Server error' });
@@ -22,8 +19,8 @@ export const createSalaryStructure = async (req: AuthRequest, res: Response) => 
         const validated = SalaryStructureSchema.parse(req.body);
         // Upsert
         const structure = await SalaryStructure.findOneAndUpdate(
-            { organizationId: req.user!.organizationId, userId: validated.userId },
-            { ...validated, organizationId: req.user!.organizationId },
+            { userId: validated.userId },
+            { ...validated },
             { new: true, upsert: true }
         );
         res.status(201).json(structure);
@@ -35,10 +32,7 @@ export const createSalaryStructure = async (req: AuthRequest, res: Response) => 
 export const getPayslips = async (req: AuthRequest, res: Response) => {
     try {
         const userId = req.user!.role === 'admin' && req.query.userId ? req.query.userId : req.user!.userId;
-        const payslips = await Payslip.find({
-            organizationId: req.user!.organizationId,
-            userId
-        }).sort({ startDate: -1 });
+        const payslips = await Payslip.find({ userId }).sort({ startDate: -1 });
         res.json(payslips);
     } catch (error) {
         res.status(500).json({ message: 'Server error' });
@@ -49,10 +43,7 @@ export const generatePayslip = async (req: AuthRequest, res: Response) => {
     try {
         const { userId, startDate, endDate } = req.body;
 
-        const structure = await SalaryStructure.findOne({
-            organizationId: req.user!.organizationId,
-            userId
-        });
+        const structure = await SalaryStructure.findOne({ userId });
 
         if (!structure) {
             return res.status(404).json({ message: 'Salary structure not found' });
@@ -65,7 +56,6 @@ export const generatePayslip = async (req: AuthRequest, res: Response) => {
         const netSalary = grossSalary + totalAdditions - totalDeductions;
 
         const payslip = await Payslip.create({
-            organizationId: req.user!.organizationId,
             userId,
             startDate,
             endDate,

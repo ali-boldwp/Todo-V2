@@ -2,7 +2,6 @@ import { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import User from '../models/User';
-import Organization from '../models/Organization';
 import { RegisterSchema, LoginSchema } from '@devmanager/shared/dist/auth.schema';
 
 export const register = async (req: Request, res: Response) => {
@@ -15,12 +14,6 @@ export const register = async (req: Request, res: Response) => {
             return res.status(400).json({ message: 'User already exists' });
         }
 
-        // Create Organization
-        const org = await Organization.create({
-            name: validated.organizationName,
-            plan: 'free',
-        });
-
         // Hash password
         const salt = await bcrypt.genSalt(10);
         const passwordHash = await bcrypt.hash(validated.password, salt);
@@ -31,18 +24,17 @@ export const register = async (req: Request, res: Response) => {
             passwordHash,
             firstName: validated.firstName,
             lastName: validated.lastName,
-            organizationId: org._id,
             role: 'admin',
         });
 
         // Generate Token
         const token = jwt.sign(
-            { userId: user._id, organizationId: org._id, role: user.role, clientId: user.clientId },
+            { userId: user._id, email: user.email, role: user.role, clientId: user.clientId },
             process.env.JWT_SECRET || 'secret',
             { expiresIn: '1d' }
         );
 
-        res.status(201).json({ token, user: { id: user._id, email: user.email, role: user.role, organizationId: org._id } });
+        res.status(201).json({ token, user: { id: user._id, email: user.email, role: user.role } });
     } catch (error: any) {
         if (error.issues) {
             return res.status(400).json({ errors: error.issues });
@@ -70,12 +62,12 @@ export const login = async (req: Request, res: Response) => {
         }
 
         const token = jwt.sign(
-            { userId: user._id, organizationId: user.organizationId, role: user.role, clientId: user.clientId },
+            { userId: user._id, email: user.email, role: user.role, clientId: user.clientId },
             process.env.JWT_SECRET || 'secret',
             { expiresIn: '1d' }
         );
 
-        res.json({ token, user: { id: user._id, email: user.email, role: user.role, organizationId: user.organizationId } });
+        res.json({ token, user: { id: user._id, email: user.email, role: user.role } });
     } catch (error: any) {
         if (error.issues) {
             return res.status(400).json({ errors: error.issues });

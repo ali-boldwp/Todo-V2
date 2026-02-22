@@ -24,7 +24,7 @@ import clientRoutes from './routes/client.routes';
 
 app.use(helmet());
 
-const allowedOrigins = [
+export const allowedOrigins = [
     'http://localhost:3000',
     'http://localhost:3001',
     'http://localhost:3030',
@@ -44,7 +44,7 @@ app.use(cors({
     },
     credentials: true
 }));
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 
 app.use('/api/auth', authRoutes);
 app.use('/api', coreRoutes);

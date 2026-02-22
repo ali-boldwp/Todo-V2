@@ -1,6 +1,8 @@
 import dotenv from 'dotenv';
-import app, { logger } from './app';
+import http from 'http';
+import app, { logger, allowedOrigins } from './app';
 import { connectDB } from './config/db';
+import { initSocket } from './socket';
 
 dotenv.config();
 
@@ -9,7 +11,9 @@ const PORT = process.env.PORT || 3001;
 const startServer = async () => {
     try {
         await connectDB();
-        app.listen(PORT, () => {
+        const httpServer = http.createServer(app);
+        initSocket(httpServer, allowedOrigins);
+        httpServer.listen(PORT, () => {
             logger.info(`Server running on port ${PORT}`);
         });
     } catch (error) {

@@ -1,7 +1,6 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
 export interface ISalaryStructure extends Document {
-    organizationId: mongoose.Types.ObjectId;
     userId: mongoose.Types.ObjectId;
     baseSalary: number;
     allowances: Map<string, number>;
@@ -10,7 +9,6 @@ export interface ISalaryStructure extends Document {
 }
 
 const SalaryStructureSchema: Schema = new Schema({
-    organizationId: { type: Schema.Types.ObjectId, ref: 'Organization', required: true, index: true },
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, unique: true },
     baseSalary: { type: Number, required: true },
     allowances: { type: Map, of: Number },
@@ -21,7 +19,6 @@ const SalaryStructureSchema: Schema = new Schema({
 export const SalaryStructure = mongoose.model<ISalaryStructure>('SalaryStructure', SalaryStructureSchema);
 
 export interface IPayslip extends Document {
-    organizationId: mongoose.Types.ObjectId;
     userId: mongoose.Types.ObjectId;
     startDate: Date;
     endDate: Date;
@@ -33,7 +30,6 @@ export interface IPayslip extends Document {
 }
 
 const PayslipSchema: Schema = new Schema({
-    organizationId: { type: Schema.Types.ObjectId, ref: 'Organization', required: true, index: true },
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     startDate: { type: Date, required: true },
     endDate: { type: Date, required: true },

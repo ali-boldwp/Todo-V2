@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getProjects, createProject, updateProject } from '../services/core';
+import { getGithubConfig, getGithubRepos } from '../services/github';
 import { ProjectInput } from '@devmanager/shared/dist/index';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
@@ -41,6 +42,17 @@ const Projects: React.FC = () => {
     const [visibility, setVisibility] = useState<'public' | 'private'>('private');
     const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
 
+    const { data: githubConfig } = useQuery({ queryKey: ['github-config'], queryFn: getGithubConfig });
+    const { data: githubRepos, isLoading: reposLoading } = useQuery({
+        queryKey: ['github-repos'],
+        queryFn: getGithubRepos,
+        enabled: !!githubConfig?.personalAccessToken
+    });
+
+    const [githubRepoOption, setGithubRepoOption] = useState<'none' | 'new' | 'existing'>('none');
+    const [selectedRepoOwner, setSelectedRepoOwner] = useState('');
+    const [selectedRepoName, setSelectedRepoName] = useState('');
+
     const { register, handleSubmit, reset, formState: { errors } } = useForm<ProjectInput>({
         resolver: zodResolver(ProjectSchema),
         defaultValues: {
@@ -63,6 +75,10 @@ const Projects: React.FC = () => {
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['projects'] });
         },
+        onError: (error: any) => {
+            const message = error.response?.data?.message || error.message || 'Failed to update project';
+            alert(message);
+        }
     });
 
     // Auto-create on name blur
@@ -86,10 +102,15 @@ const Projects: React.FC = () => {
                     ...data,
                     description: editorData,
                     visibility,
+                    ...(githubRepoOption === 'new' && { createGithubRepo: true }),
+                    ...(githubRepoOption === 'existing' && { githubRepoOwner: selectedRepoOwner, githubRepoName: selectedRepoName })
+                }
+            }, {
+                onSuccess: () => {
+                    setIsDrawerOpen(false);
+                    resetForm();
                 }
             });
-            setIsDrawerOpen(false);
-            resetForm();
         }
     };
 
@@ -98,6 +119,9 @@ const Projects: React.FC = () => {
         setEditorData(null);
         setVisibility('private');
         setCurrentProjectId(null);
+        setGithubRepoOption('none');
+        setSelectedRepoOwner('');
+        setSelectedRepoName('');
     };
 
     const handleDrawerClose = () => {
@@ -232,6 +256,53 @@ const Projects: React.FC = () => {
 
                     {/* Settings */}
                     <div className="bg-gray-50 rounded-xl p-4 space-y-4">
+                        {/* GitHub Repository */}
+                        {!!githubConfig?.personalAccessToken && (
+                            <div className="mb-6 border-b border-gray-200 pb-6">
+                                <h3 className="text-sm font-semibold text-gray-900 mb-4">GitHub Repository</h3>
+                                <div className="space-y-4">
+                                    <label className="flex items-center space-x-3 cursor-pointer">
+                                        <input type="radio" checked={githubRepoOption === 'none'} onChange={() => setGithubRepoOption('none')} className="text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer" />
+                                        <span className="text-sm text-gray-700 font-medium">No GitHub Repository</span>
+                                    </label>
+
+                                    <label className="flex items-center space-x-3 cursor-pointer">
+                                        <input type="radio" checked={githubRepoOption === 'new'} onChange={() => setGithubRepoOption('new')} className="text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer" />
+                                        <span className="text-sm text-gray-700 font-medium">Create New Private Repository</span>
+                                    </label>
+
+                                    <label className="flex items-start space-x-3 cursor-pointer">
+                                        <input type="radio" checked={githubRepoOption === 'existing'} onChange={() => setGithubRepoOption('existing')} className="text-indigo-600 focus:ring-indigo-500 w-4 h-4 mt-0.5 cursor-pointer" />
+                                        <div className="flex-1">
+                                            <span className="text-sm text-gray-700 font-medium block">Use Existing Repository</span>
+                                            {githubRepoOption === 'existing' && (
+                                                <div className="mt-3">
+                                                    {reposLoading ? (
+                                                        <span className="text-xs text-gray-500">Loading repositories...</span>
+                                                    ) : (
+                                                        <select
+                                                            className="w-full bg-white border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+                                                            value={`${selectedRepoOwner}/${selectedRepoName}`}
+                                                            onChange={(e) => {
+                                                                const [owner, name] = e.target.value.split('/');
+                                                                setSelectedRepoOwner(owner);
+                                                                setSelectedRepoName(name);
+                                                            }}
+                                                        >
+                                                            <option value="/">Select a repository...</option>
+                                                            {githubRepos?.map((repo: any) => (
+                                                                <option key={repo.id} value={`${repo.owner}/${repo.name}`}>{repo.fullName}</option>
+                                                            ))}
+                                                        </select>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+                        )}
+
                         <div className="flex items-center justify-between">
                             <div className="flex flex-col">
                                 <span className="text-sm font-semibold text-gray-900">Visibility</span>

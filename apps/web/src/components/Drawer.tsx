@@ -52,18 +52,18 @@ const Drawer: React.FC<DrawerProps> = ({ isOpen, onClose, title, children, size 
                     isOpen ? "translate-x-0" : "translate-x-full"
                 )}
             >
-                <div className="flex items-center justify-between p-4 border-b border-gray-50">
-                    <div className="flex items-center space-x-2 text-xs font-bold text-gray-400 uppercase tracking-widest px-2">
+                <div className="flex items-center justify-between p-3 border-b border-gray-50">
+                    <div className="flex items-center space-x-2 text-[10px] font-bold text-gray-400 uppercase tracking-widest px-2">
                         {title}
                     </div>
                     <button
                         onClick={onClose}
-                        className="p-1.5 hover:bg-gray-100 rounded-md transition-all text-gray-400 hover:text-gray-900"
+                        className="p-1 hover:bg-gray-100 rounded-md transition-all text-gray-400 hover:text-gray-900"
                     >
-                        <X size={20} strokeWidth={2} />
+                        <X size={18} strokeWidth={2} />
                     </button>
                 </div>
-                <div className="p-6 h-[calc(100vh-80px)] overflow-y-auto">
+                <div className="p-4 h-[calc(100vh-60px)] overflow-y-auto">
                     {children}
                 </div>
             </div>

@@ -23,8 +23,28 @@ const time_routes_1 = __importDefault(require("./routes/time.routes"));
 const attendance_routes_1 = __importDefault(require("./routes/attendance.routes"));
 const payroll_routes_1 = __importDefault(require("./routes/payroll.routes"));
 const github_routes_1 = __importDefault(require("./routes/github.routes"));
+const client_routes_1 = __importDefault(require("./routes/client.routes"));
 app.use((0, helmet_1.default)());
-app.use((0, cors_1.default)());
+const allowedOrigins = [
+    'http://localhost:3000',
+    'http://localhost:3001',
+    'http://localhost:3030',
+    'http://localhost:5173',
+    'https://beta.devregion.com'
+];
+app.use((0, cors_1.default)({
+    origin: function (origin, callback) {
+        // allow requests with no origin (like mobile apps or curl requests)
+        if (!origin)
+            return callback(null, true);
+        if (allowedOrigins.indexOf(origin) === -1) {
+            const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
+            return callback(new Error(msg), false);
+        }
+        return callback(null, true);
+    },
+    credentials: true
+}));
 app.use(express_1.default.json());
 app.use('/api/auth', auth_routes_1.default);
 app.use('/api', core_routes_1.default);
@@ -35,7 +55,17 @@ app.use('/api/time', time_routes_1.default);
 app.use('/api/attendance', attendance_routes_1.default);
 app.use('/api/payroll', payroll_routes_1.default);
 app.use('/api/github', github_routes_1.default);
+app.use('/api/clients', client_routes_1.default);
 app.get('/health', (_req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+// Serve static files in production
+if (process.env.NODE_ENV === 'production') {
+    const path = require('path');
+    const buildPath = path.join(__dirname, '../../web/dist');
+    app.use(express_1.default.static(buildPath));
+    app.get('*', (_req, res) => {
+        res.sendFile(path.join(buildPath, 'index.html'));
+    });
+}
 exports.default = app;

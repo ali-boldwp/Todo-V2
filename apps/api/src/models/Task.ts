@@ -1,7 +1,6 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
 export interface ITask extends Document {
-    organizationId: mongoose.Types.ObjectId;
     projectId: mongoose.Types.ObjectId;
     title: string;
     description?: string;
@@ -10,10 +9,18 @@ export interface ITask extends Document {
     type: 'task' | 'bug' | 'feature';
     assigneeId?: mongoose.Types.ObjectId;
     dueDate?: Date;
+    clarificationText?: any;
+    githubBranch?: string;
+    attachments?: Array<{
+        name: string;
+        mimeType: string;
+        size: number;
+        data: string; // base64
+        uploadedAt: Date;
+    }>;
 }
 
 const TaskSchema: Schema = new Schema({
-    organizationId: { type: Schema.Types.ObjectId, ref: 'Organization', required: true, index: true },
     projectId: { type: Schema.Types.ObjectId, ref: 'Project', required: true, index: true },
     title: { type: String, required: true },
     description: { type: Schema.Types.Mixed },
@@ -23,6 +30,15 @@ const TaskSchema: Schema = new Schema({
     assigneeId: { type: Schema.Types.ObjectId, ref: 'User' },
     dueDate: { type: Date },
     needsClarification: { type: Boolean, default: false },
+    clarificationText: { type: Schema.Types.Mixed },
+    githubBranch: { type: String },
+    attachments: [{
+        name: { type: String, required: true },
+        mimeType: { type: String, required: true },
+        size: { type: Number, required: true },
+        data: { type: String, required: true },
+        uploadedAt: { type: Date, default: Date.now },
+    }],
 }, { timestamps: true });
 
 export default mongoose.model<ITask>('Task', TaskSchema);

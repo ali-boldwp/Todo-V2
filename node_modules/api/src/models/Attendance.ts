@@ -1,7 +1,6 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
 export interface IAttendance extends Document {
-    organizationId: mongoose.Types.ObjectId;
     userId: mongoose.Types.ObjectId;
     date: Date; // Normalized to start of day
     checkInTime?: Date;
@@ -12,7 +11,6 @@ export interface IAttendance extends Document {
 }
 
 const AttendanceSchema: Schema = new Schema({
-    organizationId: { type: Schema.Types.ObjectId, ref: 'Organization', required: true, index: true },
     userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     date: { type: Date, required: true },
     checkInTime: { type: Date },

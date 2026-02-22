@@ -5,16 +5,13 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.createComment = exports.getComments = void 0;
 const Comment_1 = __importDefault(require("../models/Comment"));
-const comment_schema_1 = require("@devmanager/shared/dist/comment.schema");
 const getComments = async (req, res) => {
     try {
-        const { taskId } = req.query;
-        if (!taskId)
-            return res.status(400).json({ message: 'Task ID required' });
+        const { taskId } = req.params;
         const comments = await Comment_1.default.find({
             taskId,
             organizationId: req.user.organizationId
-        }).populate('userId', 'firstName lastName email').sort({ createdAt: 1 });
+        }).populate('userId', 'firstName lastName email');
         res.json(comments);
     }
     catch (error) {
@@ -24,19 +21,21 @@ const getComments = async (req, res) => {
 exports.getComments = getComments;
 const createComment = async (req, res) => {
     try {
-        const validated = comment_schema_1.CommentSchema.parse(req.body);
+        const { taskId } = req.params;
+        const { content } = req.body;
+        if (!content) {
+            return res.status(400).json({ message: 'Content is required' });
+        }
         const comment = await Comment_1.default.create({
-            ...validated,
-            userId: req.user.userId,
+            taskId,
             organizationId: req.user.organizationId,
+            userId: req.user.userId,
+            content
         });
-        // Populate user for immediate return
-        await comment.populate('userId', 'firstName lastName email');
-        res.status(201).json(comment);
+        const populated = await comment.populate('userId', 'firstName lastName email');
+        res.status(201).json(populated);
     }
     catch (error) {
-        if (error.issues)
-            return res.status(400).json({ errors: error.issues });
         res.status(500).json({ message: 'Server error' });
     }
 };

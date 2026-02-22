@@ -8,6 +8,7 @@ const mongoose_1 = __importDefault(require("mongoose"));
 const app_1 = require("../app");
 const connectDB = async () => {
     const mongoURI = process.env.MONGO_URI || 'mongodb://admin:password123@localhost:27017/devmanager?authSource=admin';
+    app_1.logger.info(`Connecting to MongoDB with URI: ${mongoURI.replace(/:([^:@]+)@/, ':****@')}`);
     try {
         await mongoose_1.default.connect(mongoURI);
         app_1.logger.info('MongoDB Connected');

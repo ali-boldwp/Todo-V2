@@ -36,8 +36,10 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose_1 = __importStar(require("mongoose"));
 const ClientSchema = new mongoose_1.Schema({
     organizationId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Organization', required: true, index: true },
+    userId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'User' },
     name: { type: String, required: true },
     type: { type: String, enum: ['internal', 'external'], default: 'external' },
+    status: { type: String, enum: ['active', 'suspended'], default: 'active' },
     email: { type: String },
     phone: { type: String },
     address: { type: String },

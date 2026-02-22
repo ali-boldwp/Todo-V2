@@ -38,12 +38,12 @@ const UserSchema = new mongoose_1.Schema({
     organizationId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Organization', required: true, index: true },
     email: { type: String, required: true, unique: true },
     passwordHash: { type: String, required: true },
-    role: { type: String, enum: ['admin', 'manager', 'member'], default: 'member' },
+    role: { type: String, enum: ['admin', 'manager', 'member', 'client'], default: 'member' },
+    clientId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Client' },
     firstName: { type: String, required: true },
     lastName: { type: String, required: true },
+    isActive: { type: Boolean, default: true },
 }, { timestamps: true });
-// Compound index for email to be unique probably globally or per org? 
-// Usually email is unique globally in SaaS, or unique per org. 
-// Let's assume global unique for login simplicity for now.
-UserSchema.index({ email: 1 }, { unique: true });
+// Compound index for email to be unique is already handled by Schema definition
+// UserSchema.index({ email: 1 }, { unique: true });
 exports.default = mongoose_1.default.model('User', UserSchema);

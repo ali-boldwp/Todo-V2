@@ -5,10 +5,7 @@ import Comment from '../models/Comment';
 export const getComments = async (req: AuthRequest, res: Response) => {
     try {
         const { taskId } = req.params;
-        const comments = await Comment.find({
-            taskId,
-            organizationId: req.user!.organizationId
-        }).populate('userId', 'firstName lastName email');
+        const comments = await Comment.find({ taskId }).populate('userId', 'firstName lastName email');
 
         res.json(comments);
     } catch (error) {
@@ -27,7 +24,6 @@ export const createComment = async (req: AuthRequest, res: Response) => {
 
         const comment = await Comment.create({
             taskId,
-            organizationId: req.user!.organizationId,
             userId: req.user!.userId,
             content
         });

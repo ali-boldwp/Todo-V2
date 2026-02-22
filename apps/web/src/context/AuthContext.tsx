@@ -5,7 +5,6 @@ interface User {
     id: string;
     email: string;
     role: string;
-    organizationId: string;
 }
 
 interface AuthContextType {
@@ -18,15 +17,29 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+const parseJwt = (token: string) => {
+    try {
+        return JSON.parse(atob(token.split('.')[1]));
+    } catch (e) {
+        return null;
+    }
+};
+
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [user, setUser] = useState<User | null>(null);
     const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
     const navigate = useNavigate();
 
     useEffect(() => {
-        if (token) {
-            // Typically fetch user profile here if not stored or needed refresh
-            // For MVP we might store minimal user info in context or fetch /me
+        if (token && !user) {
+            const decoded = parseJwt(token);
+            if (decoded) {
+                setUser({
+                    id: decoded.userId,
+                    email: decoded.email || '',
+                    role: decoded.role,
+                });
+            }
         }
     }, [token]);
 

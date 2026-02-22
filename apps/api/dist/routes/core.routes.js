@@ -10,5 +10,6 @@ router.get('/clients', client_controller_1.getClients);
 router.post('/clients', client_controller_1.createClient);
 router.get('/projects', project_controller_1.getProjects);
 router.post('/projects', project_controller_1.createProject);
+router.put('/projects/:id', project_controller_1.updateProject);
 router.get('/projects/:id', project_controller_1.getProject);
 exports.default = router;

@@ -4,7 +4,6 @@ import jwt from 'jsonwebtoken';
 export interface AuthRequest extends Request {
     user?: {
         userId: string;
-        organizationId: string;
         role: string;
         clientId?: string;
     };
@@ -34,3 +33,6 @@ export const authorize = (roles: string[]) => {
         next();
     };
 };
+
+// Convenience middleware: admin only
+export const requireAdmin = authorize(['admin']);

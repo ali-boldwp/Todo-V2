@@ -5,7 +5,7 @@ import Attendance from '../models/Attendance';
 export const getAttendance = async (req: AuthRequest, res: Response) => {
     try {
         const { date } = req.query;
-        const query: any = { organizationId: req.user!.organizationId, userId: req.user!.userId };
+        const query: any = { userId: req.user!.userId };
 
         if (date) {
             const start = new Date(date as string);
@@ -37,7 +37,6 @@ export const checkIn = async (req: AuthRequest, res: Response) => {
         }
 
         const attendance = await Attendance.create({
-            organizationId: req.user!.organizationId,
             userId: req.user!.userId,
             date: today,
             checkInTime: new Date(),

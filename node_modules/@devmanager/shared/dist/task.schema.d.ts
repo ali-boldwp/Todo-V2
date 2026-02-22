@@ -2,29 +2,35 @@ import { z } from 'zod';
 export declare const TaskSchema: z.ZodObject<{
     projectId: z.ZodString;
     title: z.ZodString;
-    description: z.ZodOptional<z.ZodString>;
+    description: z.ZodOptional<z.ZodAny>;
     status: z.ZodDefault<z.ZodEnum<["todo", "in_progress", "review", "done"]>>;
     priority: z.ZodDefault<z.ZodEnum<["low", "medium", "high", "urgent"]>>;
     type: z.ZodDefault<z.ZodEnum<["task", "bug", "feature"]>>;
     assigneeId: z.ZodOptional<z.ZodString>;
     dueDate: z.ZodOptional<z.ZodString>;
+    needsClarification: z.ZodDefault<z.ZodBoolean>;
+    clarificationText: z.ZodOptional<z.ZodAny>;
 }, "strip", z.ZodTypeAny, {
     status: "todo" | "in_progress" | "review" | "done";
     type: "task" | "bug" | "feature";
     priority: "low" | "medium" | "high" | "urgent";
     projectId: string;
     title: string;
-    description?: string | undefined;
+    needsClarification: boolean;
+    description?: any;
     assigneeId?: string | undefined;
     dueDate?: string | undefined;
+    clarificationText?: any;
 }, {
     projectId: string;
     title: string;
     status?: "todo" | "in_progress" | "review" | "done" | undefined;
     type?: "task" | "bug" | "feature" | undefined;
-    description?: string | undefined;
+    description?: any;
     priority?: "low" | "medium" | "high" | "urgent" | undefined;
     assigneeId?: string | undefined;
     dueDate?: string | undefined;
+    needsClarification?: boolean | undefined;
+    clarificationText?: any;
 }>;
 export type TaskInput = z.infer<typeof TaskSchema>;

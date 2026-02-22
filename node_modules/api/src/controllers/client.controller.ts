@@ -5,9 +5,9 @@ import Client from '../models/Client';
 import User from '../models/User';
 import { ClientSchema } from '@devmanager/shared/dist/client.schema';
 
-export const getClients = async (req: AuthRequest, res: Response) => {
+export const getClients = async (_req: AuthRequest, res: Response) => {
     try {
-        const clients = await Client.find({ organizationId: req.user!.organizationId });
+        const clients = await Client.find({});
         res.json(clients);
     } catch (error) {
         res.status(500).json({ message: 'Server error' });
@@ -16,10 +16,7 @@ export const getClients = async (req: AuthRequest, res: Response) => {
 
 export const getClient = async (req: AuthRequest, res: Response) => {
     try {
-        const client = await Client.findOne({
-            _id: req.params.id,
-            organizationId: req.user!.organizationId
-        });
+        const client = await Client.findById(req.params.id);
         if (!client) return res.status(404).json({ message: 'Client not found' });
         res.json(client);
     } catch (error) {
@@ -34,7 +31,6 @@ export const createClient = async (req: AuthRequest, res: Response) => {
         // 1. Create the Client document
         const client = await Client.create({
             ...validated,
-            organizationId: req.user!.organizationId,
         });
 
         // 2. If email is provided, create a User account for the client
@@ -59,7 +55,6 @@ export const createClient = async (req: AuthRequest, res: Response) => {
                 firstName: validated.name.split(' ')[0] || 'Client',
                 lastName: validated.name.split(' ')[1] || 'User',
                 role: 'client',
-                organizationId: req.user!.organizationId,
                 clientId: client._id
             });
 
@@ -79,10 +74,7 @@ export const createClient = async (req: AuthRequest, res: Response) => {
 export const toggleClientStatus = async (req: AuthRequest, res: Response) => {
     try {
         const { status } = req.body;
-        const client = await Client.findOne({
-            _id: req.params.id,
-            organizationId: req.user!.organizationId
-        });
+        const client = await Client.findById(req.params.id);
 
         if (!client) return res.status(404).json({ message: 'Client not found' });
 
@@ -103,10 +95,7 @@ export const toggleClientStatus = async (req: AuthRequest, res: Response) => {
 
 export const resetClientPassword = async (req: AuthRequest, res: Response) => {
     try {
-        const client = await Client.findOne({
-            _id: req.params.id,
-            organizationId: req.user!.organizationId
-        });
+        const client = await Client.findById(req.params.id);
 
         if (!client) return res.status(404).json({ message: 'Client not found' });
         if (!client.userId) return res.status(400).json({ message: 'Client has no associated user account' });
@@ -125,10 +114,7 @@ export const resetClientPassword = async (req: AuthRequest, res: Response) => {
 
 export const deleteClient = async (req: AuthRequest, res: Response) => {
     try {
-        const client = await Client.findOne({
-            _id: req.params.id,
-            organizationId: req.user!.organizationId
-        });
+        const client = await Client.findById(req.params.id);
 
         if (!client) return res.status(404).json({ message: 'Client not found' });
 

@@ -11,9 +11,10 @@ interface RichTextEditorProps {
     onChange: (data: OutputData) => void;
     readOnly?: boolean;
     holder?: string;
+    placeholder?: string;
 }
 
-const RichTextEditor: React.FC<RichTextEditorProps> = ({ data, onChange, readOnly = false, holder = 'editorjs' }) => {
+const RichTextEditor: React.FC<RichTextEditorProps> = ({ data, onChange, readOnly = false, holder = 'editorjs', placeholder = 'Add description...' }) => {
     const editorRef = useRef<EditorJS | null>(null);
 
     useEffect(() => {
@@ -22,6 +23,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ data, onChange, readOnl
                 holder: holder,
                 readOnly: readOnly,
                 data: data,
+                placeholder: placeholder,
                 defaultBlock: 'paragraph',
                 inlineToolbar: true,
                 tools: {
@@ -57,7 +59,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ data, onChange, readOnl
         };
     }, []);
 
-    return <div id={holder} className="min-h-[200px] prose max-w-none w-full h-full p-[50px] focus:outline-none" />;
+    return <div id={holder} className="min-h-[24px] prose max-w-none w-full h-full p-0 focus:outline-none" />;
 };
 
 export default RichTextEditor;

@@ -1,7 +1,6 @@
 import mongoose, { Document, Schema } from 'mongoose';
 
 export interface IUser extends Document {
-    organizationId: mongoose.Types.ObjectId;
     email: string;
     passwordHash: string;
     role: 'admin' | 'manager' | 'member' | 'client';
@@ -12,7 +11,6 @@ export interface IUser extends Document {
 }
 
 const UserSchema: Schema = new Schema({
-    organizationId: { type: Schema.Types.ObjectId, ref: 'Organization', required: true, index: true },
     email: { type: String, required: true, unique: true },
     passwordHash: { type: String, required: true },
     role: { type: String, enum: ['admin', 'manager', 'member', 'client'], default: 'member' },

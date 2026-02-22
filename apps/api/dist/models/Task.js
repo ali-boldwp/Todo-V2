@@ -38,11 +38,13 @@ const TaskSchema = new mongoose_1.Schema({
     organizationId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Organization', required: true, index: true },
     projectId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Project', required: true, index: true },
     title: { type: String, required: true },
-    description: { type: String },
+    description: { type: mongoose_1.Schema.Types.Mixed },
     status: { type: String, enum: ['todo', 'in_progress', 'review', 'done'], default: 'todo' },
     priority: { type: String, enum: ['low', 'medium', 'high', 'urgent'], default: 'medium' },
     type: { type: String, enum: ['task', 'bug', 'feature'], default: 'task' },
     assigneeId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'User' },
     dueDate: { type: Date },
+    needsClarification: { type: Boolean, default: false },
+    clarificationText: { type: mongoose_1.Schema.Types.Mixed },
 }, { timestamps: true });
 exports.default = mongoose_1.default.model('Task', TaskSchema);

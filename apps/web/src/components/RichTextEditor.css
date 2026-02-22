@@ -2,6 +2,8 @@
 .codex-editor .ce-toolbar__content {
     max-width: 100% !important;
     width: 100%;
+    margin-left: 0 !important;
+    padding-left: 0 !important;
 }
 
 .codex-editor .ce-block__content .ce-header {
@@ -34,6 +36,29 @@
 }
 
 .codex-editor .ce-block__content .ce-paragraph {
-    font-size: 1rem;
+    font-size: 14px;
     line-height: 1.5;
+    margin: 0 0 8px 0 !important;
+    padding: 0 !important;
+}
+
+.codex-editor .ce-block {
+    margin: 0 !important;
+    padding: 0 !important;
+    min-height: 0 !important;
+}
+
+.codex-editor .ce-redactor,
+.codex-editor__redactor {
+    padding-bottom: 35px !important;
+    margin: 0 !important;
+}
+
+.codex-editor .ce-toolbar__plus,
+.codex-editor .ce-toolbar__settings-btn {
+    display: none !important;
+}
+
+.codex-editor--empty .ce-block:first-child .ce-paragraph:before {
+    margin-top: 0 !important;
 }

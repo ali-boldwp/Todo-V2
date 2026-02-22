@@ -4,7 +4,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { LoginSchema, LoginInput } from '@devmanager/shared/dist/auth.schema';
 import { useAuth } from '../context/AuthContext';
 import { login as loginApi } from '../services/auth';
-import { Link } from 'react-router-dom';
 
 const Login: React.FC = () => {
     const { login } = useAuth();
@@ -52,9 +51,6 @@ const Login: React.FC = () => {
                         Sign In
                     </button>
                 </form>
-                <div className="mt-4 text-center">
-                    <Link to="/register" className="text-sm text-indigo-600 hover:text-indigo-500">Need an account? Register</Link>
-                </div>
             </div>
         </div>
     );

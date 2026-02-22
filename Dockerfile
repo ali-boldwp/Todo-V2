@@ -32,6 +32,8 @@ ENV PORT=3030
 ENV MONGO_URI=mongodb://mongo:ibbjba5pzkmn7hvu@185.185.80.245:27028/devmanager?authSource=admin
 ENV JWT_SECRET=supersecretkey
 ENV REDIS_URL=redis://localhost:6379
+ENV GITHUB_CLIENT_ID="Ov23lievqX0deavCNgFA"
+ENV GITHUB_CLIENT_SECRET="24c00c09a9f1cfb1d0192375a8687fd430d11d8a"
 
 # Copy necessary files
 # Copy node_modules with compiled binaries from builder

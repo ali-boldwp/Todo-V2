@@ -1,47 +1,51 @@
-import React, { useState } from 'react';
+import React from 'react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getGithubConfig, saveGithubConfig, syncIssues } from '../services/github';
-import { GithubConfigInput } from '@devmanager/shared/dist/index';
+import { getGithubConfig, getGithubAuthUrl, handleGithubCallback } from '../services/github';
+import { Github } from 'lucide-react';
 
 const GithubIntegration: React.FC = () => {
     const { data: config, isLoading } = useQuery({ queryKey: ['github-config'], queryFn: getGithubConfig });
     const queryClient = useQueryClient();
-    const [formData, setFormData] = useState<GithubConfigInput>({
-        personalAccessToken: '',
-        repoOwner: '',
-        repoName: '',
-    });
 
-    // Load initial data
-    React.useEffect(() => {
-        if (config) {
-            setFormData({
-                personalAccessToken: config.personalAccessToken || '',
-                repoOwner: config.repoOwner || '',
-                repoName: config.repoName || '',
-            });
-        }
-    }, [config]);
 
-    const saveMutation = useMutation({
-        mutationFn: saveGithubConfig,
-        onSuccess: () => {
+
+    const [searchParams] = useSearchParams();
+    const navigate = useNavigate();
+    const code = searchParams.get('code');
+
+    const callbackMutation = useMutation({
+        mutationFn: handleGithubCallback,
+        onSuccess: (data) => {
+            console.log('GitHub callback SUCCESS:', data);
             queryClient.invalidateQueries({ queryKey: ['github-config'] });
-            alert('Configuration saved!');
+            navigate('/github', { replace: true });
         },
-        onError: (err: any) => alert(err.response?.data?.message || 'Failed to save configuration'),
+        onError: (err: any) => {
+            console.error('GitHub callback ERROR:', err.response?.data || err.message || err);
+            alert('Failed to connect to GitHub: ' + (err.response?.data?.message || err.message || 'Unknown error'));
+            navigate('/github', { replace: true });
+        }
     });
 
-    const syncMutation = useMutation({
-        mutationFn: syncIssues,
-        onSuccess: () => alert('Sync started successfully!'),
-        onError: (err: any) => alert(err.response?.data?.message || 'Failed to start sync'),
-    });
+    const callbackFired = React.useRef(false);
 
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        saveMutation.mutate(formData);
+    React.useEffect(() => {
+        if (code && !callbackFired.current) {
+            callbackFired.current = true;
+            callbackMutation.mutate(code);
+        }
+    }, [code]);
+
+    const handleConnect = async () => {
+        try {
+            const { url } = await getGithubAuthUrl();
+            window.location.href = url;
+        } catch (error: any) {
+            alert(error.response?.data?.message || 'Failed to get GitHub Auth URL');
+        }
     };
+
 
     if (isLoading) return <div>Loading...</div>;
 
@@ -51,54 +55,38 @@ const GithubIntegration: React.FC = () => {
 
             <div className="bg-white p-6 rounded shadow mb-8 max-w-lg">
                 <h2 className="text-lg font-semibold mb-4">Configuration</h2>
-                <form onSubmit={handleSubmit}>
-                    <div className="mb-4">
-                        <label className="block text-sm font-medium mb-1">Personal Access Token</label>
-                        <input
-                            type="password"
-                            className="w-full border p-2 rounded"
-                            value={formData.personalAccessToken}
-                            onChange={(e) => setFormData({ ...formData, personalAccessToken: e.target.value })}
-                            required
-                        />
-                        <p className="text-xs text-gray-400 mt-1">Token requires 'repo' scope.</p>
+
+                {config?.personalAccessToken ? (
+                    <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-md flex items-center justify-between">
+                        <div className="flex items-center text-green-700">
+                            <Github className="w-5 h-5 mr-2" />
+                            <span className="font-semibold text-sm">Connected to GitHub</span>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={handleConnect}
+                            className="text-sm font-medium text-indigo-600 hover:text-indigo-800"
+                        >
+                            Reconnect
+                        </button>
                     </div>
-                    <div className="mb-4">
-                        <label className="block text-sm font-medium mb-1">Repository Owner</label>
-                        <input
-                            className="w-full border p-2 rounded"
-                            value={formData.repoOwner}
-                            onChange={(e) => setFormData({ ...formData, repoOwner: e.target.value })}
-                            required
-                        />
-                    </div>
+                ) : (
                     <div className="mb-6">
-                        <label className="block text-sm font-medium mb-1">Repository Name</label>
-                        <input
-                            className="w-full border p-2 rounded"
-                            value={formData.repoName}
-                            onChange={(e) => setFormData({ ...formData, repoName: e.target.value })}
-                            required
-                        />
+                        <button
+                            type="button"
+                            onClick={handleConnect}
+                            className="w-full bg-[#24292e] text-white py-2.5 rounded hover:bg-[#1b1f23] flex items-center justify-center space-x-2 transition-colors"
+                        >
+                            <Github className="w-5 h-5" />
+                            <span>Connect via GitHub</span>
+                        </button>
+                        <p className="text-xs text-gray-400 mt-2 text-center">
+                            Automatically generate a token to securely access your repositories.
+                        </p>
                     </div>
-                    <button
-                        type="submit"
-                        className="w-full bg-indigo-600 text-white py-2 rounded hover:bg-indigo-700"
-                    >
-                        Save Configuration
-                    </button>
-                </form>
+                )}
             </div>
 
-            <div className="bg-white p-6 rounded shadow max-w-lg">
-                <h2 className="text-lg font-semibold mb-4">Actions</h2>
-                <button
-                    onClick={() => syncMutation.mutate()}
-                    className="bg-gray-800 text-white px-4 py-2 rounded hover:bg-gray-900 flex items-center space-x-2"
-                >
-                    <span>Sync Issues to Tasks</span>
-                </button>
-            </div>
         </div>
     );
 };

@@ -14,11 +14,18 @@ import {
     ListTodo,
     Zap,
     Settings,
+    Github,
+    Briefcase,
+    FileText,
 } from 'lucide-react';
 import Header from './Header';
+import icon from '../assets/icon.png';
 
-const SidebarRailItem = ({ icon: Icon, label, active }: { icon: any; label: string; active?: boolean }) => (
-    <div className={`w-10 h-10 flex items-center justify-center rounded-lg mb-2 cursor-pointer transition-colors group relative ${active ? 'bg-gray-200 text-gray-900' : 'text-gray-500 hover:bg-gray-200 hover:text-gray-900'}`}>
+const SidebarRailItem = ({ icon: Icon, label, active, onClick }: { icon: any; label: string; active?: boolean; onClick?: () => void }) => (
+    <div
+        onClick={onClick}
+        className={`w-10 h-10 flex items-center justify-center rounded-lg mb-2 cursor-pointer transition-colors group relative ${active ? 'bg-gray-200 text-gray-900' : 'text-gray-500 hover:bg-gray-200 hover:text-gray-900'}`}
+    >
         <Icon size={20} strokeWidth={1.5} />
         <div className="absolute left-12 bg-gray-900 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 pointer-events-none">
             {label}
@@ -65,9 +72,10 @@ const SectionHeader = ({ label }: { label: string }) => (
 const PROJECT_SUB_ITEMS = [
     { label: 'Overview', path: 'overview', icon: LayoutGrid },
     { label: 'Tasks', path: 'tasks', icon: ListTodo },
-    { label: 'Backlog', path: 'backlog', icon: CheckSquare },
-    { label: 'Sprints', path: 'sprints', icon: Zap },
-    { label: 'Settings', path: 'settings', icon: Settings },
+    { label: 'Documents', path: 'documents', icon: FileText, adminOnly: false },
+    { label: 'Backlog', path: 'backlog', icon: CheckSquare, adminOnly: false },
+    { label: 'Sprints', path: 'sprints', icon: Zap, adminOnly: false },
+    { label: 'Settings', path: 'settings', icon: Settings, staffOnly: true },
 ];
 
 const ProjectNavItem = ({
@@ -80,8 +88,14 @@ const ProjectNavItem = ({
     onToggle: () => void;
 }) => {
     const location = useLocation();
+    const { user } = useAuth();
     const basePath = `/projects/${project._id}`;
     const isParentActive = location.pathname.startsWith(basePath);
+
+    // Clients only see Overview and Tasks
+    const visibleItems = user?.role === 'client'
+        ? PROJECT_SUB_ITEMS.filter(item => !item.staffOnly)
+        : PROJECT_SUB_ITEMS;
 
     return (
         <div>
@@ -103,7 +117,7 @@ const ProjectNavItem = ({
             {/* Sub-menu */}
             {isOpen && (
                 <div className="ml-4 mt-0.5 space-y-0.5 border-l border-gray-200 pl-2">
-                    {PROJECT_SUB_ITEMS.map((item) => {
+                    {visibleItems.map((item) => {
                         const to = `${basePath}/${item.path}`;
                         const isActive = location.pathname === to || location.pathname.startsWith(to + '/');
                         return (
@@ -127,7 +141,7 @@ const ProjectNavItem = ({
 };
 
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const { user } = useAuth();
+    const { user, logout } = useAuth();
     const navigate = useNavigate();
     const location = useLocation();
 
@@ -156,13 +170,38 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         <div className="flex h-screen bg-white">
             {/* 1. Icon Rail */}
             <div className="w-[56px] bg-[#F7F8FA] border-r border-gray-200 flex flex-col items-center py-4 z-20">
-                <SidebarRailItem icon={FolderKanban} label="Projects" active />
-                <SidebarRailItem icon={Users} label="Team" />
-                <SidebarRailItem icon={CheckSquare} label="My Work" />
+                <SidebarRailItem icon={FolderKanban} label="Projects" active={location.pathname.startsWith('/projects') || location.pathname === '/'} onClick={() => navigate('/')} />
+
+                {(user?.role === 'admin' || user?.role === 'manager') && (
+                    <SidebarRailItem
+                        icon={Briefcase}
+                        label="Clients"
+                        active={location.pathname === '/clients'}
+                        onClick={() => navigate('/clients')}
+                    />
+                )}
+
+                {user?.role === 'admin' && (
+                    <>
+                        <SidebarRailItem
+                            icon={Users}
+                            label="Team"
+                            active={location.pathname === '/team'}
+                            onClick={() => navigate('/team')}
+                        />
+                        <SidebarRailItem
+                            icon={Github}
+                            label="GitHub Settings"
+                            active={location.pathname === '/github'}
+                            onClick={() => navigate('/github')}
+                        />
+                    </>
+                )}
+
                 <div className="mt-auto flex flex-col items-center space-y-2">
-                    <SidebarRailItem icon={LogOut} label="Logout" />
+                    <SidebarRailItem icon={LogOut} label="Logout" onClick={logout} />
                     <div className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs font-bold cursor-pointer">
-                        {user?.email?.[0].toUpperCase()}
+                        {user?.email ? user.email[0].toUpperCase() : 'U'}
                     </div>
                 </div>
             </div>
@@ -170,10 +209,10 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
             {/* 2. Context Sidebar */}
             <div className="w-[240px] bg-[#F7F8FA] border-r border-gray-200 flex flex-col z-10">
                 {/* Workspace Switcher */}
-                <div className="h-14 flex items-center px-4 border-b border-gray-100 hover:bg-gray-200/50 cursor-pointer transition-colors">
-                    <div className="w-5 h-5 bg-gray-900 rounded flex items-center justify-center text-white text-[10px] font-bold mr-2">D</div>
-                    <span className="text-sm font-semibold text-gray-900 flex-1">DevRegion</span>
-                    <span className="text-gray-400 text-[10px]">▼</span>
+                <div className="h-14 flex items-center px-4 border-b border-gray-200 hover:bg-gray-100 cursor-pointer transition-colors bg-white">
+                    <img src={icon} alt="DevRegion Workspace" className="h-6 w-auto object-contain mr-2 opacity-90" />
+                    <span className="text-sm font-bold text-gray-900 flex-1 tracking-wide">DevRegion</span>
+                    <span className="text-gray-400 text-[10px] ml-1">▼</span>
                 </div>
 
                 {/* Main Nav */}

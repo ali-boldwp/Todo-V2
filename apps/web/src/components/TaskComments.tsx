@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../services/api';
-import { Send } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 
 interface Comment {

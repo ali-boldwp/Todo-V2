@@ -30,3 +30,14 @@ export const getProject = async (id: string) => {
     const response = await api.get(`/projects/${id}`);
     return response.data;
 };
+
+// --- Documents ---
+export const uploadProjectDocument = async (projectId: string, data: { title: string; description: string; fileData: string; mimeType: string; fileName: string }) => {
+    const response = await api.post(`/projects/${projectId}/documents`, data);
+    return response.data;
+};
+
+export const deleteProjectDocument = async (projectId: string, docId: string) => {
+    const response = await api.delete(`/projects/${projectId}/documents/${docId}`);
+    return response.data;
+};

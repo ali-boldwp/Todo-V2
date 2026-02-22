@@ -38,9 +38,14 @@ const ProjectSchema = new mongoose_1.Schema({
     organizationId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Organization', required: true, index: true },
     clientId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Client' },
     name: { type: String, required: true },
-    description: { type: String },
-    status: { type: String, enum: ['active', 'completed', 'archived', 'on_hold'], default: 'active' },
+    description: { type: mongoose_1.Schema.Types.Mixed },
+    status: { type: String, enum: ['active', 'completed', 'archived', 'on_hold', 'draft'], default: 'active' },
+    visibility: { type: String, enum: ['public', 'private'], default: 'private' },
+    priority: { type: String, enum: ['low', 'medium', 'high'], default: 'medium' },
     startDate: { type: Date },
     endDate: { type: Date },
+    members: [{ type: mongoose_1.Schema.Types.ObjectId, ref: 'User' }],
+    githubRepoOwner: { type: String },
+    githubRepoName: { type: String },
 }, { timestamps: true });
 exports.default = mongoose_1.default.model('Project', ProjectSchema);

@@ -7,7 +7,7 @@ import { EpicSchema, SprintSchema } from '@devmanager/shared/dist/planning.schem
 export const getEpics = async (req: AuthRequest, res: Response) => {
     try {
         const { projectId } = req.query;
-        const query: any = { organizationId: req.user!.organizationId };
+        const query: any = {};
         if (projectId) query.projectId = projectId;
         const epics = await Epic.find(query);
         res.json(epics);
@@ -19,7 +19,7 @@ export const getEpics = async (req: AuthRequest, res: Response) => {
 export const createEpic = async (req: AuthRequest, res: Response) => {
     try {
         const validated = EpicSchema.parse(req.body);
-        const epic = await Epic.create({ ...validated, organizationId: req.user!.organizationId });
+        const epic = await Epic.create({ ...validated });
         res.status(201).json(epic);
     } catch (error: any) {
         res.status(400).json({ errors: error.issues || error.message });
@@ -29,7 +29,7 @@ export const createEpic = async (req: AuthRequest, res: Response) => {
 export const getSprints = async (req: AuthRequest, res: Response) => {
     try {
         const { projectId } = req.query;
-        const query: any = { organizationId: req.user!.organizationId };
+        const query: any = {};
         if (projectId) query.projectId = projectId;
         const sprints = await Sprint.find(query).sort({ startDate: 1 });
         res.json(sprints);
@@ -41,7 +41,7 @@ export const getSprints = async (req: AuthRequest, res: Response) => {
 export const createSprint = async (req: AuthRequest, res: Response) => {
     try {
         const validated = SprintSchema.parse(req.body);
-        const sprint = await Sprint.create({ ...validated, organizationId: req.user!.organizationId });
+        const sprint = await Sprint.create({ ...validated });
         res.status(201).json(sprint);
     } catch (error: any) {
         res.status(400).json({ errors: error.issues || error.message });
