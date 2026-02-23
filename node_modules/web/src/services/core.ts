@@ -26,6 +26,11 @@ export const updateProject = async (id: string, data: Partial<ProjectInput>) => 
     return response.data;
 };
 
+export const deleteProject = async (id: string) => {
+    const response = await api.delete(`/projects/${id}`);
+    return response.data;
+};
+
 export const getProject = async (id: string) => {
     const response = await api.get(`/projects/${id}`);
     return response.data;

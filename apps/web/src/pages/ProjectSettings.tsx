@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { updateProject, getClients } from '../services/core';
+import { updateProject, getClients, deleteProject } from '../services/core';
 import { addProjectMember, removeProjectMember, getTeamMembers } from '../services/team';
 import { useAuth } from '../context/AuthContext';
 import Switch from '../components/Switch';
+import { useNavigate } from 'react-router-dom';
 import {
     Shield, Globe, Lock, Trash2, Users, Settings as SettingsIcon, Save, UserPlus, X, Briefcase,
 } from 'lucide-react';
@@ -24,6 +25,7 @@ const AlertCircle = ({ className }: { className?: string }) => (
 const ProjectSettings: React.FC<{ project: any }> = ({ project }) => {
     const { user } = useAuth();
     const queryClient = useQueryClient();
+    const navigate = useNavigate();
     const [saved, setSaved] = useState(false);
     const [visibility, setVisibility] = useState(project.visibility);
     const [showAddMember, setShowAddMember] = useState(false);
@@ -75,6 +77,14 @@ const ProjectSettings: React.FC<{ project: any }> = ({ project }) => {
             setSaved(true);
             setTimeout(() => setSaved(false), 2000);
         },
+    });
+
+    const deleteProjectMutation = useMutation({
+        mutationFn: () => deleteProject(project._id),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['projects'] });
+            navigate('/');
+        }
     });
 
     const handleVisibilityChange = (checked: boolean) => {
@@ -278,9 +288,21 @@ const ProjectSettings: React.FC<{ project: any }> = ({ project }) => {
                                 <h3 className="text-sm font-semibold text-gray-900">Delete this project</h3>
                                 <p className="text-xs text-gray-500 mt-1">Once you delete a project, there is no going back.</p>
                             </div>
-                            <button className="bg-white border border-red-200 text-red-600 hover:bg-red-50 px-4 py-2 rounded-lg text-sm font-semibold flex items-center">
-                                <Trash2 className="w-4 h-4 mr-2" />
-                                Delete Project
+                            <button
+                                onClick={() => {
+                                    if (window.confirm(`Are you sure you want to delete ${project.name}? This action cannot be undone.`)) {
+                                        deleteProjectMutation.mutate();
+                                    }
+                                }}
+                                disabled={deleteProjectMutation.isPending}
+                                className="bg-white border border-red-200 text-red-600 hover:bg-red-50 px-4 py-2 rounded-lg text-sm font-semibold flex items-center disabled:opacity-50"
+                            >
+                                {deleteProjectMutation.isPending ? 'Deleting...' : (
+                                    <>
+                                        <Trash2 className="w-4 h-4 mr-2" />
+                                        Delete Project
+                                    </>
+                                )}
                             </button>
                         </div>
                     </div>

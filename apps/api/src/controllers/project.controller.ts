@@ -152,6 +152,24 @@ export const updateProject = async (req: AuthRequest, res: Response) => {
     }
 };
 
+export const deleteProject = async (req: AuthRequest, res: Response) => {
+    try {
+        if (req.user!.role !== 'admin') {
+            return res.status(403).json({ message: 'Only admins can delete projects' });
+        }
+
+        const project = await Project.findByIdAndDelete(req.params.id);
+
+        if (!project) return res.status(404).json({ message: 'Project not found' });
+
+        emitToAll('project:updated', null); // Optionally notify clients to refresh project list
+        res.json({ message: 'Project deleted successfully' });
+    } catch (error) {
+        console.error('Error deleting project:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
 export const addProjectMember = async (req: AuthRequest, res: Response) => {
     try {
         const { userId } = req.body;
