@@ -16,6 +16,7 @@ interface RichTextEditorProps {
 
 const RichTextEditor: React.FC<RichTextEditorProps> = ({ data, onChange, readOnly = false, holder = 'editorjs', placeholder = 'Add description...' }) => {
     const editorRef = useRef<EditorJS | null>(null);
+    const isReady = useRef(false);
 
     useEffect(() => {
         if (!editorRef.current) {
@@ -43,8 +44,16 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ data, onChange, readOnl
                         inlineToolbar: true,
                     },
                 },
+                onReady: () => {
+                    isReady.current = true;
+                },
                 onChange: async () => {
+                    if (!isReady.current || readOnly) return;
                     const content = await editor.save();
+                    // Avoid triggering onChange with empty data if it was already empty
+                    if (content.blocks.length === 0 && (!data || data.blocks?.length === 0)) {
+                        return;
+                    }
                     onChange(content);
                 },
             });
@@ -55,9 +64,17 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ data, onChange, readOnl
             if (editorRef.current && editorRef.current.destroy) {
                 editorRef.current.destroy();
                 editorRef.current = null;
+                isReady.current = false;
             }
         };
-    }, []);
+    }, [holder]);
+
+    // Handle readOnly property updates
+    useEffect(() => {
+        if (editorRef.current && isReady.current) {
+            editorRef.current.readOnly.toggle(readOnly);
+        }
+    }, [readOnly]);
 
     return <div id={holder} className="min-h-[24px] prose max-w-none w-full h-full p-0 focus:outline-none" />;
 };

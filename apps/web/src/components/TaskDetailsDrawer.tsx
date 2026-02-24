@@ -130,6 +130,7 @@ const TaskDetailsDrawer: React.FC<TaskDetailsDrawerProps> = ({ isOpen, onClose, 
                             <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-3">Description</h4>
                             <div className="text-gray-700 leading-relaxed pointer-events-none">
                                 <RichTextEditor
+                                    key={`description-${task._id}`}
                                     holder={`description-reader-${task._id}`}
                                     data={task.description}
                                     onChange={() => { }}
@@ -151,6 +152,7 @@ const TaskDetailsDrawer: React.FC<TaskDetailsDrawerProps> = ({ isOpen, onClose, 
 
                         <div className="border border-gray-200 rounded-xl p-2 min-h-[200px] focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-transparent transition-all">
                             <RichTextEditor
+                                key={`clarification-${task._id}`}
                                 holder={`clarification-editor-${task._id}`}
                                 data={clarificationText}
                                 onChange={setClarificationText}

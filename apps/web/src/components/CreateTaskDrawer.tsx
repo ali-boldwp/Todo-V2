@@ -86,7 +86,7 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
         }
         setSaveStatus('idle');
         // Mark as initialized after a short delay so first render doesn't trigger auto-save
-        const t = setTimeout(() => { isInitialized.current = true; }, 300);
+        const t = setTimeout(() => { isInitialized.current = true; }, 1000);
         return () => clearTimeout(t);
     }, [task, initialProjectId, isOpen]);
 
@@ -209,9 +209,9 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
                             }}
                         />
 
-                        {/* Description Editor */}
                         <div className="min-h-0 text-gray-700 leading-none py-0 my-0">
                             <RichTextEditor
+                                key={task?._id || 'new-task'}
                                 holder={task ? `editor-${task._id}` : 'new-task-editor'}
                                 data={description}
                                 onChange={setDescription}
