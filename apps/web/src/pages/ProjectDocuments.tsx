@@ -114,8 +114,14 @@ const ProjectDocuments: React.FC = () => {
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                         {documents.map((doc: any) => {
-                            const canDelete = user?.role === 'admin' || (doc.uploadedBy && doc.uploadedBy._id === user?.id);
-                            const uploaderName = doc.uploadedBy ? `${doc.uploadedBy.firstName} ${doc.uploadedBy.lastName}` : 'Unknown';
+                            const uploadedById = typeof doc.uploadedBy === 'string'
+                                ? doc.uploadedBy
+                                : doc.uploadedBy?._id;
+                            const canDelete = user?.role === 'admin' || uploadedById === user?.id;
+                            const uploaderName = [
+                                doc.uploadedBy?.firstName,
+                                doc.uploadedBy?.lastName
+                            ].filter(Boolean).join(' ') || doc.uploadedBy?.email || 'Unknown';
 
                             return (
                                 <div key={doc._id} className="group relative bg-white border border-gray-200 rounded-xl p-4 hover:shadow-md transition-shadow flex flex-col">
@@ -148,7 +154,7 @@ const ProjectDocuments: React.FC = () => {
                                     <div className="mt-auto pt-3 border-t border-gray-100 flex items-center justify-between">
                                         <div className="text-[10px] text-gray-400">
                                             <span className="block font-medium text-gray-600 truncate max-w-[120px]" title={uploaderName}>{uploaderName}</span>
-                                            {new Date(doc.uploadedAt).toLocaleDateString()}
+                                            {doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleDateString() : '-'}
                                         </div>
                                         <button
                                             onClick={() => handleDownload(doc)}
