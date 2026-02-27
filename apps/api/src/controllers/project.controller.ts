@@ -90,7 +90,10 @@ export const getProject = async (req: AuthRequest, res: Response) => {
             }
         }
 
-        const project = await Project.findOne(query).populate('clientId', 'name').populate('members', 'firstName lastName email role');
+        const project = await Project.findOne(query)
+            .populate('clientId', 'name')
+            .populate('members', 'firstName lastName email role')
+            .populate('documents.uploadedBy', 'firstName lastName email');
         if (!project) return res.status(404).json({ message: 'Project not found' });
         res.json(project);
     } catch (error) {
