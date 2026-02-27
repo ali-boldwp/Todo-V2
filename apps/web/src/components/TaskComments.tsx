@@ -11,18 +11,24 @@ interface Comment {
         firstName: string;
         lastName: string;
         email: string;
+        role?: 'admin' | 'manager' | 'member' | 'client';
     };
     createdAt: string;
 }
 
-const TaskComments: React.FC<{ taskId: string }> = ({ taskId }) => {
+const TaskComments: React.FC<{
+    taskId: string;
+    type?: 'general' | 'clarification';
+    submitLabel?: string;
+    placeholder?: string;
+}> = ({ taskId, type = 'general', submitLabel = 'Comment', placeholder = 'Add comment' }) => {
     const [newComment, setNewComment] = useState('');
     const queryClient = useQueryClient();
 
     const { data: comments, isLoading } = useQuery<Comment[]>({
-        queryKey: ['comments', taskId],
+        queryKey: ['comments', taskId, type],
         queryFn: async () => {
-            const res = await api.get(`/comments/${taskId}`);
+            const res = await api.get(`/comments/${taskId}`, { params: { type } });
             return res.data;
         },
         enabled: !!taskId,
@@ -30,14 +36,21 @@ const TaskComments: React.FC<{ taskId: string }> = ({ taskId }) => {
 
     const commentMutation = useMutation({
         mutationFn: async (content: string) => {
-            const res = await api.post(`/comments/${taskId}`, { content });
+            const res = await api.post(`/comments/${taskId}`, { content, type });
             return res.data;
         },
         onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['comments', taskId] });
+            queryClient.invalidateQueries({ queryKey: ['comments', taskId, type] });
             setNewComment('');
         },
     });
+
+    const getRoleChip = (role?: string) => {
+        if (role === 'admin') return { label: 'Admin', cls: 'bg-red-50 text-red-700 border-red-100' };
+        if (role === 'client') return { label: 'Client', cls: 'bg-blue-50 text-blue-700 border-blue-100' };
+        if (role === 'manager' || role === 'member') return { label: 'Team', cls: 'bg-emerald-50 text-emerald-700 border-emerald-100' };
+        return { label: 'User', cls: 'bg-gray-50 text-gray-600 border-gray-100' };
+    };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -59,6 +72,9 @@ const TaskComments: React.FC<{ taskId: string }> = ({ taskId }) => {
                             <div className="flex items-center space-x-2">
                                 <span className="text-xs font-bold text-gray-900">
                                     {comment.userId.firstName} {comment.userId.lastName}
+                                </span>
+                                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${getRoleChip(comment.userId.role).cls}`}>
+                                    {getRoleChip(comment.userId.role).label}
                                 </span>
                                 <span className="text-[10px] text-gray-400">
                                     {formatDistanceToNow(new Date(comment.createdAt), { addSuffix: true })}
@@ -83,7 +99,7 @@ const TaskComments: React.FC<{ taskId: string }> = ({ taskId }) => {
                             type="text"
                             value={newComment}
                             onChange={(e) => setNewComment(e.target.value)}
-                            placeholder="Add comment"
+                            placeholder={placeholder}
                             className="w-full bg-transparent border-none p-0 text-sm focus:ring-0 placeholder-gray-400 outline-none"
                         />
                         <div className="flex items-center justify-between mt-3">
@@ -98,7 +114,7 @@ const TaskComments: React.FC<{ taskId: string }> = ({ taskId }) => {
                                 disabled={!newComment.trim() || commentMutation.isPending}
                                 className="px-3 py-1 bg-gray-100 text-gray-400 text-xs font-bold rounded hover:bg-gray-200 hover:text-gray-900 disabled:opacity-50 transition-all"
                             >
-                                Comment
+                                {submitLabel}
                             </button>
                         </div>
                     </div>

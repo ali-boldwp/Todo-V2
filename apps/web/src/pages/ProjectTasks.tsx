@@ -1,18 +1,20 @@
 import React, { useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getTasks, updateTask } from '../services/task';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { getTasks, deleteTask } from '../services/task';
 import CreateTaskDrawer from '../components/CreateTaskDrawer';
+import { useAuth } from '../context/AuthContext';
 import {
     Plus,
-    MoreHorizontal,
     CheckCircle2,
     Clock,
     PlayCircle,
     Search,
     Filter,
     ArrowUpDown,
-    Info
+    Info,
+    Eye,
+    Trash2
 } from 'lucide-react';
 
 const PRIORITY_STYLES: any = {
@@ -32,6 +34,8 @@ const STATUS_ICONS: any = {
     in_progress: <PlayCircle className="w-4 h-4 text-blue-500" />,
     review: <Clock className="w-4 h-4 text-amber-500" />,
     done: <CheckCircle2 className="w-4 h-4 text-green-500" />,
+    clarification: <Info className="w-4 h-4 text-red-500" />,
+    clarified: <CheckCircle2 className="w-4 h-4 text-emerald-500" />,
 };
 
 const STATUS_LABELS: any = {
@@ -39,22 +43,37 @@ const STATUS_LABELS: any = {
     in_progress: 'In Progress',
     review: 'Review',
     done: 'Done',
+    clarification: 'Clarification',
+    clarified: 'Clarified',
+};
+
+const STATUS_BADGES: any = {
+    todo: 'bg-gray-100 text-gray-700 border-gray-200',
+    in_progress: 'bg-blue-50 text-blue-700 border-blue-100',
+    review: 'bg-amber-50 text-amber-700 border-amber-100',
+    done: 'bg-green-50 text-green-700 border-green-100',
+    clarification: 'bg-red-50 text-red-700 border-red-100',
+    clarified: 'bg-blue-50 text-blue-700 border-blue-100',
 };
 
 const ProjectTasks: React.FC = () => {
+    const { user } = useAuth();
+    const canManageClarification = ['admin', 'manager', 'member'].includes(user?.role || '');
+    const canDeleteTask = ['admin', 'manager', 'member'].includes(user?.role || '');
     const { id: projectId } = useParams<{ id: string }>();
+    const queryClient = useQueryClient();
     const { data: tasks, isLoading } = useQuery({
         queryKey: ['tasks', projectId],
         queryFn: () => getTasks(projectId!)
     });
-    const queryClient = useQueryClient();
     const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false);
     const [selectedTask, setSelectedTask] = useState<any>(null);
     const [searchTerm, setSearchTerm] = useState('');
-
-    const updateMutation = useMutation({
-        mutationFn: ({ id, data }: { id: string, data: any }) => updateTask(id, data),
-        onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tasks', projectId] }),
+    const deleteMutation = useMutation({
+        mutationFn: (id: string) => deleteTask(id),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['tasks', projectId] });
+        },
     });
 
     const handleOpenCreate = () => {
@@ -72,6 +91,14 @@ const ProjectTasks: React.FC = () => {
     const filteredTasks = tasks?.filter((task: any) =>
         task.title.toLowerCase().includes(searchTerm.toLowerCase())
     );
+
+    const handleDeleteTask = (task: any, e: React.MouseEvent) => {
+        e.stopPropagation();
+        if (!canDeleteTask || deleteMutation.isPending) return;
+        const ok = window.confirm(`Delete task "${task.title}"?`);
+        if (!ok) return;
+        deleteMutation.mutate(task._id);
+    };
 
     return (
         <div className="flex flex-col h-full bg-white">
@@ -138,7 +165,7 @@ const ProjectTasks: React.FC = () => {
                                     <td className="px-6 py-3.5">
                                         <div className="flex items-center space-x-3">
                                             <div className="flex-shrink-0">
-                                                {task.needsClarification ? (
+                                                {task.status === 'clarification' ? (
                                                     <span title="Clarification required">
                                                         <Info className="w-4 h-4 text-red-500" />
                                                     </span>
@@ -146,22 +173,19 @@ const ProjectTasks: React.FC = () => {
                                                     STATUS_ICONS[task.status] || <Circle className="w-4 h-4 text-gray-400" />
                                                 )}
                                             </div>
-                                            <span className="text-sm font-medium text-gray-900 group-hover:text-indigo-600 transition-colors">
+                                            <span className={`text-sm font-medium transition-colors ${
+                                                task.status === 'clarification'
+                                                    ? 'text-red-600 group-hover:text-red-700'
+                                                    : 'text-gray-900 group-hover:text-indigo-600'
+                                            }`}>
                                                 {task.title}
                                             </span>
                                         </div>
                                     </td>
                                     <td className="px-6 py-3.5">
-                                        <select
-                                            value={task.status}
-                                            onChange={(e) => updateMutation.mutate({ id: task._id, data: { status: e.target.value } })}
-                                            className="text-xs font-medium text-gray-600 bg-transparent border-none p-0 focus:ring-0 cursor-pointer hover:text-gray-900"
-                                            onClick={(e) => e.stopPropagation()}
-                                        >
-                                            {Object.keys(STATUS_LABELS).map(key => (
-                                                <option key={key} value={key}>{STATUS_LABELS[key]}</option>
-                                            ))}
-                                        </select>
+                                        <div className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${STATUS_BADGES[task.status] || STATUS_BADGES.todo}`}>
+                                            {STATUS_LABELS[task.status] || task.status}
+                                        </div>
                                     </td>
                                     <td className="px-6 py-3.5">
                                         <div className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${PRIORITY_STYLES[task.priority] || PRIORITY_STYLES.medium}`}>
@@ -169,9 +193,38 @@ const ProjectTasks: React.FC = () => {
                                         </div>
                                     </td>
                                     <td className="px-6 py-3.5 text-right pr-6">
-                                        <button className="p-1 hover:bg-gray-200 rounded text-gray-400 hover:text-gray-600 opacity-0 group-hover:opacity-100 transition-all">
-                                            <MoreHorizontal className="w-4 h-4" />
-                                        </button>
+                                        <div className="flex items-center justify-end gap-1">
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleOpenEdit(task);
+                                                }}
+                                                className="p-1 rounded text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 transition-all"
+                                                title="View task"
+                                            >
+                                                <Eye className="w-4 h-4" />
+                                            </button>
+                                            {canManageClarification && task.status === 'clarification' && (
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleOpenEdit(task);
+                                                    }}
+                                                    className="px-2 py-1 text-[11px] font-semibold rounded text-red-600 hover:bg-red-50 transition-all"
+                                                >
+                                                    Clarify
+                                                </button>
+                                            )}
+                                            {canDeleteTask && (
+                                                <button
+                                                    onClick={(e) => handleDeleteTask(task, e)}
+                                                    className="p-1 rounded text-gray-400 hover:text-red-600 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all"
+                                                    title="Delete task"
+                                                >
+                                                    <Trash2 className="w-4 h-4" />
+                                                </button>
+                                            )}
+                                        </div>
                                     </td>
                                 </tr>
                             ))

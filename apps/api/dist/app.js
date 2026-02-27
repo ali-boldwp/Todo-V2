@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.logger = void 0;
+exports.allowedOrigins = exports.logger = void 0;
 const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const helmet_1 = __importDefault(require("helmet"));
@@ -25,7 +25,7 @@ const payroll_routes_1 = __importDefault(require("./routes/payroll.routes"));
 const github_routes_1 = __importDefault(require("./routes/github.routes"));
 const client_routes_1 = __importDefault(require("./routes/client.routes"));
 app.use((0, helmet_1.default)());
-const allowedOrigins = [
+exports.allowedOrigins = [
     'http://localhost:3000',
     'http://localhost:3001',
     'http://localhost:3030',
@@ -37,7 +37,7 @@ app.use((0, cors_1.default)({
         // allow requests with no origin (like mobile apps or curl requests)
         if (!origin)
             return callback(null, true);
-        if (allowedOrigins.indexOf(origin) === -1) {
+        if (exports.allowedOrigins.indexOf(origin) === -1) {
             const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
             return callback(new Error(msg), false);
         }
@@ -45,7 +45,7 @@ app.use((0, cors_1.default)({
     },
     credentials: true
 }));
-app.use(express_1.default.json());
+app.use(express_1.default.json({ limit: '10mb' }));
 app.use('/api/auth', auth_routes_1.default);
 app.use('/api', core_routes_1.default);
 app.use('/api/tasks', task_routes_1.default);

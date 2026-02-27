@@ -4,7 +4,21 @@ import Task from '../models/Task';
 import Project from '../models/Project';
 import GithubConfig from '../models/GithubConfig';
 import { TaskSchema } from '@devmanager/shared/dist/task.schema';
-import { emitToProject } from '../socket';
+import { emitToAll, emitToProject } from '../socket';
+
+const INTERNAL_ROLES = ['admin', 'manager', 'member'];
+
+const isClarificationRequestPayload = (body: any) => {
+    if (body?.status === 'clarified') return false;
+    return (
+        body?.status === 'clarification' ||
+        body?.needsClarification === true ||
+        (
+            Object.prototype.hasOwnProperty.call(body || {}, 'clarificationText') &&
+            !!body?.clarificationText
+        )
+    );
+};
 
 async function createGithubBranch(
     token: string,
@@ -144,15 +158,67 @@ export const createTask = async (req: AuthRequest, res: Response) => {
 
 export const updateTask = async (req: AuthRequest, res: Response) => {
     try {
+        const existingTask = await Task.findById(req.params.id);
+        if (!existingTask) return res.status(404).json({ message: 'Task not found' });
+
+        const clarificationRequest = isClarificationRequestPayload(req.body);
+        if (clarificationRequest && !INTERNAL_ROLES.includes(req.user!.role)) {
+            return res.status(403).json({ message: 'Only admin and team members can request clarification' });
+        }
+
+        const patch: any = { ...req.body };
+        if (clarificationRequest) {
+            patch.status = 'clarification';
+            patch.needsClarification = true;
+        }
+        if (patch.status === 'clarified') {
+            patch.needsClarification = false;
+        }
+
         const task = await Task.findByIdAndUpdate(
             req.params.id,
-            req.body,
+            patch,
             { new: true }
         );
+
         if (!task) return res.status(404).json({ message: 'Task not found' });
         res.json(task);
+
+        if (clarificationRequest && task.projectId) {
+            emitToAll('notification:created', {
+                type: 'clarification_requested',
+                taskId: task._id,
+                projectId: task.projectId,
+                title: task.title,
+                message: `Clarification requested for task: ${task.title}`,
+                recipientRoles: ['admin', 'client'],
+                createdAt: new Date().toISOString(),
+            });
+        }
+
         // Notify project room of updated task
         if (task.projectId) emitToProject(task.projectId.toString(), 'task:updated', task);
+    } catch (error) {
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+export const deleteTask = async (req: AuthRequest, res: Response) => {
+    try {
+        if (!INTERNAL_ROLES.includes(req.user!.role)) {
+            return res.status(403).json({ message: 'Only admin and team members can delete tasks' });
+        }
+
+        const task = await Task.findByIdAndDelete(req.params.id);
+        if (!task) return res.status(404).json({ message: 'Task not found' });
+
+        res.json({ message: 'Task deleted' });
+        if (task.projectId) {
+            emitToProject(task.projectId.toString(), 'task:deleted', {
+                _id: task._id,
+                projectId: task.projectId,
+            });
+        }
     } catch (error) {
         res.status(500).json({ message: 'Server error' });
     }

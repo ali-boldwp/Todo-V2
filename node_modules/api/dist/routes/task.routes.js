@@ -8,4 +8,7 @@ router.use(auth_1.authenticate);
 router.get('/', task_controller_1.getTasks);
 router.post('/', task_controller_1.createTask);
 router.patch('/:id', task_controller_1.updateTask);
+router.delete('/:id', task_controller_1.deleteTask);
+router.post('/:id/attachments', task_controller_1.uploadAttachment);
+router.delete('/:id/attachments/:attachmentIndex', task_controller_1.deleteAttachment);
 exports.default = router;

@@ -9,7 +9,6 @@ const time_schema_1 = require("@devmanager/shared/dist/time.schema");
 const getTimeEntries = async (req, res) => {
     try {
         const entries = await TimeEntry_1.default.find({
-            organizationId: req.user.organizationId,
             userId: req.user.userId
         }).sort({ startTime: -1 });
         res.json(entries);
@@ -24,7 +23,6 @@ const createTimeEntry = async (req, res) => {
         const validated = time_schema_1.TimeEntrySchema.parse(req.body);
         const entry = await TimeEntry_1.default.create({
             ...validated,
-            organizationId: req.user.organizationId,
             userId: req.user.userId,
         });
         res.status(201).json(entry);
@@ -46,7 +44,6 @@ const startTimer = async (req, res) => {
         }
         const { taskId, projectId, description } = req.body;
         const entry = await TimeEntry_1.default.create({
-            organizationId: req.user.organizationId,
             userId: req.user.userId,
             taskId,
             projectId,

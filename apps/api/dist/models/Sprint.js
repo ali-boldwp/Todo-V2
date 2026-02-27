@@ -35,7 +35,6 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose_1 = __importStar(require("mongoose"));
 const SprintSchema = new mongoose_1.Schema({
-    organizationId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Organization', required: true, index: true },
     projectId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Project', required: true, index: true },
     name: { type: String, required: true },
     goal: { type: String },

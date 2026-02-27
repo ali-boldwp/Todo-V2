@@ -36,7 +36,6 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.Payslip = exports.SalaryStructure = void 0;
 const mongoose_1 = __importStar(require("mongoose"));
 const SalaryStructureSchema = new mongoose_1.Schema({
-    organizationId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Organization', required: true, index: true },
     userId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'User', required: true, unique: true },
     baseSalary: { type: Number, required: true },
     allowances: { type: Map, of: Number },
@@ -45,7 +44,6 @@ const SalaryStructureSchema = new mongoose_1.Schema({
 }, { timestamps: true });
 exports.SalaryStructure = mongoose_1.default.model('SalaryStructure', SalaryStructureSchema);
 const PayslipSchema = new mongoose_1.Schema({
-    organizationId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Organization', required: true, index: true },
     userId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     startDate: { type: Date, required: true },
     endDate: { type: Date, required: true },

@@ -10,7 +10,7 @@ const planning_schema_1 = require("@devmanager/shared/dist/planning.schema");
 const getEpics = async (req, res) => {
     try {
         const { projectId } = req.query;
-        const query = { organizationId: req.user.organizationId };
+        const query = {};
         if (projectId)
             query.projectId = projectId;
         const epics = await Epic_1.default.find(query);
@@ -24,7 +24,7 @@ exports.getEpics = getEpics;
 const createEpic = async (req, res) => {
     try {
         const validated = planning_schema_1.EpicSchema.parse(req.body);
-        const epic = await Epic_1.default.create({ ...validated, organizationId: req.user.organizationId });
+        const epic = await Epic_1.default.create({ ...validated });
         res.status(201).json(epic);
     }
     catch (error) {
@@ -35,7 +35,7 @@ exports.createEpic = createEpic;
 const getSprints = async (req, res) => {
     try {
         const { projectId } = req.query;
-        const query = { organizationId: req.user.organizationId };
+        const query = {};
         if (projectId)
             query.projectId = projectId;
         const sprints = await Sprint_1.default.find(query).sort({ startDate: 1 });
@@ -49,7 +49,7 @@ exports.getSprints = getSprints;
 const createSprint = async (req, res) => {
     try {
         const validated = planning_schema_1.SprintSchema.parse(req.body);
-        const sprint = await Sprint_1.default.create({ ...validated, organizationId: req.user.organizationId });
+        const sprint = await Sprint_1.default.create({ ...validated });
         res.status(201).json(sprint);
     }
     catch (error) {

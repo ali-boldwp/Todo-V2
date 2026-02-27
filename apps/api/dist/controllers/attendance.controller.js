@@ -8,7 +8,7 @@ const Attendance_1 = __importDefault(require("../models/Attendance"));
 const getAttendance = async (req, res) => {
     try {
         const { date } = req.query;
-        const query = { organizationId: req.user.organizationId, userId: req.user.userId };
+        const query = { userId: req.user.userId };
         if (date) {
             const start = new Date(date);
             start.setHours(0, 0, 0, 0);
@@ -36,7 +36,6 @@ const checkIn = async (req, res) => {
             return res.status(400).json({ message: 'Already checked in today' });
         }
         const attendance = await Attendance_1.default.create({
-            organizationId: req.user.organizationId,
             userId: req.user.userId,
             date: today,
             checkInTime: new Date(),

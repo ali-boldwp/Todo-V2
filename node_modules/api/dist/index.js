@@ -37,14 +37,18 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 const dotenv_1 = __importDefault(require("dotenv"));
+const http_1 = __importDefault(require("http"));
 const app_1 = __importStar(require("./app"));
 const db_1 = require("./config/db");
+const socket_1 = require("./socket");
 dotenv_1.default.config();
 const PORT = process.env.PORT || 3001;
 const startServer = async () => {
     try {
         await (0, db_1.connectDB)();
-        app_1.default.listen(PORT, () => {
+        const httpServer = http_1.default.createServer(app_1.default);
+        (0, socket_1.initSocket)(httpServer, app_1.allowedOrigins);
+        httpServer.listen(PORT, () => {
             app_1.logger.info(`Server running on port ${PORT}`);
         });
     }

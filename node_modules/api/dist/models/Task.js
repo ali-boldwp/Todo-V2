@@ -35,16 +35,23 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose_1 = __importStar(require("mongoose"));
 const TaskSchema = new mongoose_1.Schema({
-    organizationId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Organization', required: true, index: true },
     projectId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Project', required: true, index: true },
     title: { type: String, required: true },
     description: { type: mongoose_1.Schema.Types.Mixed },
-    status: { type: String, enum: ['todo', 'in_progress', 'review', 'done'], default: 'todo' },
+    status: { type: String, enum: ['todo', 'in_progress', 'review', 'done', 'clarification', 'clarified'], default: 'todo' },
     priority: { type: String, enum: ['low', 'medium', 'high', 'urgent'], default: 'medium' },
     type: { type: String, enum: ['task', 'bug', 'feature'], default: 'task' },
     assigneeId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'User' },
     dueDate: { type: Date },
     needsClarification: { type: Boolean, default: false },
     clarificationText: { type: mongoose_1.Schema.Types.Mixed },
+    githubBranch: { type: String },
+    attachments: [{
+            name: { type: String, required: true },
+            mimeType: { type: String, required: true },
+            size: { type: Number, required: true },
+            data: { type: String, required: true },
+            uploadedAt: { type: Date, default: Date.now },
+        }],
 }, { timestamps: true });
 exports.default = mongoose_1.default.model('Task', TaskSchema);
