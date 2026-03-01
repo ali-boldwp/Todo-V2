@@ -6,7 +6,8 @@ import { updateTask } from '../services/task';
 import {
     Flag,
     CheckCircle2,
-    Save,
+    Check,
+    Loader2,
     Info,
     GitBranch,
 } from 'lucide-react';
@@ -35,30 +36,49 @@ const STATUS_STYLES: any = {
 const TaskDetailsDrawer: React.FC<TaskDetailsDrawerProps> = ({ isOpen, onClose, task }) => {
     const queryClient = useQueryClient();
     const [clarificationText, setClarificationText] = useState<OutputData | undefined>(task?.clarificationText);
+    const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+    const isInitialized = React.useRef(false);
+    const debounceTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
+        isInitialized.current = false;
         if (task) {
             setClarificationText(task.clarificationText);
         } else {
             setClarificationText(undefined);
         }
+        setSaveStatus('idle');
+        const t = setTimeout(() => { isInitialized.current = true; }, 1000);
+        return () => clearTimeout(t);
     }, [task, isOpen]);
 
     const mutation = useMutation({
         mutationFn: (data: any) => updateTask(task._id, data),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['tasks'] });
-            onClose();
+            setSaveStatus('saved');
+            setTimeout(() => setSaveStatus('idle'), 2000);
         },
+        onError: () => setSaveStatus('idle'),
     });
 
-    const handleSaveClarification = () => {
-        if (!task) return;
-        mutation.mutate({
-            clarificationText: clarificationText,
-            needsClarification: true, // Auto flag as needs clarification when they add text
-        });
-    };
+    const scheduleAutoSave = React.useCallback((text: OutputData | undefined) => {
+        if (!task || !isInitialized.current) return;
+        if (debounceTimer.current) clearTimeout(debounceTimer.current);
+        setSaveStatus('saving');
+        debounceTimer.current = setTimeout(() => {
+            mutation.mutate({
+                clarificationText: text,
+                needsClarification: true,
+            });
+        }, 800);
+    }, [task]);
+
+    useEffect(() => {
+        if (isInitialized.current) {
+            scheduleAutoSave(clarificationText);
+        }
+    }, [clarificationText]);
 
     if (!task) return null;
 
@@ -165,23 +185,31 @@ const TaskDetailsDrawer: React.FC<TaskDetailsDrawerProps> = ({ isOpen, onClose, 
 
             {/* Sticky Action Footer */}
             <div className="absolute bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-100 flex justify-between items-center z-20">
-                <div className="text-[10px] text-gray-400 font-medium px-2">
-                    Editing clarification for task
+                <div className="flex items-center space-x-2 px-2">
+                    {saveStatus === 'saving' && (
+                        <>
+                            <Loader2 className="w-3.5 h-3.5 text-gray-400 animate-spin" />
+                            <span className="text-[11px] text-gray-400 font-medium">Saving…</span>
+                        </>
+                    )}
+                    {saveStatus === 'saved' && (
+                        <>
+                            <Check className="w-3.5 h-3.5 text-green-500" />
+                            <span className="text-[11px] text-green-600 font-medium">Saved</span>
+                        </>
+                    )}
+                    {saveStatus === 'idle' && (
+                        <span className="text-[10px] text-gray-400 font-medium">
+                            Auto-saving clarification...
+                        </span>
+                    )}
                 </div>
                 <div className="flex space-x-2">
                     <button
                         onClick={onClose}
                         className="px-4 py-1.5 text-sm font-medium text-gray-500 hover:text-gray-900 rounded-md transition-all"
                     >
-                        Cancel
-                    </button>
-                    <button
-                        onClick={handleSaveClarification}
-                        disabled={mutation.isPending}
-                        className="px-4 py-1.5 bg-red-600 text-white text-sm font-semibold rounded-md hover:bg-red-700 transition-all flex items-center disabled:opacity-50"
-                    >
-                        <Save className="w-4 h-4 mr-2" />
-                        {mutation.isPending ? 'Saving...' : 'Save Clarification'}
+                        Close
                     </button>
                 </div>
             </div>

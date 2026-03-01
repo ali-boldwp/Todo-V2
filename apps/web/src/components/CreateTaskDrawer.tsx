@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Drawer from './Drawer';
-import RichTextEditor from './RichTextEditor';
+import RichTextEditor, { RichTextEditorRef } from './RichTextEditor';
 import TaskComments from './TaskComments';
 import clsx from 'clsx';
 import { getProjects } from '../services/core';
@@ -58,6 +58,7 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
     const isInitialized = useRef(false);
     const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const editorRef = useRef<RichTextEditorRef>(null);
 
     const { data: projects } = useQuery({
         queryKey: ['projects'],
@@ -112,12 +113,26 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
     });
 
     // Debounced auto-save — only fires when editing an existing task
-    const scheduleAutoSave = useCallback((patch: object) => {
+    const scheduleAutoSave = useCallback(async (patch: any) => {
         if (!task || !isInitialized.current) return;
         if (debounceTimer.current) clearTimeout(debounceTimer.current);
+
+        let finalPatch = { ...patch };
+
+        // If we have an editor, ensure we get the latest data directly from it
+        // and override whatever is in the 'description' state to avoid race conditions
+        if (editorRef.current) {
+            try {
+                const latestDescription = await editorRef.current.save();
+                finalPatch.description = latestDescription;
+            } catch (e) {
+                console.error('Failed to save editor content during auto-save', e);
+            }
+        }
+
         setSaveStatus('saving');
         debounceTimer.current = setTimeout(() => {
-            autoSaveMutation.mutate(patch);
+            autoSaveMutation.mutate(finalPatch);
         }, 800);
     }, [task]);
 
@@ -126,7 +141,7 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
         scheduleAutoSave({ title, status, priority, projectId, description, needsClarification, type: 'task' });
     }, [title, status, priority, projectId, needsClarification]);
 
-    // Description has its own watcher with a slightly longer debounce (handled via scheduleAutoSave)
+    // Description state update also triggers it
     useEffect(() => {
         scheduleAutoSave({ title, status, priority, projectId, description, needsClarification, type: 'task' });
     }, [description]);
@@ -168,14 +183,21 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
         e.target.value = '';
     };
 
-    const handleCreate = () => {
+    const handleCreate = async () => {
         if (!title || !projectId) return;
+
+        // Ensure we have the latest description from the editor
+        let finalDescription = description;
+        if (editorRef.current) {
+            finalDescription = await editorRef.current.save();
+        }
+
         createMutation.mutate({
             title,
             status,
             priority,
             projectId,
-            description,
+            description: finalDescription,
             needsClarification,
             type: 'task',
         });
@@ -211,6 +233,7 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
 
                         <div className="min-h-0 text-gray-700 leading-none py-0 my-0">
                             <RichTextEditor
+                                ref={editorRef}
                                 key={task?._id || 'new-task'}
                                 holder={task ? `editor-${task._id}` : 'new-task-editor'}
                                 data={description}

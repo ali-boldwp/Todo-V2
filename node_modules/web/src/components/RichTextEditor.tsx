@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
 import EditorJS, { OutputData } from '@editorjs/editorjs';
 // @ts-ignore
 import Header from '@editorjs/header';
@@ -14,9 +14,28 @@ interface RichTextEditorProps {
     placeholder?: string;
 }
 
-const RichTextEditor: React.FC<RichTextEditorProps> = ({ data, onChange, readOnly = false, holder = 'editorjs', placeholder = 'Add description...' }) => {
+export interface RichTextEditorRef {
+    save: () => Promise<OutputData>;
+}
+
+const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(({
+    data,
+    onChange,
+    readOnly = false,
+    holder = 'editorjs',
+    placeholder = 'Add description...'
+}, ref) => {
     const editorRef = useRef<EditorJS | null>(null);
     const isReady = useRef(false);
+
+    useImperativeHandle(ref, () => ({
+        save: async () => {
+            if (editorRef.current && isReady.current) {
+                return await editorRef.current.save();
+            }
+            return { blocks: [] };
+        }
+    }));
 
     useEffect(() => {
         if (!editorRef.current) {
@@ -76,7 +95,20 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ data, onChange, readOnl
         }
     }, [readOnly]);
 
+    // Handle external data updates
+    useEffect(() => {
+        if (editorRef.current && isReady.current && data) {
+            // Only render if data is different from current editor content to avoid loop
+            // Simple stringify check for basic comparison
+            editorRef.current.save().then((currentData) => {
+                if (JSON.stringify(currentData.blocks) !== JSON.stringify(data.blocks)) {
+                    editorRef.current?.render(data);
+                }
+            });
+        }
+    }, [data]);
+
     return <div id={holder} className="min-h-[24px] prose max-w-none w-full h-full p-0 focus:outline-none" />;
-};
+});
 
 export default RichTextEditor;
