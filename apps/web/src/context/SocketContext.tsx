@@ -18,6 +18,17 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
     const queryClient = useQueryClient();
     const socketRef = useRef<Socket | null>(null);
 
+    const getCurrentUserRole = () => {
+        try {
+            const token = localStorage.getItem('token');
+            if (!token) return null;
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            return payload?.role || null;
+        } catch {
+            return null;
+        }
+    };
+
     useEffect(() => {
         const socket = io(API_URL, { withCredentials: true });
         socketRef.current = socket;
@@ -33,9 +44,21 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
             queryClient.invalidateQueries({ queryKey: ['task', task._id] });
         });
 
+        socket.on('task:deleted', (task: any) => {
+            queryClient.invalidateQueries({ queryKey: ['tasks', task.projectId] });
+        });
+
         // Project events — invalidate the projects list
         socket.on('project:updated', () => {
             queryClient.invalidateQueries({ queryKey: ['projects'] });
+        });
+
+        socket.on('notification:created', (notification: any) => {
+            const role = getCurrentUserRole();
+            if (!role) return;
+            const recipients = notification?.recipientRoles;
+            if (Array.isArray(recipients) && recipients.length > 0 && !recipients.includes(role)) return;
+            if (notification?.message) alert(notification.message);
         });
 
         return () => {

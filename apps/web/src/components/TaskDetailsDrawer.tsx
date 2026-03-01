@@ -1,17 +1,18 @@
-import React, { useState, useEffect } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import React from 'react';
 import Drawer from './Drawer';
 import RichTextEditor from './RichTextEditor';
-import { updateTask } from '../services/task';
+import TaskComments from './TaskComments';
 import {
     Flag,
     CheckCircle2,
+<<<<<<< HEAD
     Check,
     Loader2,
+=======
+>>>>>>> 40b95f57c2e7f127a17bdceac71ec8de09c9d65b
     Info,
     GitBranch,
 } from 'lucide-react';
-import { OutputData } from '@editorjs/editorjs';
 
 interface TaskDetailsDrawerProps {
     isOpen: boolean;
@@ -31,9 +32,12 @@ const STATUS_STYLES: any = {
     in_progress: { label: 'In Progress', color: 'text-blue-500' },
     review: { label: 'Review', color: 'text-amber-500' },
     done: { label: 'Done', color: 'text-green-500' },
+    clarification: { label: 'Clarification', color: 'text-red-600' },
+    clarified: { label: 'Clarified', color: 'text-emerald-600' },
 };
 
 const TaskDetailsDrawer: React.FC<TaskDetailsDrawerProps> = ({ isOpen, onClose, task }) => {
+<<<<<<< HEAD
     const queryClient = useQueryClient();
     const [clarificationText, setClarificationText] = useState<OutputData | undefined>(task?.clarificationText);
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
@@ -80,6 +84,8 @@ const TaskDetailsDrawer: React.FC<TaskDetailsDrawerProps> = ({ isOpen, onClose, 
         }
     }, [clarificationText]);
 
+=======
+>>>>>>> 40b95f57c2e7f127a17bdceac71ec8de09c9d65b
     if (!task) return null;
 
     return (
@@ -160,31 +166,31 @@ const TaskDetailsDrawer: React.FC<TaskDetailsDrawerProps> = ({ isOpen, onClose, 
                         </div>
                     )}
 
-                    {/* Clarification Editor (The only editable part here) */}
                     <div className="space-y-2 mt-8">
-                        <div className="flex items-center space-x-2 text-red-500 mb-2 border-b border-gray-50 pb-2">
+                        <div className="flex items-center space-x-2 text-red-500 ">
                             <Info className="w-4 h-4" />
-                            <h4 className="text-sm font-bold">Clarification Notes</h4>
+                            <h4 className="text-sm font-bold">Clarification</h4>
                         </div>
-                        <p className="text-xs text-gray-500 mb-4">
-                            Add detailed notes or requirements that need clarification for this task.
+                        <p className="text-xs text-gray-500">
+                            Write your clarification in chat.
                         </p>
+                    </div>
 
-                        <div className="border border-gray-200 rounded-xl p-2 min-h-[200px] focus-within:ring-2 focus-within:ring-indigo-500 focus-within:border-transparent transition-all">
-                            <RichTextEditor
-                                key={`clarification-${task._id}`}
-                                holder={`clarification-editor-${task._id}`}
-                                data={clarificationText}
-                                onChange={setClarificationText}
-                                placeholder="What exactly do users want to know about the task? Add clarification details here..."
-                            />
-                        </div>
+                    {/* Clarification chat thread */}
+                    <div className="space-y-4 pt-6 ">
+                        <TaskComments
+                            taskId={task._id}
+                            type="clarification"
+                            submitLabel="Send Message"
+                            placeholder="Write clarification message..."
+                        />
                     </div>
                 </div>
             </div>
 
             {/* Sticky Action Footer */}
             <div className="absolute bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-100 flex justify-between items-center z-20">
+<<<<<<< HEAD
                 <div className="flex items-center space-x-2 px-2">
                     {saveStatus === 'saving' && (
                         <>
@@ -203,6 +209,10 @@ const TaskDetailsDrawer: React.FC<TaskDetailsDrawerProps> = ({ isOpen, onClose, 
                             Auto-saving clarification...
                         </span>
                     )}
+=======
+                <div className="text-[10px] text-gray-400 font-medium px-2">
+                    Clarification messages are sent from chat
+>>>>>>> 40b95f57c2e7f127a17bdceac71ec8de09c9d65b
                 </div>
                 <div className="flex space-x-2">
                     <button

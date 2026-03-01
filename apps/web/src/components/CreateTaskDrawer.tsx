@@ -1,11 +1,17 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Drawer from './Drawer';
+<<<<<<< HEAD
 import RichTextEditor, { RichTextEditorRef } from './RichTextEditor';
+=======
+import RichTextEditor from './RichTextEditor';
+import TaskDetailsDrawer from './TaskDetailsDrawer';
+>>>>>>> 40b95f57c2e7f127a17bdceac71ec8de09c9d65b
 import TaskComments from './TaskComments';
 import clsx from 'clsx';
 import { getProjects } from '../services/core';
 import { createTask, updateTask, uploadAttachment, deleteAttachment } from '../services/task';
+import { useAuth } from '../context/AuthContext';
 import {
     Flag,
     CheckCircle2,
@@ -28,6 +34,26 @@ interface CreateTaskDrawerProps {
     initialProjectId?: string;
 }
 
+interface PendingAttachment {
+    id: string;
+    file: File;
+}
+
+const normalizeDescription = (value: any): OutputData | undefined => {
+    if (!value) return undefined;
+    if (typeof value === 'object' && Array.isArray(value.blocks)) {
+        return value as OutputData;
+    }
+    if (typeof value === 'string' && value.trim()) {
+        return {
+            time: Date.now(),
+            blocks: [{ type: 'paragraph', data: { text: value } }],
+            version: '2.0.0',
+        };
+    }
+    return undefined;
+};
+
 const PRIORITY_OPTIONS = [
     { value: 'low', label: 'Low', color: 'text-blue-500', bg: 'bg-blue-50' },
     { value: 'medium', label: 'Medium', color: 'text-amber-500', bg: 'bg-amber-50' },
@@ -40,19 +66,26 @@ const STATUS_OPTIONS = [
     { value: 'in_progress', label: 'In Progress', color: 'text-blue-500' },
     { value: 'review', label: 'Review', color: 'text-amber-500' },
     { value: 'done', label: 'Done', color: 'text-green-500' },
+    { value: 'clarification', label: 'Clarification', color: 'text-red-500' },
+    { value: 'clarified', label: 'Clarified', color: 'text-emerald-500' },
 ];
 
 const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, task, initialProjectId }) => {
+    const { user } = useAuth();
+    const canManageClarification = ['admin', 'manager', 'member'].includes(user?.role || '');
     const queryClient = useQueryClient();
     const [title, setTitle] = useState(task?.title || '');
     const [status, setStatus] = useState(task?.status || 'todo');
     const [priority, setPriority] = useState(task?.priority || 'medium');
     const [projectId, setProjectId] = useState(task?.projectId || initialProjectId || '');
-    const [description, setDescription] = useState<OutputData | undefined>(task?.description);
+    const [description, setDescription] = useState<OutputData | undefined>(normalizeDescription(task?.description));
     const [needsClarification, setNeedsClarification] = useState(task?.needsClarification || false);
     const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
     const [uploadError, setUploadError] = useState<string | null>(null);
     const [localAttachments, setLocalAttachments] = useState<any[]>(task?.attachments || []);
+    const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
+    const [editorInstanceKey, setEditorInstanceKey] = useState(0);
+    const [isClarificationDrawerOpen, setIsClarificationDrawerOpen] = useState(false);
 
     // Track whether we've just loaded (to avoid auto-saving on initial populate)
     const isInitialized = useRef(false);
@@ -73,9 +106,10 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
             setStatus(task.status);
             setPriority(task.priority);
             setProjectId(task.projectId);
-            setDescription(task.description);
+            setDescription(normalizeDescription(task.description));
             setNeedsClarification(task.needsClarification || false);
             setLocalAttachments(task.attachments || []);
+            setPendingAttachments([]);
         } else {
             setTitle('');
             setStatus('todo');
@@ -84,8 +118,11 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
             setDescription(undefined);
             setNeedsClarification(false);
             setLocalAttachments([]);
+            setPendingAttachments([]);
         }
+        setEditorInstanceKey((k) => k + 1);
         setSaveStatus('idle');
+        setUploadError(null);
         // Mark as initialized after a short delay so first render doesn't trigger auto-save
         const t = setTimeout(() => { isInitialized.current = true; }, 1000);
         return () => clearTimeout(t);
@@ -93,7 +130,15 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
 
     // --- Create mutation (manual save, closes drawer) ---
     const createMutation = useMutation({
-        mutationFn: (data: any) => createTask(data),
+        mutationFn: async (data: any) => {
+            const createdTask = await createTask(data);
+            if (pendingAttachments.length > 0) {
+                await Promise.allSettled(
+                    pendingAttachments.map((att) => uploadAttachment(createdTask._id, att.file))
+                );
+            }
+            return createdTask;
+        },
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['tasks'] });
             onClose();
@@ -178,6 +223,17 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
         const file = e.target.files?.[0];
         if (!file) return;
         setUploadError(null);
+        if (!task?._id) {
+            setPendingAttachments((prev) => [
+                ...prev,
+                {
+                    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                    file,
+                },
+            ]);
+            e.target.value = '';
+            return;
+        }
         attachMutation.mutate(file);
         // reset so same file can be re-selected
         e.target.value = '';
@@ -233,9 +289,14 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
 
                         <div className="min-h-0 text-gray-700 leading-none py-0 my-0">
                             <RichTextEditor
+<<<<<<< HEAD
                                 ref={editorRef}
                                 key={task?._id || 'new-task'}
                                 holder={task ? `editor-${task._id}` : 'new-task-editor'}
+=======
+                                key={`${task?._id || 'new-task'}-${editorInstanceKey}`}
+                                holder={task ? `editor-${task._id}-${editorInstanceKey}` : `new-task-editor-${editorInstanceKey}`}
+>>>>>>> 40b95f57c2e7f127a17bdceac71ec8de09c9d65b
                                 data={description}
                                 onChange={setDescription}
                                 placeholder="Add description..."
@@ -272,16 +333,17 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
                         <div className="flex-1" />
 
                         <button
-                            onClick={() => setNeedsClarification(!needsClarification)}
+                            onClick={() => setIsClarificationDrawerOpen(true)}
+                            disabled={!task || !canManageClarification}
                             className={clsx(
                                 "flex items-center space-x-2 px-3 py-1.5 rounded-md text-[13px] font-bold transition-all shadow-sm",
-                                needsClarification
+                                task?.status === 'clarification' || needsClarification
                                     ? "bg-red-600 text-white hover:bg-red-700 shadow-red-100"
                                     : "bg-gray-50 text-red-500 hover:bg-red-50 border border-transparent"
                             )}
                         >
-                            <Info className={clsx("w-3.5 h-3.5", needsClarification ? "text-white" : "text-red-400")} />
-                            <span>{needsClarification ? 'Awaiting Clarification' : 'Request Clarification'}</span>
+                            <Info className={clsx("w-3.5 h-3.5", task?.status === 'clarification' || needsClarification ? "text-white" : "text-red-400")} />
+                            <span>{task?.status === 'clarification' || needsClarification ? 'Clarification Open' : 'Clarification Request'}</span>
                         </button>
                     </div>
 
@@ -345,41 +407,72 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
                     </div>
 
                     {/* Attachments List */}
-                    {localAttachments.length > 0 && (
+                    {(task ? localAttachments.length > 0 : pendingAttachments.length > 0) && (
                         <div className="space-y-1 mt-4">
                             <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest px-1">Attachments</h4>
                             <div className="flex flex-col gap-1">
-                                {localAttachments.map((att: any, idx: number) => (
-                                    <div
-                                        key={idx}
-                                        className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg border border-gray-100 group"
-                                    >
-                                        <div className="flex items-center space-x-2 min-w-0">
-                                            <FileText className="w-4 h-4 text-indigo-400 flex-shrink-0" />
-                                            <a
-                                                href={`data:${att.mimeType};base64,${att.data}`}
-                                                download={att.name}
-                                                className="text-[13px] font-medium text-gray-700 hover:text-indigo-600 truncate transition-colors"
-                                            >
-                                                {att.name}
-                                            </a>
-                                            <span className="text-[11px] text-gray-400 flex-shrink-0">
-                                                {att.size < 1024 * 1024
-                                                    ? `${(att.size / 1024).toFixed(1)} KB`
-                                                    : `${(att.size / 1024 / 1024).toFixed(1)} MB`}
-                                            </span>
-                                        </div>
-                                        <button
-                                            onClick={() => detachMutation.mutate(idx)}
-                                            disabled={detachMutation.isPending}
-                                            className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-50 rounded text-gray-400 hover:text-red-500 transition-all"
-                                            title="Remove attachment"
+                                {task ? (
+                                    localAttachments.map((att: any, idx: number) => (
+                                        <div
+                                            key={idx}
+                                            className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg border border-gray-100 group"
                                         >
-                                            <Trash2 className="w-3.5 h-3.5" />
-                                        </button>
-                                    </div>
-                                ))}
+                                            <div className="flex items-center space-x-2 min-w-0">
+                                                <FileText className="w-4 h-4 text-indigo-400 flex-shrink-0" />
+                                                <a
+                                                    href={`data:${att.mimeType};base64,${att.data}`}
+                                                    download={att.name}
+                                                    className="text-[13px] font-medium text-gray-700 hover:text-indigo-600 truncate transition-colors"
+                                                >
+                                                    {att.name}
+                                                </a>
+                                                <span className="text-[11px] text-gray-400 flex-shrink-0">
+                                                    {att.size < 1024 * 1024
+                                                        ? `${(att.size / 1024).toFixed(1)} KB`
+                                                        : `${(att.size / 1024 / 1024).toFixed(1)} MB`}
+                                                </span>
+                                            </div>
+                                            <button
+                                                onClick={() => detachMutation.mutate(idx)}
+                                                disabled={detachMutation.isPending}
+                                                className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-50 rounded text-gray-400 hover:text-red-500 transition-all"
+                                                title="Remove attachment"
+                                            >
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
+                                    ))
+                                ) : (
+                                    pendingAttachments.map((att) => (
+                                        <div
+                                            key={att.id}
+                                            className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-lg border border-gray-100 group"
+                                        >
+                                            <div className="flex items-center space-x-2 min-w-0">
+                                                <FileText className="w-4 h-4 text-indigo-400 flex-shrink-0" />
+                                                <span className="text-[13px] font-medium text-gray-700 truncate">
+                                                    {att.file.name}
+                                                </span>
+                                                <span className="text-[11px] text-gray-400 flex-shrink-0">
+                                                    {att.file.size < 1024 * 1024
+                                                        ? `${(att.file.size / 1024).toFixed(1)} KB`
+                                                        : `${(att.file.size / 1024 / 1024).toFixed(1)} MB`}
+                                                </span>
+                                            </div>
+                                            <button
+                                                onClick={() => setPendingAttachments((prev) => prev.filter((x) => x.id !== att.id))}
+                                                className="opacity-0 group-hover:opacity-100 p-1 hover:bg-red-50 rounded text-gray-400 hover:text-red-500 transition-all"
+                                                title="Remove attachment"
+                                            >
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
+                                    ))
+                                )}
                             </div>
+                            {!task && pendingAttachments.length > 0 && (
+                                <p className="text-[11px] text-gray-500 px-1">Files will upload when you click Create.</p>
+                            )}
                         </div>
                     )}
                     {needsClarification && (
@@ -392,15 +485,24 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
                         </div>
                     )}
 
-                    {/* Activity Section */}
+                    {/* General task comments */}
                     {task && (
-                        <div className="space-y-4 pt-6 border-t border-gray-50">
-                            <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest px-1">Activity</h4>
-                            <TaskComments taskId={task._id} />
+                        <div className="space-y-4 pt-6 mt-8 border-t border-gray-50">
+                            <h4 className="text-[11px] font-bold text-gray-400 uppercase tracking-widest px-1">Comments</h4>
+                            <TaskComments taskId={task._id} type="general" />
                         </div>
                     )}
+
                 </div>
             </div>
+
+            {task && (
+                <TaskDetailsDrawer
+                    isOpen={isClarificationDrawerOpen}
+                    onClose={() => setIsClarificationDrawerOpen(false)}
+                    task={task}
+                />
+            )}
 
             {/* Sticky Action Footer */}
             <div className="absolute bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-100 flex justify-between items-center z-20">

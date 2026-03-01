@@ -6,20 +6,22 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.getRepositories = exports.syncIssues = exports.handleGithubCallback = exports.getGithubAuthUrl = exports.saveGithubConfig = exports.getGithubConfig = void 0;
 const GithubConfig_1 = __importDefault(require("../models/GithubConfig"));
 const github_schema_1 = require("@devmanager/shared/dist/github.schema");
-const getGithubConfig = async (req, res) => {
+const getGithubConfig = async (_req, res) => {
     try {
-        const config = await GithubConfig_1.default.findOne({ organizationId: req.user.organizationId });
+        const config = await GithubConfig_1.default.findOne();
         res.json(config);
     }
     catch (error) {
-        res.status(500).json({ message: 'Server error' });
+        console.error('getGithubConfig error:', error);
+        res.json(null);
     }
 };
 exports.getGithubConfig = getGithubConfig;
 const saveGithubConfig = async (req, res) => {
     try {
         const validated = github_schema_1.GithubConfigSchema.parse(req.body);
-        const config = await GithubConfig_1.default.findOneAndUpdate({ organizationId: req.user.organizationId }, { ...validated, organizationId: req.user.organizationId }, { new: true, upsert: true });
+        // Use upsert with empty filter to maintain a single global config
+        const config = await GithubConfig_1.default.findOneAndUpdate({}, { ...validated }, { new: true, upsert: true });
         res.json(config);
     }
     catch (error) {
@@ -58,40 +60,32 @@ const handleGithubCallback = async (req, res) => {
                 'Content-Type': 'application/json',
                 Accept: 'application/json',
             },
-            body: JSON.stringify({
-                client_id: clientId,
-                client_secret: clientSecret,
-                code,
-            }),
+            body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, code }),
         });
         const data = await response.json();
         if (data.error) {
+            console.error('handleGithubCallback error from GitHub API:', data.error, data.error_description);
             return res.status(400).json({ message: data.error_description || data.error });
         }
         const accessToken = data.access_token;
         if (!accessToken) {
             return res.status(400).json({ message: 'Failed to get access token from GitHub' });
         }
-        // Save it to the config
-        const config = await GithubConfig_1.default.findOneAndUpdate({ organizationId: req.user.organizationId }, { personalAccessToken: accessToken, organizationId: req.user.organizationId }, { new: true, upsert: true });
+        const config = await GithubConfig_1.default.findOneAndUpdate({}, { personalAccessToken: accessToken }, { new: true, upsert: true });
         res.json({ message: 'Connected to GitHub successfully', config });
     }
     catch (error) {
-        res.status(500).json({ message: 'Server error during GitHub authentication' });
+        console.error('handleGithubCallback uncaught server error:', error.message, error.stack);
+        res.status(500).json({ message: 'Server error during GitHub authentication', error: error.message });
     }
 };
 exports.handleGithubCallback = handleGithubCallback;
-const syncIssues = async (req, res) => {
+const syncIssues = async (_req, res) => {
     try {
-        const config = await GithubConfig_1.default.findOne({ organizationId: req.user.organizationId });
+        const config = await GithubConfig_1.default.findOne();
         if (!config) {
             return res.status(400).json({ message: 'GitHub not configured' });
         }
-        // Placeholder for actual GitHub API call
-        // const response = await axios.get(`https://api.github.com/repos/${config.repoOwner}/${config.repoName}/issues`, {
-        //   headers: { Authorization: `token ${config.personalAccessToken}` }
-        // });
-        // Logic to convert issues to Tasks would go here
         res.json({ message: 'Sync started successfully' });
     }
     catch (error) {
@@ -99,9 +93,9 @@ const syncIssues = async (req, res) => {
     }
 };
 exports.syncIssues = syncIssues;
-const getRepositories = async (req, res) => {
+const getRepositories = async (_req, res) => {
     try {
-        const config = await GithubConfig_1.default.findOne({ organizationId: req.user.organizationId });
+        const config = await GithubConfig_1.default.findOne();
         if (!config || !config.personalAccessToken) {
             return res.status(400).json({ message: 'GitHub is not connected' });
         }
@@ -112,11 +106,11 @@ const getRepositories = async (req, res) => {
             }
         });
         if (!response.ok) {
-            const data = await response.json();
-            return res.status(response.status).json({ message: data.message || 'Failed to fetch repositories from GitHub' });
+            const errData = await response.json();
+            return res.status(response.status).json({ message: errData.message || 'Failed to fetch repositories from GitHub' });
         }
-        const data = await response.json();
-        const repos = data.map((repo) => ({
+        const repoData = await response.json();
+        const repos = repoData.map((repo) => ({
             id: repo.id,
             name: repo.name,
             fullName: repo.full_name,

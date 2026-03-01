@@ -35,9 +35,8 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose_1 = __importStar(require("mongoose"));
 const GithubConfigSchema = new mongoose_1.Schema({
-    organizationId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Organization', required: true, unique: true },
     personalAccessToken: { type: String, required: true },
-    repoOwner: { type: String, required: true },
-    repoName: { type: String, required: true },
+    repoOwner: { type: String },
+    repoName: { type: String },
 }, { timestamps: true });
 exports.default = mongoose_1.default.model('GithubConfig', GithubConfigSchema);

@@ -3,24 +3,21 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.updateProject = exports.getProject = exports.createProject = exports.getProjects = void 0;
+exports.deleteProjectDocument = exports.uploadProjectDocument = exports.removeProjectMember = exports.addProjectMember = exports.deleteProject = exports.updateProject = exports.getProject = exports.createProject = exports.getProjects = void 0;
 const Project_1 = __importDefault(require("../models/Project"));
 const GithubConfig_1 = __importDefault(require("../models/GithubConfig"));
 const project_schema_1 = require("@devmanager/shared/dist/project.schema");
+const socket_1 = require("../socket");
 const getProjects = async (req, res) => {
     try {
-        const query = { organizationId: req.user.organizationId };
-        // If user is not admin, apply visibility filters
+        const query = {};
         if (req.user.role !== 'admin') {
             if (req.user.role === 'client' && req.user.clientId) {
                 query.clientId = req.user.clientId;
             }
             else {
-                // For regular users, show public projects OR those they are members of
-                query.$or = [
-                    { visibility: 'public' },
-                    { members: req.user.userId }
-                ];
+                // manager/member: only projects they are explicitly assigned to
+                query.members = req.user.userId;
             }
         }
         const projects = await Project_1.default.find(query).populate('clientId', 'name');
@@ -41,9 +38,8 @@ const createProject = async (req, res) => {
         let githubRepoOwner = validated.githubRepoOwner;
         let githubRepoName = validated.githubRepoName;
         if (validated.createGithubRepo) {
-            const config = await GithubConfig_1.default.findOne({ organizationId: req.user.organizationId });
+            const config = await GithubConfig_1.default.findOne();
             if (config && config.personalAccessToken) {
-                // Ensure name is a valid repo name (no spaces/weird chars)
                 const safeName = validated.name.replace(/[^a-zA-Z0-9-]/g, '-').toLowerCase();
                 const response = await fetch('https://api.github.com/user/repos', {
                     method: 'POST',
@@ -52,16 +48,21 @@ const createProject = async (req, res) => {
                         Accept: 'application/vnd.github.v3+json',
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({
-                        name: safeName,
-                        private: true
-                    })
+                    body: JSON.stringify({ name: safeName, private: true })
                 });
                 if (response.ok) {
                     const repoData = await response.json();
                     githubRepoOwner = repoData.owner.login;
                     githubRepoName = repoData.name;
                 }
+                else {
+                    const errorText = await response.text();
+                    console.error('createProject - GitHub Repo Creation Error:', response.status, errorText);
+                    return res.status(400).json({ message: 'Failed to create GitHub repository. ' + errorText });
+                }
+            }
+            else {
+                return res.status(400).json({ message: 'GitHub integration is not connected.' });
             }
         }
         const project = await Project_1.default.create({
@@ -69,7 +70,6 @@ const createProject = async (req, res) => {
             clientId,
             githubRepoOwner,
             githubRepoName,
-            organizationId: req.user.organizationId,
         });
         res.status(201).json(project);
     }
@@ -82,23 +82,16 @@ const createProject = async (req, res) => {
 exports.createProject = createProject;
 const getProject = async (req, res) => {
     try {
-        const query = {
-            _id: req.params.id,
-            organizationId: req.user.organizationId
-        };
-        // If not admin, check visibility/membership
+        const query = { _id: req.params.id };
         if (req.user.role !== 'admin') {
             if (req.user.role === 'client') {
                 query.clientId = req.user.clientId;
             }
             else {
-                query.$or = [
-                    { visibility: 'public' },
-                    { members: req.user.userId }
-                ];
+                query.members = req.user.userId;
             }
         }
-        const project = await Project_1.default.findOne(query).populate('clientId', 'name');
+        const project = await Project_1.default.findOne(query).populate('clientId', 'name').populate('members', 'firstName lastName email role');
         if (!project)
             return res.status(404).json({ message: 'Project not found' });
         res.json(project);
@@ -114,7 +107,7 @@ const updateProject = async (req, res) => {
         let githubRepoOwner = validated.githubRepoOwner;
         let githubRepoName = validated.githubRepoName;
         if (validated.createGithubRepo && validated.name) {
-            const config = await GithubConfig_1.default.findOne({ organizationId: req.user.organizationId });
+            const config = await GithubConfig_1.default.findOne();
             if (config && config.personalAccessToken) {
                 const safeName = validated.name.replace(/[^a-zA-Z0-9-]/g, '-').toLowerCase();
                 const response = await fetch('https://api.github.com/user/repos', {
@@ -124,16 +117,22 @@ const updateProject = async (req, res) => {
                         Accept: 'application/vnd.github.v3+json',
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({
-                        name: safeName,
-                        private: true
-                    })
+                    body: JSON.stringify({ name: safeName, private: true })
                 });
                 if (response.ok) {
                     const repoData = await response.json();
                     githubRepoOwner = repoData.owner.login;
                     githubRepoName = repoData.name;
+                    console.log('updateProject - Repo created successfully:', githubRepoOwner, githubRepoName);
                 }
+                else {
+                    const errorText = await response.text();
+                    console.error('updateProject - GitHub Repo Creation Error:', response.status, errorText);
+                    return res.status(400).json({ message: 'Failed to create GitHub repository. ' + errorText });
+                }
+            }
+            else {
+                return res.status(400).json({ message: 'GitHub integration is not connected.' });
             }
         }
         const updateData = { ...validated };
@@ -141,7 +140,7 @@ const updateProject = async (req, res) => {
             updateData.githubRepoOwner = githubRepoOwner;
         if (githubRepoName)
             updateData.githubRepoName = githubRepoName;
-        const project = await Project_1.default.findOneAndUpdate({ _id: req.params.id, organizationId: req.user.organizationId }, updateData, { new: true });
+        const project = await Project_1.default.findByIdAndUpdate(req.params.id, updateData, { new: true });
         if (!project)
             return res.status(404).json({ message: 'Project not found' });
         res.json(project);
@@ -153,3 +152,112 @@ const updateProject = async (req, res) => {
     }
 };
 exports.updateProject = updateProject;
+const deleteProject = async (req, res) => {
+    try {
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({ message: 'Only admins can delete projects' });
+        }
+        const project = await Project_1.default.findByIdAndDelete(req.params.id);
+        if (!project)
+            return res.status(404).json({ message: 'Project not found' });
+        (0, socket_1.emitToAll)('project:updated', null); // Optionally notify clients to refresh project list
+        res.json({ message: 'Project deleted successfully' });
+    }
+    catch (error) {
+        console.error('Error deleting project:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+exports.deleteProject = deleteProject;
+const addProjectMember = async (req, res) => {
+    try {
+        const { userId } = req.body;
+        if (!userId)
+            return res.status(400).json({ message: 'userId is required' });
+        const project = await Project_1.default.findByIdAndUpdate(req.params.id, { $addToSet: { members: userId } }, { new: true }).populate('members', 'firstName lastName email role');
+        if (!project)
+            return res.status(404).json({ message: 'Project not found' });
+        res.json(project);
+        (0, socket_1.emitToAll)('project:updated', project);
+    }
+    catch (error) {
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+exports.addProjectMember = addProjectMember;
+const removeProjectMember = async (req, res) => {
+    try {
+        const project = await Project_1.default.findByIdAndUpdate(req.params.id, { $pull: { members: req.params.userId } }, { new: true }).populate('members', 'firstName lastName email role');
+        if (!project)
+            return res.status(404).json({ message: 'Project not found' });
+        res.json(project);
+        (0, socket_1.emitToAll)('project:updated', project);
+    }
+    catch (error) {
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+exports.removeProjectMember = removeProjectMember;
+// --- Documents ---
+const uploadProjectDocument = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { title, description, fileData, mimeType, fileName } = req.body;
+        if (!title || !fileData || !mimeType || !fileName) {
+            return res.status(400).json({ message: 'Missing required document fields' });
+        }
+        const project = await Project_1.default.findById(id);
+        if (!project)
+            return res.status(404).json({ message: 'Project not found' });
+        // Ensure user has access to project
+        if (req.user.role === 'client' && project.clientId?.toString() !== req.user.clientId) {
+            return res.status(403).json({ message: 'Not authorized' });
+        }
+        if (req.user.role === 'manager' || req.user.role === 'member') {
+            if (!project.members.includes(req.user.userId)) {
+                return res.status(403).json({ message: 'Not authorized' });
+            }
+        }
+        project.documents.push({
+            title,
+            description: description || '',
+            fileData,
+            mimeType,
+            fileName,
+            uploadedBy: req.user.userId,
+            uploadedAt: new Date()
+        });
+        await project.save();
+        await project.populate('documents.uploadedBy', 'firstName lastName email');
+        res.status(201).json(project.documents[project.documents.length - 1]);
+    }
+    catch (error) {
+        console.error('Error uploading document:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+exports.uploadProjectDocument = uploadProjectDocument;
+const deleteProjectDocument = async (req, res) => {
+    try {
+        const { id, docId } = req.params;
+        const project = await Project_1.default.findById(id);
+        if (!project)
+            return res.status(404).json({ message: 'Project not found' });
+        const docIndex = project.documents.findIndex(d => d._id?.toString() === docId);
+        if (docIndex === -1)
+            return res.status(404).json({ message: 'Document not found' });
+        const doc = project.documents[docIndex];
+        // Access control for deletion: Admin can delete any. Others can only delete their own.
+        if (req.user.role !== 'admin' && doc.uploadedBy.toString() !== req.user.userId) {
+            return res.status(403).json({ message: 'You can only delete your own documents' });
+        }
+        project.documents.splice(docIndex, 1);
+        await project.save();
+        res.json({ message: 'Document deleted successfully' });
+    }
+    catch (error) {
+        console.error('Error deleting document:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+exports.deleteProjectDocument = deleteProjectDocument;

@@ -35,7 +35,6 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose_1 = __importStar(require("mongoose"));
 const AttendanceSchema = new mongoose_1.Schema({
-    organizationId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Organization', required: true, index: true },
     userId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
     date: { type: Date, required: true },
     checkInTime: { type: Date },

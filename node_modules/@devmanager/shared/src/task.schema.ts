@@ -4,7 +4,7 @@ export const TaskSchema = z.object({
     projectId: z.string().min(1),
     title: z.string().min(1),
     description: z.any().optional(),
-    status: z.enum(['todo', 'in_progress', 'review', 'done']).default('todo'),
+    status: z.enum(['todo', 'in_progress', 'review', 'done', 'clarification', 'clarified']).default('todo'),
     priority: z.enum(['low', 'medium', 'high', 'urgent']).default('medium'),
     type: z.enum(['task', 'bug', 'feature']).default('task'),
     assigneeId: z.string().optional(),

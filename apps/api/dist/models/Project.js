@@ -35,7 +35,6 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose_1 = __importStar(require("mongoose"));
 const ProjectSchema = new mongoose_1.Schema({
-    organizationId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Organization', required: true, index: true },
     clientId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Client' },
     name: { type: String, required: true },
     description: { type: mongoose_1.Schema.Types.Mixed },
@@ -47,5 +46,14 @@ const ProjectSchema = new mongoose_1.Schema({
     members: [{ type: mongoose_1.Schema.Types.ObjectId, ref: 'User' }],
     githubRepoOwner: { type: String },
     githubRepoName: { type: String },
+    documents: [{
+            title: { type: String, required: true },
+            description: { type: String },
+            fileData: { type: String, required: true },
+            mimeType: { type: String, required: true },
+            fileName: { type: String, required: true },
+            uploadedBy: { type: mongoose_1.Schema.Types.ObjectId, ref: 'User', required: true },
+            uploadedAt: { type: Date, default: Date.now }
+        }]
 }, { timestamps: true });
 exports.default = mongoose_1.default.model('Project', ProjectSchema);

@@ -8,9 +8,9 @@ const bcrypt_1 = __importDefault(require("bcrypt"));
 const Client_1 = __importDefault(require("../models/Client"));
 const User_1 = __importDefault(require("../models/User"));
 const client_schema_1 = require("@devmanager/shared/dist/client.schema");
-const getClients = async (req, res) => {
+const getClients = async (_req, res) => {
     try {
-        const clients = await Client_1.default.find({ organizationId: req.user.organizationId });
+        const clients = await Client_1.default.find({});
         res.json(clients);
     }
     catch (error) {
@@ -20,10 +20,7 @@ const getClients = async (req, res) => {
 exports.getClients = getClients;
 const getClient = async (req, res) => {
     try {
-        const client = await Client_1.default.findOne({
-            _id: req.params.id,
-            organizationId: req.user.organizationId
-        });
+        const client = await Client_1.default.findById(req.params.id);
         if (!client)
             return res.status(404).json({ message: 'Client not found' });
         res.json(client);
@@ -39,7 +36,6 @@ const createClient = async (req, res) => {
         // 1. Create the Client document
         const client = await Client_1.default.create({
             ...validated,
-            organizationId: req.user.organizationId,
         });
         // 2. If email is provided, create a User account for the client
         if (validated.email) {
@@ -61,7 +57,6 @@ const createClient = async (req, res) => {
                 firstName: validated.name.split(' ')[0] || 'Client',
                 lastName: validated.name.split(' ')[1] || 'User',
                 role: 'client',
-                organizationId: req.user.organizationId,
                 clientId: client._id
             });
             // Update client with userId
@@ -80,10 +75,7 @@ exports.createClient = createClient;
 const toggleClientStatus = async (req, res) => {
     try {
         const { status } = req.body;
-        const client = await Client_1.default.findOne({
-            _id: req.params.id,
-            organizationId: req.user.organizationId
-        });
+        const client = await Client_1.default.findById(req.params.id);
         if (!client)
             return res.status(404).json({ message: 'Client not found' });
         client.status = status;
@@ -102,10 +94,7 @@ const toggleClientStatus = async (req, res) => {
 exports.toggleClientStatus = toggleClientStatus;
 const resetClientPassword = async (req, res) => {
     try {
-        const client = await Client_1.default.findOne({
-            _id: req.params.id,
-            organizationId: req.user.organizationId
-        });
+        const client = await Client_1.default.findById(req.params.id);
         if (!client)
             return res.status(404).json({ message: 'Client not found' });
         if (!client.userId)
@@ -123,10 +112,7 @@ const resetClientPassword = async (req, res) => {
 exports.resetClientPassword = resetClientPassword;
 const deleteClient = async (req, res) => {
     try {
-        const client = await Client_1.default.findOne({
-            _id: req.params.id,
-            organizationId: req.user.organizationId
-        });
+        const client = await Client_1.default.findById(req.params.id);
         if (!client)
             return res.status(404).json({ message: 'Client not found' });
         if (client.userId) {

@@ -16,6 +16,11 @@ export const updateTask = async (id: string, data: Partial<TaskInput>) => {
     return response.data;
 };
 
+export const deleteTask = async (id: string) => {
+    const response = await api.delete(`/tasks/${id}`);
+    return response.data;
+};
+
 export const uploadAttachment = async (
     taskId: string,
     file: File
