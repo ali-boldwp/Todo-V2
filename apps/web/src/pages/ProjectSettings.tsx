@@ -29,6 +29,7 @@ const ProjectSettings: React.FC<{ project: any }> = ({ project }) => {
     const navigate = useNavigate();
     const [saved, setSaved] = useState(false);
     const [visibility, setVisibility] = useState(project.visibility);
+    const [status, setStatus] = useState(project.status || 'draft');
     const [showAddMember, setShowAddMember] = useState(false);
     const [selectedUserId, setSelectedUserId] = useState('');
     const [selectedClientId, setSelectedClientId] = useState(
@@ -132,6 +133,11 @@ const ProjectSettings: React.FC<{ project: any }> = ({ project }) => {
         updateMutation.mutate({ visibility: newVisibility });
     };
 
+    const handleStatusChange = (newStatus: 'active' | 'on_hold' | 'completed' | 'archived' | 'draft') => {
+        setStatus(newStatus);
+        updateMutation.mutate({ status: newStatus });
+    };
+
     const handleSaveGithubSettings = () => {
         if (githubRepoOption === 'none') {
             githubMutation.mutate({ githubRepoOwner: '', githubRepoName: '' });
@@ -196,6 +202,51 @@ const ProjectSettings: React.FC<{ project: any }> = ({ project }) => {
                                 </p>
                             </div>
                             <Switch checked={visibility === 'public'} onChange={handleVisibilityChange} label={visibility === 'public' ? 'Public' : 'Private'} />
+                        </div>
+
+                        <div className="border-t border-gray-100 mt-5 pt-5">
+                            <div className="space-y-2">
+                                <h3 className="text-sm font-semibold text-gray-900">Project Status</h3>
+                                <p className="text-xs text-gray-500">Current status: <span className="font-semibold uppercase">{status}</span></p>
+                                <div className="flex flex-wrap gap-2">
+                                    {status !== 'active' && (
+                                        <button
+                                            onClick={() => handleStatusChange('active')}
+                                            disabled={updateMutation.isPending}
+                                            className="px-3 py-1.5 rounded-md text-xs font-semibold bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-50"
+                                        >
+                                            Activate Project
+                                        </button>
+                                    )}
+                                    {status !== 'on_hold' && (
+                                        <button
+                                            onClick={() => handleStatusChange('on_hold')}
+                                            disabled={updateMutation.isPending}
+                                            className="px-3 py-1.5 rounded-md text-xs font-semibold bg-amber-100 text-amber-800 hover:bg-amber-200 disabled:opacity-50"
+                                        >
+                                            Put On Hold
+                                        </button>
+                                    )}
+                                    {status !== 'completed' && (
+                                        <button
+                                            onClick={() => handleStatusChange('completed')}
+                                            disabled={updateMutation.isPending}
+                                            className="px-3 py-1.5 rounded-md text-xs font-semibold bg-blue-100 text-blue-800 hover:bg-blue-200 disabled:opacity-50"
+                                        >
+                                            Mark Completed
+                                        </button>
+                                    )}
+                                    {status !== 'archived' && (
+                                        <button
+                                            onClick={() => handleStatusChange('archived')}
+                                            disabled={updateMutation.isPending}
+                                            className="px-3 py-1.5 rounded-md text-xs font-semibold bg-gray-200 text-gray-700 hover:bg-gray-300 disabled:opacity-50"
+                                        >
+                                            Archive
+                                        </button>
+                                    )}
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>

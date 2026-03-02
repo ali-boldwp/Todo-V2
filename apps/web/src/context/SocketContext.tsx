@@ -51,15 +51,18 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
 
         socket.on('task:created', (task: any) => {
             queryClient.invalidateQueries({ queryKey: ['tasks', task.projectId] });
+            queryClient.invalidateQueries({ queryKey: ['dashboard-tasks'] });
         });
 
         socket.on('task:updated', (task: any) => {
             queryClient.invalidateQueries({ queryKey: ['tasks', task.projectId] });
             queryClient.invalidateQueries({ queryKey: ['task', task._id] });
+            queryClient.invalidateQueries({ queryKey: ['dashboard-tasks'] });
         });
 
         socket.on('task:deleted', (task: any) => {
             queryClient.invalidateQueries({ queryKey: ['tasks', task.projectId] });
+            queryClient.invalidateQueries({ queryKey: ['dashboard-tasks'] });
         });
 
         socket.on('project:updated', () => {

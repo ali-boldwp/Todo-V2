@@ -131,7 +131,7 @@ const ProjectOverview = ({ project }: { project: any }) => {
 
         const workedByUsers = Array.from(workedTaskMap.entries())
             .map(([id, value]) => ({ id, ...value }))
-            .sort((a, b) => b.taskCount - a.taskCount || a.name.localeCompare(b.name))
+            .sort((a: any, b: any) => b.taskCount - a.taskCount || a.name.localeCompare(b.name))
             .slice(0, 8);
 
         const latestCompletedTasks = projectTasks
@@ -152,7 +152,7 @@ const ProjectOverview = ({ project }: { project: any }) => {
                     doneAt: doneAt && !Number.isNaN(doneAt.getTime()) ? doneAt : null,
                 };
             })
-            .sort((a, b) => {
+            .sort((a: any, b: any) => {
                 const aTime = a.doneAt ? a.doneAt.getTime() : 0;
                 const bTime = b.doneAt ? b.doneAt.getTime() : 0;
                 return bTime - aTime;

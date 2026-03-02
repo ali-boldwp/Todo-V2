@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { useQuery } from '@tanstack/react-query';
 import Login from './pages/Login';
 import Projects from './pages/Projects';
 import ProjectDetails from './pages/ProjectDetails';
@@ -15,6 +16,11 @@ import ProfileSetup from './pages/ProfileSetup';
 import Layout from './components/Layout';
 import LoadingScreen from './components/LoadingScreen';
 import { useState, useEffect } from 'react';
+import { getProjects } from './services/core';
+import { getTasks } from './services/task';
+import { getTeamMembers } from './services/team';
+import { getClients } from './services/client';
+import { useSocket } from './context/SocketContext';
 
 const requiresProfileSetup = (user: any) =>
     !!user && !user.profileSetupCompleted;
@@ -22,8 +28,236 @@ const requiresProfileSetup = (user: any) =>
 const requiresGithubSetup = (user: any) =>
     !!user && ['manager', 'member'].includes(user.role) && !user.githubSetupCompleted;
 
+const formatDuration = (seconds: number) => {
+    const total = Math.max(0, Math.floor(Number(seconds) || 0));
+    const h = Math.floor(total / 3600);
+    const m = Math.floor((total % 3600) / 60);
+    const s = total % 60;
+    if (h > 0) return `${h}h ${m}m`;
+    if (m > 0) return `${m}m ${s}s`;
+    return `${s}s`;
+};
+
 const Dashboard = () => {
     const { user } = useAuth();
+    const { joinProject, leaveProject } = useSocket();
+    const [clockTick, setClockTick] = useState(0);
+
+    const isAdmin = user?.role === 'admin';
+    const { data: projects = [] } = useQuery({
+        queryKey: ['dashboard-projects'],
+        queryFn: getProjects,
+        enabled: isAdmin,
+    });
+    const { data: tasks = [] } = useQuery({
+        queryKey: ['dashboard-tasks'],
+        queryFn: () => getTasks(''),
+        enabled: isAdmin,
+    });
+    const { data: teamMembers = [] } = useQuery({
+        queryKey: ['dashboard-team-members'],
+        queryFn: getTeamMembers,
+        enabled: isAdmin,
+    });
+    const { data: clients = [] } = useQuery({
+        queryKey: ['dashboard-clients'],
+        queryFn: getClients,
+        enabled: isAdmin,
+    });
+
+    useEffect(() => {
+        if (!isAdmin) return;
+        const intervalId = setInterval(() => {
+            setClockTick((prev) => prev + 1);
+        }, 1000);
+        return () => clearInterval(intervalId);
+    }, [isAdmin]);
+
+    useEffect(() => {
+        if (!isAdmin) return;
+        const ids = projects
+            .map((project: any) => project?._id)
+            .filter(Boolean);
+
+        ids.forEach((id: string) => joinProject(id));
+        return () => {
+            ids.forEach((id: string) => leaveProject(id));
+        };
+    }, [isAdmin, projects, joinProject, leaveProject]);
+
+    if (isAdmin) {
+        const totalProjects = projects.length;
+        const activeProjects = projects.filter((p: any) => p.status === 'active').length;
+        const completedProjects = projects.filter((p: any) => p.status === 'completed').length;
+        const archivedProjects = projects.filter((p: any) => p.status === 'archived').length;
+
+        const totalTasks = tasks.length;
+        const taskTodo = tasks.filter((t: any) => t.status === 'todo').length;
+        const taskInProgress = tasks.filter((t: any) => t.status === 'in_progress').length;
+        const taskReview = tasks.filter((t: any) => t.status === 'review').length;
+        const taskUnderVerification = tasks.filter((t: any) => t.status === 'under_verification').length;
+        const taskDone = tasks.filter((t: any) => t.status === 'done').length;
+        const completionRate = totalTasks > 0 ? Math.round((taskDone / totalTasks) * 100) : 0;
+
+        const totalTeamUsers = teamMembers.length;
+        const activeTeamUsers = teamMembers.filter((m: any) => m.isActive).length;
+        const managers = teamMembers.filter((m: any) => m.role === 'manager').length;
+        const members = teamMembers.filter((m: any) => m.role === 'member').length;
+        const verifiersEnabled = teamMembers.filter((m: any) => m.canVerifyTasks).length;
+
+        const totalClients = clients.length;
+        const activeClients = clients.filter((c: any) => c.status === 'active').length;
+        const suspendedClients = clients.filter((c: any) => c.status === 'suspended').length;
+        const projectNameById = new Map(
+            projects.map((project: any) => [project._id?.toString?.() || project._id, project.name || 'Untitled Project'])
+        );
+        const liveWorkItems = tasks
+            .filter((task: any) => task.status === 'in_progress' && task.activeWorkerId)
+            .map((task: any) => {
+                const projectId = task?.projectId?._id?.toString?.() || task?.projectId?.toString?.() || '';
+                const worker = task.activeWorkerId;
+                const workerName = [worker?.firstName, worker?.lastName].filter(Boolean).join(' ').trim() || worker?.email || 'Unknown';
+                const running = !task.isWorkPaused;
+                const lastStart = task.lastWorkStartedAt ? new Date(task.lastWorkStartedAt) : null;
+                const sessionSeconds = running && lastStart && !Number.isNaN(lastStart.getTime())
+                    ? Math.max(0, Math.floor((Date.now() - lastStart.getTime()) / 1000))
+                    : 0;
+                return {
+                    id: task._id,
+                    title: task.title || 'Untitled task',
+                    workerName,
+                    projectName: projectNameById.get(projectId) || 'Unknown Project',
+                    running,
+                    sessionSeconds,
+                    totalWorkedSeconds: Number(task.totalWorkedSecondsComputed || task.totalWorkedSeconds || 0),
+                };
+            });
+        void clockTick;
+
+        return (
+            <div className="p-6 bg-gradient-to-b from-slate-50 to-white min-h-full space-y-6">
+                <div>
+                    <h1 className="text-2xl font-bold text-slate-900">Admin Dashboard</h1>
+                    <p className="text-sm text-slate-500 mt-1">Full application stats overview</p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+                    <div className="rounded-xl border border-slate-200 bg-white p-4">
+                        <p className="text-xs uppercase text-slate-500 font-semibold">Total Projects</p>
+                        <p className="text-2xl font-bold text-slate-900 mt-2">{totalProjects}</p>
+                    </div>
+                    <div className="rounded-xl border border-emerald-100 bg-white p-4">
+                        <p className="text-xs uppercase text-slate-500 font-semibold">Active Projects</p>
+                        <p className="text-2xl font-bold text-emerald-700 mt-2">{activeProjects}</p>
+                    </div>
+                    <div className="rounded-xl border border-blue-100 bg-white p-4">
+                        <p className="text-xs uppercase text-slate-500 font-semibold">Completed Projects</p>
+                        <p className="text-2xl font-bold text-blue-700 mt-2">{completedProjects}</p>
+                    </div>
+                    <div className="rounded-xl border border-slate-200 bg-white p-4">
+                        <p className="text-xs uppercase text-slate-500 font-semibold">Archived Projects</p>
+                        <p className="text-2xl font-bold text-slate-700 mt-2">{archivedProjects}</p>
+                    </div>
+                </div>
+
+                <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                    <div className="rounded-xl border border-slate-200 bg-white p-4">
+                        <h2 className="text-sm font-bold uppercase tracking-wide text-slate-600">Task Stats</h2>
+                        <div className="grid grid-cols-2 gap-3 mt-3">
+                            <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
+                                <p className="text-xs text-slate-500">Total</p>
+                                <p className="text-xl font-bold text-slate-900">{totalTasks}</p>
+                            </div>
+                            <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-3">
+                                <p className="text-xs text-emerald-700">Done</p>
+                                <p className="text-xl font-bold text-emerald-700">{taskDone}</p>
+                            </div>
+                            <div className="rounded-lg border border-amber-100 bg-amber-50 p-3">
+                                <p className="text-xs text-amber-700">In Progress</p>
+                                <p className="text-xl font-bold text-amber-700">{taskInProgress}</p>
+                            </div>
+                            <div className="rounded-lg border border-blue-100 bg-blue-50 p-3">
+                                <p className="text-xs text-blue-700">Under Verification</p>
+                                <p className="text-xl font-bold text-blue-700">{taskUnderVerification}</p>
+                            </div>
+                            <div className="rounded-lg border border-violet-100 bg-violet-50 p-3">
+                                <p className="text-xs text-violet-700">Review</p>
+                                <p className="text-xl font-bold text-violet-700">{taskReview}</p>
+                            </div>
+                            <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
+                                <p className="text-xs text-slate-500">To Do</p>
+                                <p className="text-xl font-bold text-slate-900">{taskTodo}</p>
+                            </div>
+                        </div>
+                        <p className="text-xs text-slate-500 mt-3">Completion rate: {completionRate}%</p>
+                    </div>
+
+                    <div className="rounded-xl border border-slate-200 bg-white p-4">
+                        <h2 className="text-sm font-bold uppercase tracking-wide text-slate-600">People Stats</h2>
+                        <div className="grid grid-cols-2 gap-3 mt-3">
+                            <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
+                                <p className="text-xs text-slate-500">Team Users</p>
+                                <p className="text-xl font-bold text-slate-900">{totalTeamUsers}</p>
+                            </div>
+                            <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-3">
+                                <p className="text-xs text-emerald-700">Active Team</p>
+                                <p className="text-xl font-bold text-emerald-700">{activeTeamUsers}</p>
+                            </div>
+                            <div className="rounded-lg border border-blue-100 bg-blue-50 p-3">
+                                <p className="text-xs text-blue-700">Managers</p>
+                                <p className="text-xl font-bold text-blue-700">{managers}</p>
+                            </div>
+                            <div className="rounded-lg border border-indigo-100 bg-indigo-50 p-3">
+                                <p className="text-xs text-indigo-700">Members</p>
+                                <p className="text-xl font-bold text-indigo-700">{members}</p>
+                            </div>
+                            <div className="rounded-lg border border-violet-100 bg-violet-50 p-3">
+                                <p className="text-xs text-violet-700">Can Verify</p>
+                                <p className="text-xl font-bold text-violet-700">{verifiersEnabled}</p>
+                            </div>
+                            <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
+                                <p className="text-xs text-slate-500">Clients</p>
+                                <p className="text-xl font-bold text-slate-900">{totalClients}</p>
+                            </div>
+                        </div>
+                        <p className="text-xs text-slate-500 mt-3">
+                            Active clients: {activeClients} | Suspended clients: {suspendedClients}
+                        </p>
+                    </div>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-white p-4">
+                    <h2 className="text-sm font-bold uppercase tracking-wide text-slate-600">Live Work Tracker</h2>
+                    {liveWorkItems.length === 0 ? (
+                        <p className="text-sm text-slate-500 mt-3">No one is actively working on a task right now.</p>
+                    ) : (
+                        <div className="mt-3 space-y-2">
+                            {liveWorkItems.map((item: any) => (
+                                <div key={item.id} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+                                    <div className="flex items-start justify-between gap-2">
+                                        <div>
+                                            <p className="text-sm font-semibold text-slate-900">{item.title}</p>
+                                            <p className="text-xs text-slate-600 mt-0.5">
+                                                {item.workerName} · {item.projectName}
+                                            </p>
+                                        </div>
+                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${item.running ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                                            {item.running ? 'Running' : 'Paused'}
+                                        </span>
+                                    </div>
+                                    <div className="mt-2 flex flex-wrap gap-4 text-xs text-slate-600">
+                                        <span>Session timer: {formatDuration(item.sessionSeconds)}</span>
+                                        <span>Total worked: {formatDuration(item.totalWorkedSeconds)}</span>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
+    }
+
     return (
         <div className="p-6">
             <h1 className="text-2xl font-bold mb-4">Dashboard</h1>
