@@ -6,7 +6,7 @@ import TaskDetailsDrawer from './TaskDetailsDrawer';
 import TaskComments from './TaskComments';
 import clsx from 'clsx';
 import { getProjects } from '../services/core';
-import { createTask, updateTask, uploadAttachment, deleteAttachment, startTaskWork, pauseTaskWork, resumeTaskWork, finishTaskWork, approveTaskVerification, rejectTaskVerification } from '../services/task';
+import { createTask, updateTask, uploadAttachment, deleteAttachment, downloadAttachment, startTaskWork, pauseTaskWork, resumeTaskWork, finishTaskWork, approveTaskVerification, rejectTaskVerification } from '../services/task';
 import { useAuth } from '../context/AuthContext';
 import {
     Flag,
@@ -421,6 +421,25 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
         e.target.value = '';
     };
 
+    const handleAttachmentDownload = async (att: any, idx: number) => {
+        if (!task?._id) return;
+        try {
+            const payload = att?.data
+                ? att
+                : await downloadAttachment(task._id, idx);
+            const link = document.createElement('a');
+            link.href = payload?.data?.startsWith?.('data:')
+                ? payload.data
+                : `data:${payload.mimeType};base64,${payload.data}`;
+            link.download = payload.name || att.name || 'attachment';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        } catch {
+            alert('Failed to download attachment');
+        }
+    };
+
     const handleCreate = async () => {
         if (!title || !projectId) return;
 
@@ -621,13 +640,13 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
                                         >
                                             <div className="flex items-center space-x-2 min-w-0">
                                                 <FileText className="w-4 h-4 text-indigo-400 flex-shrink-0" />
-                                                <a
-                                                    href={`data:${att.mimeType};base64,${att.data}`}
-                                                    download={att.name}
-                                                    className="text-[13px] font-medium text-gray-700 hover:text-indigo-600 truncate transition-colors"
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleAttachmentDownload(att, idx)}
+                                                    className="text-[13px] font-medium text-gray-700 hover:text-indigo-600 truncate transition-colors text-left"
                                                 >
                                                     {att.name}
-                                                </a>
+                                                </button>
                                                 <span className="text-[11px] text-gray-400 flex-shrink-0">
                                                     {att.size < 1024 * 1024
                                                         ? `${(att.size / 1024).toFixed(1)} KB`

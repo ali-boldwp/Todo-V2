@@ -20,4 +20,5 @@ router.post('/:id/verify/reject', task_controller_1.rejectTaskVerification);
 router.delete('/:id', task_controller_1.deleteTask);
 router.post('/:id/attachments', task_controller_1.uploadAttachment);
 router.delete('/:id/attachments/:attachmentIndex', task_controller_1.deleteAttachment);
+router.get('/:id/attachments/:attachmentIndex/download', task_controller_1.downloadAttachment);
 exports.default = router;

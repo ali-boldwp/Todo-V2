@@ -85,3 +85,8 @@ export const deleteAttachment = async (taskId: string, index: number) => {
     const response = await api.delete(`/tasks/${taskId}/attachments/${index}`);
     return response.data;
 };
+
+export const downloadAttachment = async (taskId: string, index: number) => {
+    const response = await api.get(`/tasks/${taskId}/attachments/${index}/download`);
+    return response.data;
+};

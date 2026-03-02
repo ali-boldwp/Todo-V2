@@ -46,3 +46,8 @@ export const deleteProjectDocument = async (projectId: string, docId: string) =>
     const response = await api.delete(`/projects/${projectId}/documents/${docId}`);
     return response.data;
 };
+
+export const downloadProjectDocument = async (projectId: string, docId: string) => {
+    const response = await api.get(`/projects/${projectId}/documents/${docId}/download`);
+    return response.data;
+};

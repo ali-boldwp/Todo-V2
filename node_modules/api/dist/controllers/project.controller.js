@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteProjectDocument = exports.uploadProjectDocument = exports.removeProjectMember = exports.addProjectMember = exports.deleteProject = exports.updateProject = exports.getProject = exports.createProject = exports.getProjects = void 0;
+exports.downloadProjectDocument = exports.deleteProjectDocument = exports.uploadProjectDocument = exports.removeProjectMember = exports.addProjectMember = exports.deleteProject = exports.updateProject = exports.getProject = exports.createProject = exports.getProjects = void 0;
 const Project_1 = __importDefault(require("../models/Project"));
 const GithubConfig_1 = __importDefault(require("../models/GithubConfig"));
 const User_1 = __importDefault(require("../models/User"));
@@ -18,6 +18,18 @@ const sanitizeProjectForViewer = (project, role) => {
     const { devWebsiteUrl, accessAccounts, ...rest } = obj || {};
     return rest;
 };
+const ensureProjectAccess = (project, user) => {
+    if (!project || !user)
+        return false;
+    if (user.role === 'admin')
+        return true;
+    if (user.role === 'client')
+        return project.clientId?.toString?.() === user.clientId;
+    if (user.role === 'manager' || user.role === 'member') {
+        return project.members?.some?.((member) => member?.toString?.() === user.userId);
+    }
+    return false;
+};
 const getProjects = async (req, res) => {
     try {
         const query = {};
@@ -30,7 +42,9 @@ const getProjects = async (req, res) => {
                 query.members = req.user.userId;
             }
         }
-        const projects = await Project_1.default.find(query).populate('clientId', 'name');
+        const projects = await Project_1.default.find(query)
+            .select('-documents.fileData')
+            .populate('clientId', 'name');
         res.json(projects.map((project) => sanitizeProjectForViewer(project, req.user.role)));
     }
     catch (error) {
@@ -102,6 +116,7 @@ const getProject = async (req, res) => {
             }
         }
         const project = await Project_1.default.findOne(query)
+            .select('-documents.fileData')
             .populate('clientId', 'name')
             .populate('members', 'firstName lastName email role')
             .populate('documents.uploadedBy', 'firstName lastName email');
@@ -313,3 +328,29 @@ const deleteProjectDocument = async (req, res) => {
     }
 };
 exports.deleteProjectDocument = deleteProjectDocument;
+const downloadProjectDocument = async (req, res) => {
+    try {
+        const { id, docId } = req.params;
+        const project = await Project_1.default.findById(id);
+        if (!project)
+            return res.status(404).json({ message: 'Project not found' });
+        if (!ensureProjectAccess(project, req.user)) {
+            return res.status(403).json({ message: 'Not authorized' });
+        }
+        const doc = project.documents.find((d) => d._id?.toString() === docId);
+        if (!doc)
+            return res.status(404).json({ message: 'Document not found' });
+        res.json({
+            _id: doc._id,
+            title: doc.title,
+            fileName: doc.fileName,
+            mimeType: doc.mimeType,
+            fileData: doc.fileData,
+        });
+    }
+    catch (error) {
+        console.error('Error downloading document:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+exports.downloadProjectDocument = downloadProjectDocument;

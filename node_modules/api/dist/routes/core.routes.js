@@ -18,6 +18,7 @@ router.delete('/projects/:id', auth_1.requireAdmin, project_controller_1.deleteP
 // Documents
 router.post('/projects/:id/documents', project_controller_1.uploadProjectDocument);
 router.delete('/projects/:id/documents/:docId', project_controller_1.deleteProjectDocument);
+router.get('/projects/:id/documents/:docId/download', project_controller_1.downloadProjectDocument);
 // Admin-only: manage project members
 router.post('/projects/:id/members', auth_1.requireAdmin, project_controller_1.addProjectMember);
 router.delete('/projects/:id/members/:userId', auth_1.requireAdmin, project_controller_1.removeProjectMember);

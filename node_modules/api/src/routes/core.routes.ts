@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { createClient, getClients } from '../controllers/client.controller';
-import { createProject, getProject, getProjects, updateProject, deleteProject, addProjectMember, removeProjectMember, uploadProjectDocument, deleteProjectDocument } from '../controllers/project.controller';
+import { createProject, getProject, getProjects, updateProject, deleteProject, addProjectMember, removeProjectMember, uploadProjectDocument, deleteProjectDocument, downloadProjectDocument } from '../controllers/project.controller';
 import { authenticate, requireAdmin, requireGithubSetupForTeamMembers, requireProfileImageSetup } from '../middleware/auth';
 
 const router = Router();
@@ -21,6 +21,7 @@ router.delete('/projects/:id', requireAdmin, deleteProject);
 // Documents
 router.post('/projects/:id/documents', uploadProjectDocument);
 router.delete('/projects/:id/documents/:docId', deleteProjectDocument);
+router.get('/projects/:id/documents/:docId/download', downloadProjectDocument);
 
 // Admin-only: manage project members
 router.post('/projects/:id/members', requireAdmin, addProjectMember);

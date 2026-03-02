@@ -35,7 +35,7 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose_1 = __importStar(require("mongoose"));
 const ProjectSchema = new mongoose_1.Schema({
-    clientId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Client' },
+    clientId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Client', index: true },
     name: { type: String, required: true },
     description: { type: mongoose_1.Schema.Types.Mixed },
     status: { type: String, enum: ['active', 'completed', 'archived', 'on_hold', 'draft'], default: 'active' },
@@ -43,7 +43,7 @@ const ProjectSchema = new mongoose_1.Schema({
     priority: { type: String, enum: ['low', 'medium', 'high'], default: 'medium' },
     startDate: { type: Date },
     endDate: { type: Date },
-    members: [{ type: mongoose_1.Schema.Types.ObjectId, ref: 'User' }],
+    members: [{ type: mongoose_1.Schema.Types.ObjectId, ref: 'User', index: true }],
     githubRepoOwner: { type: String },
     githubRepoName: { type: String },
     devWebsiteUrl: { type: String },

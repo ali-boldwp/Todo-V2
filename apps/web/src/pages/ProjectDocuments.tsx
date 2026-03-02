@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getProject, uploadProjectDocument, deleteProjectDocument } from '../services/core';
+import { getProject, uploadProjectDocument, deleteProjectDocument, downloadProjectDocument } from '../services/core';
 import { useAuth } from '../context/AuthContext';
 import { FileText, Plus, Trash2, Download, Loader2, File, FilePlus } from 'lucide-react';
 import Drawer from '../components/Drawer';
@@ -70,10 +70,13 @@ const ProjectDocuments: React.FC = () => {
         reader.readAsDataURL(file);
     };
 
-    const handleDownload = (doc: any) => {
+    const handleDownload = async (doc: any) => {
+        const payload = doc.fileData
+            ? doc
+            : await downloadProjectDocument(projectId!, doc._id);
         const link = document.createElement('a');
-        link.href = doc.fileData;
-        link.download = doc.fileName || doc.title;
+        link.href = payload.fileData;
+        link.download = payload.fileName || payload.title;
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);

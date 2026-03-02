@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { createTask, getTasks, updateTask, deleteTask, uploadAttachment, deleteAttachment, startTaskWork, stopTaskWork, pauseTaskWork, resumeTaskWork, finishTaskWork, approveTaskVerification, rejectTaskVerification } from '../controllers/task.controller';
+import { createTask, getTasks, updateTask, deleteTask, uploadAttachment, deleteAttachment, downloadAttachment, startTaskWork, stopTaskWork, pauseTaskWork, resumeTaskWork, finishTaskWork, approveTaskVerification, rejectTaskVerification } from '../controllers/task.controller';
 import { authenticate, requireGithubSetupForTeamMembers, requireProfileImageSetup } from '../middleware/auth';
 
 const router = Router();
@@ -21,5 +21,6 @@ router.post('/:id/verify/reject', rejectTaskVerification);
 router.delete('/:id', deleteTask);
 router.post('/:id/attachments', uploadAttachment);
 router.delete('/:id/attachments/:attachmentIndex', deleteAttachment);
+router.get('/:id/attachments/:attachmentIndex/download', downloadAttachment);
 
 export default router;

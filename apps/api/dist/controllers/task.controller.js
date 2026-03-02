@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.rejectTaskVerification = exports.approveTaskVerification = exports.stopTaskWork = exports.finishTaskWork = exports.resumeTaskWork = exports.pauseTaskWork = exports.startTaskWork = exports.deleteAttachment = exports.uploadAttachment = exports.deleteTask = exports.updateTask = exports.createTask = exports.getTasks = void 0;
+exports.rejectTaskVerification = exports.approveTaskVerification = exports.stopTaskWork = exports.finishTaskWork = exports.resumeTaskWork = exports.pauseTaskWork = exports.startTaskWork = exports.downloadAttachment = exports.deleteAttachment = exports.uploadAttachment = exports.deleteTask = exports.updateTask = exports.createTask = exports.getTasks = void 0;
 const Task_1 = __importDefault(require("../models/Task"));
 const Project_1 = __importDefault(require("../models/Project"));
 const GithubConfig_1 = __importDefault(require("../models/GithubConfig"));
@@ -87,6 +87,26 @@ const getComputedWorkedSeconds = (task) => {
 const getEntityId = (value) => {
     return value?._id?.toString?.() || value?.toString?.() || null;
 };
+const toAttachmentMeta = (attachment) => ({
+    name: attachment?.name,
+    mimeType: attachment?.mimeType,
+    size: attachment?.size,
+    uploadedAt: attachment?.uploadedAt,
+});
+const hasTaskAccess = async (task, user) => {
+    if (!task || !user)
+        return false;
+    if (user.role === 'admin')
+        return true;
+    if (!task.projectId)
+        return false;
+    if (user.role === 'client') {
+        const project = await Project_1.default.findOne({ _id: task.projectId, clientId: user.clientId }).select('_id').lean();
+        return Boolean(project);
+    }
+    const project = await Project_1.default.findOne({ _id: task.projectId, members: user.userId }).select('_id').lean();
+    return Boolean(project);
+};
 const toTaskResponse = (task, viewer) => {
     const obj = typeof task?.toObject === 'function' ? task.toObject() : task;
     const activeWorkerId = getEntityId(obj?.activeWorkerId);
@@ -94,6 +114,7 @@ const toTaskResponse = (task, viewer) => {
     const isCurrentUserActiveWorker = Boolean(viewer?.userId && activeWorkerId && viewer.userId === activeWorkerId);
     const sanitized = {
         ...obj,
+        attachments: Array.isArray(obj?.attachments) ? obj.attachments.map(toAttachmentMeta) : [],
         hasActiveWorker: Boolean(activeWorkerId),
         isCurrentUserActiveWorker
     };
@@ -237,6 +258,7 @@ const getTasks = async (req, res) => {
             }
         }
         const tasks = await Task_1.default.find(query)
+            .select('-attachments.data')
             .populate('assigneeId', 'firstName lastName email')
             .populate('activeWorkerId', 'firstName lastName email role')
             .populate('verifierId', 'firstName lastName email role')
@@ -404,6 +426,34 @@ const deleteAttachment = async (req, res) => {
     }
 };
 exports.deleteAttachment = deleteAttachment;
+const downloadAttachment = async (req, res) => {
+    try {
+        const { attachmentIndex } = req.params;
+        const task = await Task_1.default.findById(req.params.id);
+        if (!task)
+            return res.status(404).json({ message: 'Task not found' });
+        const allowed = await hasTaskAccess(task, req.user);
+        if (!allowed)
+            return res.status(403).json({ message: 'Not authorized' });
+        const idx = parseInt(attachmentIndex, 10);
+        if (isNaN(idx) || !task.attachments || idx < 0 || idx >= task.attachments.length) {
+            return res.status(400).json({ message: 'Invalid attachment index' });
+        }
+        const att = task.attachments[idx];
+        res.json({
+            index: idx,
+            name: att.name,
+            mimeType: att.mimeType,
+            size: att.size,
+            data: att.data,
+            uploadedAt: att.uploadedAt,
+        });
+    }
+    catch (error) {
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+exports.downloadAttachment = downloadAttachment;
 const startTaskWork = async (req, res) => {
     try {
         if (!INTERNAL_ROLES.includes(req.user.role)) {

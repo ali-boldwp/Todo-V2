@@ -32,7 +32,7 @@ export interface IProject extends Document {
 }
 
 const ProjectSchema: Schema = new Schema({
-    clientId: { type: Schema.Types.ObjectId, ref: 'Client' },
+    clientId: { type: Schema.Types.ObjectId, ref: 'Client', index: true },
     name: { type: String, required: true },
     description: { type: Schema.Types.Mixed },
     status: { type: String, enum: ['active', 'completed', 'archived', 'on_hold', 'draft'], default: 'active' },
@@ -40,7 +40,7 @@ const ProjectSchema: Schema = new Schema({
     priority: { type: String, enum: ['low', 'medium', 'high'], default: 'medium' },
     startDate: { type: Date },
     endDate: { type: Date },
-    members: [{ type: Schema.Types.ObjectId, ref: 'User' }],
+    members: [{ type: Schema.Types.ObjectId, ref: 'User', index: true }],
     githubRepoOwner: { type: String },
     githubRepoName: { type: String },
     devWebsiteUrl: { type: String },

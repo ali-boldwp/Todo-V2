@@ -18,6 +18,16 @@ const sanitizeProjectForViewer = (project: any, role?: string) => {
     return rest;
 };
 
+const ensureProjectAccess = (project: any, user: AuthRequest['user']) => {
+    if (!project || !user) return false;
+    if (user.role === 'admin') return true;
+    if (user.role === 'client') return project.clientId?.toString?.() === user.clientId;
+    if (user.role === 'manager' || user.role === 'member') {
+        return project.members?.some?.((member: any) => member?.toString?.() === user.userId);
+    }
+    return false;
+};
+
 export const getProjects = async (req: AuthRequest, res: Response) => {
     try {
         const query: any = {};
@@ -31,7 +41,9 @@ export const getProjects = async (req: AuthRequest, res: Response) => {
             }
         }
 
-        const projects = await Project.find(query).populate('clientId', 'name');
+        const projects = await Project.find(query)
+            .select('-documents.fileData')
+            .populate('clientId', 'name');
         res.json(projects.map((project) => sanitizeProjectForViewer(project, req.user!.role)));
     } catch (error) {
         res.status(500).json({ message: 'Server error' });
@@ -104,6 +116,7 @@ export const getProject = async (req: AuthRequest, res: Response) => {
         }
 
         const project = await Project.findOne(query)
+            .select('-documents.fileData')
             .populate('clientId', 'name')
             .populate('members', 'firstName lastName email role')
             .populate('documents.uploadedBy', 'firstName lastName email');
@@ -342,6 +355,32 @@ export const deleteProjectDocument = async (req: AuthRequest, res: Response) => 
         res.json({ message: 'Document deleted successfully' });
     } catch (error) {
         console.error('Error deleting document:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+export const downloadProjectDocument = async (req: AuthRequest, res: Response) => {
+    try {
+        const { id, docId } = req.params;
+        const project = await Project.findById(id);
+        if (!project) return res.status(404).json({ message: 'Project not found' });
+
+        if (!ensureProjectAccess(project, req.user)) {
+            return res.status(403).json({ message: 'Not authorized' });
+        }
+
+        const doc = project.documents.find((d) => d._id?.toString() === docId);
+        if (!doc) return res.status(404).json({ message: 'Document not found' });
+
+        res.json({
+            _id: doc._id,
+            title: doc.title,
+            fileName: doc.fileName,
+            mimeType: doc.mimeType,
+            fileData: doc.fileData,
+        });
+    } catch (error) {
+        console.error('Error downloading document:', error);
         res.status(500).json({ message: 'Server error' });
     }
 };

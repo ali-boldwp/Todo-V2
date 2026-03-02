@@ -98,6 +98,25 @@ const getEntityId = (value: any): string | null => {
     return value?._id?.toString?.() || value?.toString?.() || null;
 };
 
+const toAttachmentMeta = (attachment: any) => ({
+    name: attachment?.name,
+    mimeType: attachment?.mimeType,
+    size: attachment?.size,
+    uploadedAt: attachment?.uploadedAt,
+});
+
+const hasTaskAccess = async (task: any, user?: { userId: string; role: string; clientId?: string }) => {
+    if (!task || !user) return false;
+    if (user.role === 'admin') return true;
+    if (!task.projectId) return false;
+    if (user.role === 'client') {
+        const project = await Project.findOne({ _id: task.projectId, clientId: user.clientId }).select('_id').lean();
+        return Boolean(project);
+    }
+    const project = await Project.findOne({ _id: task.projectId, members: user.userId }).select('_id').lean();
+    return Boolean(project);
+};
+
 const toTaskResponse = (task: any, viewer?: { userId: string; role: string }) => {
     const obj = typeof task?.toObject === 'function' ? task.toObject() : task;
     const activeWorkerId = getEntityId(obj?.activeWorkerId);
@@ -105,6 +124,7 @@ const toTaskResponse = (task: any, viewer?: { userId: string; role: string }) =>
     const isCurrentUserActiveWorker = Boolean(viewer?.userId && activeWorkerId && viewer.userId === activeWorkerId);
     const sanitized = {
         ...obj,
+        attachments: Array.isArray(obj?.attachments) ? obj.attachments.map(toAttachmentMeta) : [],
         hasActiveWorker: Boolean(activeWorkerId),
         isCurrentUserActiveWorker
     };
@@ -271,6 +291,7 @@ export const getTasks = async (req: AuthRequest, res: Response) => {
         }
 
         const tasks = await Task.find(query)
+            .select('-attachments.data')
             .populate('assigneeId', 'firstName lastName email')
             .populate('activeWorkerId', 'firstName lastName email role')
             .populate('verifierId', 'firstName lastName email role')
@@ -448,6 +469,34 @@ export const deleteAttachment = async (req: AuthRequest, res: Response) => {
         await task.populate('workLogs.userId', 'firstName lastName email role');
         res.json(toTaskResponse(task, req.user!));
         emitTaskEvent('task:updated', task);
+    } catch (error) {
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+export const downloadAttachment = async (req: AuthRequest, res: Response) => {
+    try {
+        const { attachmentIndex } = req.params;
+        const task = await Task.findById(req.params.id);
+        if (!task) return res.status(404).json({ message: 'Task not found' });
+
+        const allowed = await hasTaskAccess(task, req.user as any);
+        if (!allowed) return res.status(403).json({ message: 'Not authorized' });
+
+        const idx = parseInt(attachmentIndex, 10);
+        if (isNaN(idx) || !task.attachments || idx < 0 || idx >= task.attachments.length) {
+            return res.status(400).json({ message: 'Invalid attachment index' });
+        }
+
+        const att: any = task.attachments[idx];
+        res.json({
+            index: idx,
+            name: att.name,
+            mimeType: att.mimeType,
+            size: att.size,
+            data: att.data,
+            uploadedAt: att.uploadedAt,
+        });
     } catch (error) {
         res.status(500).json({ message: 'Server error' });
     }
