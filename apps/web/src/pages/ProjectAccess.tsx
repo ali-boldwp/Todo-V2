@@ -32,16 +32,18 @@ const ProjectAccess: React.FC = () => {
     });
 
     const [devWebsiteUrl, setDevWebsiteUrl] = useState('');
+    const [projectUrl, setProjectUrl] = useState('');
     const [accounts, setAccounts] = useState<AccessAccount[]>([]);
 
     useEffect(() => {
         if (!project) return;
+        setProjectUrl(project.projectUrl || '');
         setDevWebsiteUrl(project.devWebsiteUrl || '');
         setAccounts(Array.isArray(project.accessAccounts) ? project.accessAccounts : []);
     }, [project]);
 
     const saveMutation = useMutation({
-        mutationFn: () => updateProject(projectId!, { devWebsiteUrl, accessAccounts: accounts } as any),
+        mutationFn: () => updateProject(projectId!, { projectUrl, devWebsiteUrl, accessAccounts: accounts } as any),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['project', projectId] });
             queryClient.invalidateQueries({ queryKey: ['projects'] });
@@ -63,6 +65,28 @@ const ProjectAccess: React.FC = () => {
                 <p className="text-sm text-gray-500 mt-1">Save dev URL and multiple account credentials for this project.</p>
 
                 <div className="mt-5">
+                    <label className="block text-sm font-semibold text-gray-700 mb-2">Project URL (Live)</label>
+                    <div className="flex items-center gap-2 mb-4">
+                        <input
+                            type="url"
+                            value={projectUrl}
+                            onChange={(e) => setProjectUrl(e.target.value)}
+                            placeholder="https://www.example.com"
+                            className="flex-1 h-10 px-3 rounded-md border border-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-100 focus:border-blue-400 text-sm"
+                        />
+                        {projectUrl && (
+                            <a
+                                href={projectUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="h-10 px-3 rounded-md border border-gray-200 text-gray-700 hover:bg-gray-50 text-sm inline-flex items-center gap-1.5"
+                            >
+                                <ExternalLink size={14} />
+                                Open
+                            </a>
+                        )}
+                    </div>
+
                     <label className="block text-sm font-semibold text-gray-700 mb-2">Dev Website URL</label>
                     <div className="flex items-center gap-2">
                         <input

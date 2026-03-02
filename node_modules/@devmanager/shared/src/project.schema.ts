@@ -18,6 +18,7 @@ export const ProjectSchema = z.object({
     endDate: z.string().optional(),
     githubRepoOwner: z.string().optional(),
     githubRepoName: z.string().optional(),
+    projectUrl: z.string().url().optional().or(z.literal('')),
     devWebsiteUrl: z.string().url().optional().or(z.literal('')),
     accessAccounts: z.array(ProjectAccessAccountSchema).optional(),
     createGithubRepo: z.boolean().optional(),

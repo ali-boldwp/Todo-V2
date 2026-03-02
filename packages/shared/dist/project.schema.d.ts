@@ -10,6 +10,7 @@ export declare const ProjectSchema: z.ZodObject<{
     endDate: z.ZodOptional<z.ZodString>;
     githubRepoOwner: z.ZodOptional<z.ZodString>;
     githubRepoName: z.ZodOptional<z.ZodString>;
+    projectUrl: z.ZodUnion<[z.ZodOptional<z.ZodString>, z.ZodLiteral<"">]>;
     devWebsiteUrl: z.ZodUnion<[z.ZodOptional<z.ZodString>, z.ZodLiteral<"">]>;
     accessAccounts: z.ZodOptional<z.ZodArray<z.ZodObject<{
         label: z.ZodString;
@@ -39,6 +40,7 @@ export declare const ProjectSchema: z.ZodObject<{
     endDate?: string | undefined;
     githubRepoOwner?: string | undefined;
     githubRepoName?: string | undefined;
+    projectUrl?: string | undefined;
     devWebsiteUrl?: string | undefined;
     accessAccounts?: {
         password: string;
@@ -58,6 +60,7 @@ export declare const ProjectSchema: z.ZodObject<{
     endDate?: string | undefined;
     githubRepoOwner?: string | undefined;
     githubRepoName?: string | undefined;
+    projectUrl?: string | undefined;
     devWebsiteUrl?: string | undefined;
     accessAccounts?: {
         password: string;

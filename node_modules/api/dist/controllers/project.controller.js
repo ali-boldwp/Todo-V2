@@ -9,13 +9,17 @@ const GithubConfig_1 = __importDefault(require("../models/GithubConfig"));
 const User_1 = __importDefault(require("../models/User"));
 const project_schema_1 = require("@devmanager/shared/dist/project.schema");
 const socket_1 = require("../socket");
-const ACCESS_FIELD_KEYS = ['devWebsiteUrl', 'accessAccounts'];
+const ACCESS_FIELD_KEYS = ['projectUrl', 'devWebsiteUrl', 'accessAccounts'];
 const hasProjectAccessFieldInPayload = (payload) => ACCESS_FIELD_KEYS.some((key) => Object.prototype.hasOwnProperty.call(payload || {}, key));
 const sanitizeProjectForViewer = (project, role) => {
     const obj = typeof project?.toObject === 'function' ? project.toObject() : project;
     if (role === 'admin')
         return obj;
-    const { devWebsiteUrl, accessAccounts, ...rest } = obj || {};
+    if (role === 'client') {
+        const { devWebsiteUrl, accessAccounts, ...rest } = obj || {};
+        return rest;
+    }
+    const { projectUrl, accessAccounts, ...rest } = obj || {};
     return rest;
 };
 const ensureProjectAccess = (project, user) => {

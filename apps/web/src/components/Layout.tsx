@@ -74,9 +74,8 @@ const PROJECT_SUB_ITEMS = [
     { label: 'Verifications', path: 'verifications', icon: CheckSquare, staffOnly: true },
     { label: 'Documents', path: 'documents', icon: FileText, adminOnly: false },
     { label: 'Access', path: 'access', icon: KeyRound, adminOnly: true },
-    { label: 'Backlog', path: 'backlog', icon: CheckSquare, adminOnly: false },
     { label: 'Sprints', path: 'sprints', icon: Zap, adminOnly: false },
-    { label: 'Settings', path: 'settings', icon: Settings, staffOnly: true },
+    { label: 'Settings', path: 'settings', icon: Settings, roleIn: ['admin', 'manager'] },
 ];
 
 const ProjectItem = ({ project, isOpen, onToggle }: { project: any; isOpen: boolean; onToggle: () => void }) => {
@@ -88,6 +87,7 @@ const ProjectItem = ({ project, isOpen, onToggle }: { project: any; isOpen: bool
     const visibleItems = PROJECT_SUB_ITEMS.filter((item: any) => {
         if (item.adminOnly && user?.role !== 'admin') return false;
         if (item.staffOnly && user?.role === 'client') return false;
+        if (item.roleIn && !item.roleIn.includes(user?.role)) return false;
         return true;
     });
 

@@ -6,15 +6,25 @@ import User from '../models/User';
 import { ProjectSchema } from '@devmanager/shared/dist/project.schema';
 import { emitToAll } from '../socket';
 
-const ACCESS_FIELD_KEYS = ['devWebsiteUrl', 'accessAccounts'] as const;
+const ACCESS_FIELD_KEYS = ['projectUrl', 'devWebsiteUrl', 'accessAccounts'] as const;
+const MEMBER_ALLOWED_UPDATE_KEYS = ['description'] as const;
 
 const hasProjectAccessFieldInPayload = (payload: Record<string, any>) =>
     ACCESS_FIELD_KEYS.some((key) => Object.prototype.hasOwnProperty.call(payload || {}, key));
 
+const hasAnyKeyOutsideAllowList = (payload: Record<string, any>, allowed: readonly string[]) => {
+    const keys = Object.keys(payload || {});
+    return keys.some((key) => !allowed.includes(key));
+};
+
 const sanitizeProjectForViewer = (project: any, role?: string) => {
     const obj = typeof project?.toObject === 'function' ? project.toObject() : project;
     if (role === 'admin') return obj;
-    const { devWebsiteUrl, accessAccounts, ...rest } = obj || {};
+    if (role === 'client') {
+        const { devWebsiteUrl, accessAccounts, ...rest } = obj || {};
+        return rest;
+    }
+    const { projectUrl, accessAccounts, ...rest } = obj || {};
     return rest;
 };
 
@@ -129,6 +139,20 @@ export const getProject = async (req: AuthRequest, res: Response) => {
 
 export const updateProject = async (req: AuthRequest, res: Response) => {
     try {
+        const existingProject = await Project.findById(req.params.id).select('_id clientId members');
+        if (!existingProject) return res.status(404).json({ message: 'Project not found' });
+        if (!ensureProjectAccess(existingProject, req.user)) {
+            return res.status(403).json({ message: 'Not authorized' });
+        }
+
+        if (req.user!.role === 'client') {
+            return res.status(403).json({ message: 'Clients cannot update projects' });
+        }
+
+        if (req.user!.role === 'member' && hasAnyKeyOutsideAllowList(req.body || {}, MEMBER_ALLOWED_UPDATE_KEYS)) {
+            return res.status(403).json({ message: 'Members can only update project overview content' });
+        }
+
         if (req.user!.role !== 'admin' && hasProjectAccessFieldInPayload(req.body || {})) {
             return res.status(403).json({ message: 'Only admin can update project access credentials' });
         }
