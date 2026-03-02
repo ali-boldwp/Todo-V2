@@ -34,6 +34,8 @@ ENV JWT_SECRET=supersecretkey
 ENV REDIS_URL=redis://localhost:6379
 ENV GITHUB_CLIENT_ID="Ov23lievqX0deavCNgFA"
 ENV GITHUB_CLIENT_SECRET="24c00c09a9f1cfb1d0192375a8687fd430d11d8a"
+ENV GITHUB_SETUP_CALLBACK_URL=https://beta.devregion.com/api/auth/github/setup/callback
+ENV FRONTEND_BASE_URL=https://beta.devregion.com
 
 # Copy necessary files
 # Copy node_modules with compiled binaries from builder
