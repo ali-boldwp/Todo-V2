@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { updateProject, getClients, deleteProject } from '../services/core';
+import { getGithubConfig, getGithubRepos } from '../services/github';
 import { addProjectMember, removeProjectMember, getTeamMembers } from '../services/team';
 import { useAuth } from '../context/AuthContext';
 import Switch from '../components/Switch';
 import { useNavigate } from 'react-router-dom';
 import {
-    Shield, Globe, Lock, Trash2, Users, Settings as SettingsIcon, Save, UserPlus, X, Briefcase,
+    Shield, Globe, Lock, Trash2, Users, Settings as SettingsIcon, Save, UserPlus, X, Briefcase, Github,
 } from 'lucide-react';
 
 const avatarColor = (id: string) => {
@@ -33,11 +34,35 @@ const ProjectSettings: React.FC<{ project: any }> = ({ project }) => {
     const [selectedClientId, setSelectedClientId] = useState(
         project.clientId ? (typeof project.clientId === 'object' ? project.clientId._id : project.clientId) : ''
     );
+    const [githubRepoOption, setGithubRepoOption] = useState<'none' | 'new' | 'existing'>(
+        project.githubRepoOwner && project.githubRepoName ? 'existing' : 'none'
+    );
+    const [selectedRepoOwner, setSelectedRepoOwner] = useState(project.githubRepoOwner || '');
+    const [selectedRepoName, setSelectedRepoName] = useState(project.githubRepoName || '');
 
     const updateMutation = useMutation({
         mutationFn: (data: any) => updateProject(project._id, data),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['project', project._id] });
+            setSaved(true);
+            setTimeout(() => setSaved(false), 2000);
+        },
+    });
+
+    const githubMutation = useMutation({
+        mutationFn: (data: any) => updateProject(project._id, data),
+        onSuccess: (updated) => {
+            queryClient.invalidateQueries({ queryKey: ['project', project._id] });
+            if (updated?.githubRepoOwner && updated?.githubRepoName) {
+                setSelectedRepoOwner(updated.githubRepoOwner);
+                setSelectedRepoName(updated.githubRepoName);
+                setGithubRepoOption('existing');
+            }
+            if (!updated?.githubRepoOwner || !updated?.githubRepoName) {
+                setSelectedRepoOwner('');
+                setSelectedRepoName('');
+                setGithubRepoOption('none');
+            }
             setSaved(true);
             setTimeout(() => setSaved(false), 2000);
         },
@@ -71,6 +96,16 @@ const ProjectSettings: React.FC<{ project: any }> = ({ project }) => {
         queryFn: getClients,
         enabled: user?.role === 'admin',
     });
+    const { data: githubConfig } = useQuery({
+        queryKey: ['github-config'],
+        queryFn: getGithubConfig,
+        enabled: user?.role === 'admin',
+    });
+    const { data: githubRepos = [], isLoading: reposLoading } = useQuery({
+        queryKey: ['github-repos'],
+        queryFn: getGithubRepos,
+        enabled: user?.role === 'admin' && !!githubConfig?.personalAccessToken,
+    });
 
     const clientMutation = useMutation({
         mutationFn: (clientId: string | null) => updateProject(project._id, { clientId } as any),
@@ -95,6 +130,28 @@ const ProjectSettings: React.FC<{ project: any }> = ({ project }) => {
         const newVisibility = checked ? 'public' : 'private';
         setVisibility(newVisibility);
         updateMutation.mutate({ visibility: newVisibility });
+    };
+
+    const handleSaveGithubSettings = () => {
+        if (githubRepoOption === 'none') {
+            githubMutation.mutate({ githubRepoOwner: '', githubRepoName: '' });
+            return;
+        }
+
+        if (githubRepoOption === 'new') {
+            githubMutation.mutate({ name: project.name, createGithubRepo: true });
+            return;
+        }
+
+        if (!selectedRepoOwner || !selectedRepoName) {
+            alert('Please select an existing repository.');
+            return;
+        }
+
+        githubMutation.mutate({
+            githubRepoOwner: selectedRepoOwner,
+            githubRepoName: selectedRepoName,
+        });
     };
 
     const currentMembers: any[] = project.members || [];
@@ -176,6 +233,97 @@ const ProjectSettings: React.FC<{ project: any }> = ({ project }) => {
                                     Client will see this project and its tasks when logged in.
                                 </p>
                             )}
+                        </div>
+                    </div>
+                )}
+
+                {/* GitHub Settings (admin only) */}
+                {user?.role === 'admin' && (
+                    <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
+                        <div className="px-6 py-4 border-b border-gray-50 bg-gray-50/50 flex items-center">
+                            <Github className="w-4 h-4 text-gray-500 mr-2" />
+                            <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">GitHub Settings</h2>
+                        </div>
+                        <div className="p-6 space-y-4">
+                            {!githubConfig?.personalAccessToken && (
+                                <div className="rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                                    Global GitHub integration is not connected. Configure it in the main GitHub Settings page first.
+                                </div>
+                            )}
+
+                            <div className="space-y-3">
+                                <label className="flex items-center gap-3 text-sm text-gray-700">
+                                    <input
+                                        type="radio"
+                                        checked={githubRepoOption === 'none'}
+                                        onChange={() => setGithubRepoOption('none')}
+                                        className="text-indigo-600 focus:ring-indigo-500"
+                                    />
+                                    No repository linked
+                                </label>
+                                <label className="flex items-center gap-3 text-sm text-gray-700">
+                                    <input
+                                        type="radio"
+                                        checked={githubRepoOption === 'new'}
+                                        onChange={() => setGithubRepoOption('new')}
+                                        className="text-indigo-600 focus:ring-indigo-500"
+                                        disabled={!githubConfig?.personalAccessToken}
+                                    />
+                                    Create new private repository from project name
+                                </label>
+                                <label className="flex items-start gap-3 text-sm text-gray-700">
+                                    <input
+                                        type="radio"
+                                        checked={githubRepoOption === 'existing'}
+                                        onChange={() => setGithubRepoOption('existing')}
+                                        className="mt-1 text-indigo-600 focus:ring-indigo-500"
+                                        disabled={!githubConfig?.personalAccessToken}
+                                    />
+                                    <div className="flex-1">
+                                        <span>Use existing repository</span>
+                                        {githubRepoOption === 'existing' && (
+                                            <div className="mt-2">
+                                                {reposLoading ? (
+                                                    <p className="text-xs text-gray-500">Loading repositories...</p>
+                                                ) : (
+                                                    <select
+                                                        value={`${selectedRepoOwner}/${selectedRepoName}`}
+                                                        onChange={(e) => {
+                                                            const [owner, name] = e.target.value.split('/');
+                                                            setSelectedRepoOwner(owner || '');
+                                                            setSelectedRepoName(name || '');
+                                                        }}
+                                                        className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                                    >
+                                                        <option value="/">Select a repository...</option>
+                                                        {githubRepos.map((repo: any) => (
+                                                            <option key={repo.id} value={`${repo.owner}/${repo.name}`}>
+                                                                {repo.fullName}
+                                                            </option>
+                                                        ))}
+                                                    </select>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                </label>
+                            </div>
+
+                            {project.githubRepoOwner && project.githubRepoName && (
+                                <p className="text-xs text-gray-500">
+                                    Current link: {project.githubRepoOwner}/{project.githubRepoName}
+                                </p>
+                            )}
+
+                            <div className="flex justify-end">
+                                <button
+                                    onClick={handleSaveGithubSettings}
+                                    disabled={githubMutation.isPending || !githubConfig?.personalAccessToken}
+                                    className="px-4 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+                                >
+                                    {githubMutation.isPending ? 'Saving...' : 'Save GitHub Settings'}
+                                </button>
+                            </div>
                         </div>
                     </div>
                 )}

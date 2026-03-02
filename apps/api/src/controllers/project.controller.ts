@@ -139,8 +139,13 @@ export const updateProject = async (req: AuthRequest, res: Response) => {
         }
 
         const updateData: any = { ...validated };
-        if (githubRepoOwner) updateData.githubRepoOwner = githubRepoOwner;
-        if (githubRepoName) updateData.githubRepoName = githubRepoName;
+        // Allow explicit clearing of repo linkage from project settings.
+        if (Object.prototype.hasOwnProperty.call(validated, 'githubRepoOwner')) {
+            updateData.githubRepoOwner = githubRepoOwner || undefined;
+        }
+        if (Object.prototype.hasOwnProperty.call(validated, 'githubRepoName')) {
+            updateData.githubRepoName = githubRepoName || undefined;
+        }
 
         const project = await Project.findByIdAndUpdate(
             req.params.id,

@@ -140,10 +140,13 @@ const updateProject = async (req, res) => {
             }
         }
         const updateData = { ...validated };
-        if (githubRepoOwner)
-            updateData.githubRepoOwner = githubRepoOwner;
-        if (githubRepoName)
-            updateData.githubRepoName = githubRepoName;
+        // Allow explicit clearing of repo linkage from project settings.
+        if (Object.prototype.hasOwnProperty.call(validated, 'githubRepoOwner')) {
+            updateData.githubRepoOwner = githubRepoOwner || undefined;
+        }
+        if (Object.prototype.hasOwnProperty.call(validated, 'githubRepoName')) {
+            updateData.githubRepoName = githubRepoName || undefined;
+        }
         const project = await Project_1.default.findByIdAndUpdate(req.params.id, updateData, { new: true });
         if (!project)
             return res.status(404).json({ message: 'Project not found' });
