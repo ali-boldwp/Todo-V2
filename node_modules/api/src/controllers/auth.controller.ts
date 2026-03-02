@@ -7,15 +7,21 @@ import { AuthRequest } from '../middleware/auth';
 
 const isGithubSetupCompleted = (user: any) =>
     !!user.githubUsername && !!user.githubUserId && !!user.githubConnectedAt;
+const isProfileSetupCompleted = (user: any) => !!user.profileImageUrl;
 
 const buildAuthResponse = (user: any) => {
     const githubSetupCompleted = isGithubSetupCompleted(user);
+    const profileSetupCompleted = isProfileSetupCompleted(user);
     const token = jwt.sign(
         {
             userId: user._id,
             email: user.email,
             role: user.role,
             clientId: user.clientId,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            profileImageUrl: user.profileImageUrl || null,
+            profileSetupCompleted,
             githubUsername: user.githubUsername,
             githubSetupCompleted
         },
@@ -29,10 +35,70 @@ const buildAuthResponse = (user: any) => {
             id: user._id,
             email: user.email,
             role: user.role,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            profileImageUrl: user.profileImageUrl || null,
+            profileSetupCompleted,
             githubUsername: user.githubUsername,
             githubSetupCompleted
         }
     };
+};
+
+export const getProfileSetupStatus = async (req: AuthRequest, res: Response) => {
+    try {
+        if (!req.user?.userId) {
+            return res.status(401).json({ message: 'Authentication required' });
+        }
+
+        const user = await User.findById(req.user.userId)
+            .select('firstName lastName email role profileImageUrl profileImageUploadedAt');
+        if (!user) return res.status(404).json({ message: 'User not found' });
+
+        res.json({
+            profileSetupCompleted: isProfileSetupCompleted(user),
+            profileImageUrl: user.profileImageUrl || null,
+            profileImageUploadedAt: user.profileImageUploadedAt || null,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            email: user.email,
+            role: user.role,
+        });
+    } catch (error: any) {
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
+
+export const uploadProfileImage = async (req: AuthRequest, res: Response) => {
+    try {
+        if (!req.user?.userId) {
+            return res.status(401).json({ message: 'Authentication required' });
+        }
+        const imageData = `${req.body?.imageData || ''}`.trim();
+        if (!imageData) {
+            return res.status(400).json({ message: 'imageData is required' });
+        }
+        if (!/^data:image\/(png|jpe?g|webp|gif);base64,/i.test(imageData)) {
+            return res.status(400).json({ message: 'Only base64 image data URLs are allowed (png, jpg, jpeg, webp, gif).' });
+        }
+        if (imageData.length > 2_000_000) {
+            return res.status(400).json({ message: 'Profile image is too large. Please upload a smaller file.' });
+        }
+
+        const user = await User.findByIdAndUpdate(
+            req.user.userId,
+            {
+                profileImageUrl: imageData,
+                profileImageUploadedAt: new Date(),
+            },
+            { new: true }
+        );
+        if (!user) return res.status(404).json({ message: 'User not found' });
+
+        res.json(buildAuthResponse(user));
+    } catch (error: any) {
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
 };
 
 export const register = async (req: Request, res: Response) => {

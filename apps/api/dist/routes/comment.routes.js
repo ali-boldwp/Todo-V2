@@ -5,6 +5,7 @@ const comment_controller_1 = require("../controllers/comment.controller");
 const auth_1 = require("../middleware/auth");
 const router = (0, express_1.Router)();
 router.use(auth_1.authenticate);
+router.use(auth_1.requireProfileImageSetup);
 router.use(auth_1.requireGithubSetupForTeamMembers);
 router.get('/:taskId', comment_controller_1.getComments);
 router.post('/:taskId', comment_controller_1.createComment);

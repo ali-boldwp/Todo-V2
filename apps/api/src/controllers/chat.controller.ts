@@ -4,7 +4,8 @@ import Conversation from '../models/Conversation';
 import Message from '../models/Message';
 import User from '../models/User';
 import Project from '../models/Project';
-import { getIO } from '../socket';
+import { getIO, getOnlineUserIds } from '../socket';
+import mongoose from 'mongoose';
 
 const INTERNAL_ROLES = ['admin', 'manager', 'member'];
 
@@ -22,25 +23,21 @@ const ensureInternalUser = (req: AuthRequest, res: Response): boolean => {
 
 const populateConversation = (query: any) =>
     query
-        .populate('participants', 'firstName lastName email role')
-        .populate('createdBy', 'firstName lastName email role')
+        .populate('participants', 'firstName lastName email role profileImageUrl')
+        .populate('createdBy', 'firstName lastName email role profileImageUrl')
         .populate('projectId', 'name');
 
 const enrichConversationsWithUnread = async (userId: string, conversations: any[]) => {
     const conversationIds = conversations.map((c: any) => c._id);
     if (!conversationIds.length) return conversations.map((c: any) => ({ ...c.toObject(), unreadCount: 0 }));
+    const currentUserObjectId = new mongoose.Types.ObjectId(userId);
 
     const unreadRows = await Message.aggregate([
         {
             $match: {
                 conversationId: { $in: conversationIds },
-                senderId: { $ne: conversationIds.length ? undefined : userId },
-            },
-        },
-        {
-            $match: {
-                senderId: { $ne: new (require('mongoose').Types.ObjectId)(userId) },
-                readBy: { $nin: [new (require('mongoose').Types.ObjectId)(userId)] },
+                senderId: { $ne: currentUserObjectId },
+                readBy: { $nin: [currentUserObjectId] },
             },
         },
         {
@@ -70,10 +67,19 @@ export const getChatUsers = async (req: AuthRequest, res: Response) => {
             role: { $in: INTERNAL_ROLES },
             isActive: true,
         })
-            .select('firstName lastName email role')
+            .select('firstName lastName email role profileImageUrl')
             .sort({ firstName: 1, lastName: 1 });
 
         res.json(users);
+    } catch (error) {
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+export const getOnlineUsers = async (req: AuthRequest, res: Response) => {
+    try {
+        if (!ensureInternalUser(req, res)) return;
+        res.json({ userIds: getOnlineUserIds() });
     } catch (error) {
         res.status(500).json({ message: 'Server error' });
     }
@@ -119,8 +125,8 @@ export const createOrGetConversation = async (req: AuthRequest, res: Response) =
                 type: 'direct',
                 participants: [req.user!.userId, participantId],
             });
-            await conversation.populate('participants', 'firstName lastName email role');
-            await conversation.populate('createdBy', 'firstName lastName email role');
+            await conversation.populate('participants', 'firstName lastName email role profileImageUrl');
+            await conversation.populate('createdBy', 'firstName lastName email role profileImageUrl');
             await conversation.populate('projectId', 'name');
         }
 
@@ -141,9 +147,25 @@ export const getMessages = async (req: AuthRequest, res: Response) => {
         const isParticipant = conversation.participants.some((id) => id.toString() === req.user!.userId);
         if (!isParticipant) return res.status(403).json({ message: 'Not authorized for this conversation' });
 
+        const deliveryResult = await Message.updateMany(
+            {
+                conversationId,
+                senderId: { $ne: req.user!.userId },
+                deliveredTo: { $nin: [new mongoose.Types.ObjectId(req.user!.userId)] },
+            },
+            { $addToSet: { deliveredTo: req.user!.userId } }
+        );
+        if ((deliveryResult.modifiedCount || 0) > 0) {
+            getIO().to(`conversation:${conversationId}`).emit('chat:delivered', {
+                conversationId,
+                userId: req.user!.userId,
+            });
+        }
+
         const messages = await Message.find({ conversationId })
-            .populate('senderId', 'firstName lastName email role')
-            .populate('readBy', 'firstName lastName email role')
+            .populate('senderId', 'firstName lastName email role profileImageUrl')
+            .populate('deliveredTo', 'firstName lastName email role profileImageUrl')
+            .populate('readBy', 'firstName lastName email role profileImageUrl')
             .sort({ createdAt: 1 });
 
         res.json(messages);
@@ -166,20 +188,27 @@ export const sendMessage = async (req: AuthRequest, res: Response) => {
         const isParticipant = conversation.participants.some((id) => id.toString() === req.user!.userId);
         if (!isParticipant) return res.status(403).json({ message: 'Not authorized for this conversation' });
 
+        const onlineUserIds = new Set(getOnlineUserIds());
+        const deliveredTo = conversation.participants
+            .map((id) => id.toString())
+            .filter((participantId) => participantId !== req.user!.userId && onlineUserIds.has(participantId));
+
         const message = await Message.create({
             conversationId,
             senderId: req.user!.userId,
+            deliveredTo,
             readBy: [req.user!.userId],
             text,
         });
-        await message.populate('senderId', 'firstName lastName email role');
-        await message.populate('readBy', 'firstName lastName email role');
+        await message.populate('senderId', 'firstName lastName email role profileImageUrl');
+        await message.populate('deliveredTo', 'firstName lastName email role profileImageUrl');
+        await message.populate('readBy', 'firstName lastName email role profileImageUrl');
 
         conversation.lastMessage = text;
         conversation.lastMessageAt = new Date();
         await conversation.save();
-        await conversation.populate('participants', 'firstName lastName email role');
-        await conversation.populate('createdBy', 'firstName lastName email role');
+        await conversation.populate('participants', 'firstName lastName email role profileImageUrl');
+        await conversation.populate('createdBy', 'firstName lastName email role profileImageUrl');
         await conversation.populate('projectId', 'name');
 
         const io = getIO();
@@ -187,6 +216,12 @@ export const sendMessage = async (req: AuthRequest, res: Response) => {
             conversationId,
             message,
         });
+        if (deliveredTo.length > 0) {
+            io.to(`conversation:${conversationId}`).emit('chat:delivered', {
+                conversationId,
+                userId: req.user!.userId,
+            });
+        }
         conversation.participants.forEach((user: any) => {
             const participantId = user?._id?.toString?.() || user.toString();
             io.to(`user:${participantId}`).emit('chat:conversation:updated', {
@@ -214,10 +249,14 @@ export const markConversationRead = async (req: AuthRequest, res: Response) => {
 
         await Message.updateMany(
             { conversationId, senderId: { $ne: req.user!.userId } },
-            { $addToSet: { readBy: req.user!.userId } }
+            { $addToSet: { deliveredTo: req.user!.userId, readBy: req.user!.userId } }
         );
 
         const io = getIO();
+        io.to(`conversation:${conversationId}`).emit('chat:delivered', {
+            conversationId,
+            userId: req.user!.userId,
+        });
         io.to(`conversation:${conversationId}`).emit('chat:read', {
             conversationId,
             userId: req.user!.userId,
@@ -230,6 +269,16 @@ export const markConversationRead = async (req: AuthRequest, res: Response) => {
     } catch (error) {
         res.status(500).json({ message: 'Server error' });
     }
+};
+
+const emitConversationCreated = (conversation: any) => {
+    const io = getIO();
+    conversation.participants.forEach((user: any) => {
+        const participantId = user?._id?.toString?.() || user.toString();
+        io.to(`user:${participantId}`).emit('chat:conversation:updated', {
+            conversationId: conversation._id,
+        });
+    });
 };
 
 export const createOrGetTeamGroup = async (req: AuthRequest, res: Response) => {
@@ -254,17 +303,18 @@ export const createOrGetTeamGroup = async (req: AuthRequest, res: Response) => {
                 participants: participantIds,
                 createdBy: req.user!.userId,
             });
-            await conversation.populate('participants', 'firstName lastName email role');
-            await conversation.populate('createdBy', 'firstName lastName email role');
+            await conversation.populate('participants', 'firstName lastName email role profileImageUrl');
+            await conversation.populate('createdBy', 'firstName lastName email role profileImageUrl');
             await conversation.populate('projectId', 'name');
         } else {
             conversation.participants = participantIds as any;
             await conversation.save();
-            await conversation.populate('participants', 'firstName lastName email role');
-            await conversation.populate('createdBy', 'firstName lastName email role');
+            await conversation.populate('participants', 'firstName lastName email role profileImageUrl');
+            await conversation.populate('createdBy', 'firstName lastName email role profileImageUrl');
             await conversation.populate('projectId', 'name');
         }
 
+        emitConversationCreated(conversation);
         res.status(201).json(conversation);
     } catch (error) {
         res.status(500).json({ message: 'Server error' });
@@ -302,18 +352,19 @@ export const createOrGetProjectGroup = async (req: AuthRequest, res: Response) =
                 participants: participantIds,
                 createdBy: req.user!.userId,
             });
-            await conversation.populate('participants', 'firstName lastName email role');
-            await conversation.populate('createdBy', 'firstName lastName email role');
+            await conversation.populate('participants', 'firstName lastName email role profileImageUrl');
+            await conversation.populate('createdBy', 'firstName lastName email role profileImageUrl');
             await conversation.populate('projectId', 'name');
         } else {
             conversation.name = groupName;
             conversation.participants = participantIds as any;
             await conversation.save();
-            await conversation.populate('participants', 'firstName lastName email role');
-            await conversation.populate('createdBy', 'firstName lastName email role');
+            await conversation.populate('participants', 'firstName lastName email role profileImageUrl');
+            await conversation.populate('createdBy', 'firstName lastName email role profileImageUrl');
             await conversation.populate('projectId', 'name');
         }
 
+        emitConversationCreated(conversation);
         res.status(201).json(conversation);
     } catch (error) {
         res.status(500).json({ message: 'Server error' });

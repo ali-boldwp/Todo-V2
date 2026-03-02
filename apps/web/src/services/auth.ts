@@ -29,3 +29,34 @@ export const getGithubSetupStatus = async () => {
         githubConnectedAt: string | null;
     };
 };
+
+export const getProfileSetupStatus = async () => {
+    const response = await api.get('/auth/profile/status');
+    return response.data as {
+        profileSetupCompleted: boolean;
+        profileImageUrl: string | null;
+        profileImageUploadedAt: string | null;
+        firstName: string;
+        lastName: string;
+        email: string;
+        role: string;
+    };
+};
+
+export const uploadProfileImage = async (imageData: string) => {
+    const response = await api.post('/auth/profile/image', { imageData });
+    return response.data as {
+        token: string;
+        user: {
+            id: string;
+            email: string;
+            role: string;
+            firstName: string;
+            lastName: string;
+            profileImageUrl: string | null;
+            profileSetupCompleted: boolean;
+            githubUsername?: string;
+            githubSetupCompleted?: boolean;
+        };
+    };
+};

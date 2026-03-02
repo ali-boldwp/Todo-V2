@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef } from 'react';
+import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -10,6 +10,9 @@ interface SocketContextValue {
     leaveProject: (projectId: string) => void;
     joinConversation: (conversationId: string) => void;
     leaveConversation: (conversationId: string) => void;
+    startTyping: (conversationId: string) => void;
+    stopTyping: (conversationId: string) => void;
+    typingUsersByConversation: Record<string, string[]>;
 }
 
 const SocketContext = createContext<SocketContextValue>({
@@ -17,11 +20,15 @@ const SocketContext = createContext<SocketContextValue>({
     leaveProject: () => { },
     joinConversation: () => { },
     leaveConversation: () => { },
+    startTyping: () => { },
+    stopTyping: () => { },
+    typingUsersByConversation: {},
 });
 
 export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
     const queryClient = useQueryClient();
     const socketRef = useRef<Socket | null>(null);
+    const [typingUsersByConversation, setTypingUsersByConversation] = useState<Record<string, string[]>>({});
 
     const getCurrentUserRole = () => {
         try {
@@ -42,14 +49,12 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
         });
         socketRef.current = socket;
 
-        // Task events — invalidate tasks for the relevant project
         socket.on('task:created', (task: any) => {
             queryClient.invalidateQueries({ queryKey: ['tasks', task.projectId] });
         });
 
         socket.on('task:updated', (task: any) => {
             queryClient.invalidateQueries({ queryKey: ['tasks', task.projectId] });
-            // Also invalidate individual task if it's cached
             queryClient.invalidateQueries({ queryKey: ['task', task._id] });
         });
 
@@ -57,7 +62,6 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
             queryClient.invalidateQueries({ queryKey: ['tasks', task.projectId] });
         });
 
-        // Project events — invalidate the projects list
         socket.on('project:updated', () => {
             queryClient.invalidateQueries({ queryKey: ['projects'] });
         });
@@ -73,12 +77,55 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
         socket.on('chat:message', (payload: any) => {
             if (payload?.conversationId) {
                 queryClient.invalidateQueries({ queryKey: ['chat', 'messages', payload.conversationId] });
+                setTypingUsersByConversation((prev) => {
+                    if (!prev[payload.conversationId]?.length) return prev;
+                    return { ...prev, [payload.conversationId]: [] };
+                });
             }
             queryClient.invalidateQueries({ queryKey: ['chat', 'conversations'] });
         });
 
         socket.on('chat:conversation:updated', () => {
             queryClient.invalidateQueries({ queryKey: ['chat', 'conversations'] });
+        });
+
+        socket.on('chat:read', (payload: any) => {
+            if (payload?.conversationId) {
+                queryClient.invalidateQueries({ queryKey: ['chat', 'messages', payload.conversationId] });
+            }
+            queryClient.invalidateQueries({ queryKey: ['chat', 'conversations'] });
+        });
+
+        socket.on('chat:delivered', (payload: any) => {
+            if (payload?.conversationId) {
+                queryClient.invalidateQueries({ queryKey: ['chat', 'messages', payload.conversationId] });
+            }
+            queryClient.invalidateQueries({ queryKey: ['chat', 'conversations'] });
+        });
+
+        socket.on('chat:typing', (payload: any) => {
+            const conversationId = payload?.conversationId;
+            const userId = payload?.userId;
+            const isTyping = !!payload?.isTyping;
+            if (!conversationId || !userId) return;
+            setTypingUsersByConversation((prev) => {
+                const current = prev[conversationId] || [];
+                if (isTyping) {
+                    if (current.includes(userId)) return prev;
+                    return { ...prev, [conversationId]: [...current, userId] };
+                }
+                if (!current.includes(userId)) return prev;
+                const next = current.filter((id) => id !== userId);
+                return { ...prev, [conversationId]: next };
+            });
+        });
+
+        socket.on('presence:online', () => {
+            queryClient.invalidateQueries({ queryKey: ['chat', 'online-users'] });
+        });
+
+        socket.on('presence:offline', () => {
+            queryClient.invalidateQueries({ queryKey: ['chat', 'online-users'] });
         });
 
         return () => {
@@ -100,10 +147,24 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
 
     const leaveConversation = (conversationId: string) => {
         socketRef.current?.emit('leave:conversation', conversationId);
+        setTypingUsersByConversation((prev) => {
+            if (!prev[conversationId]) return prev;
+            const next = { ...prev };
+            delete next[conversationId];
+            return next;
+        });
+    };
+
+    const startTyping = (conversationId: string) => {
+        socketRef.current?.emit('typing:start', conversationId);
+    };
+
+    const stopTyping = (conversationId: string) => {
+        socketRef.current?.emit('typing:stop', conversationId);
     };
 
     return (
-        <SocketContext.Provider value={{ joinProject, leaveProject, joinConversation, leaveConversation }}>
+        <SocketContext.Provider value={{ joinProject, leaveProject, joinConversation, leaveConversation, startTyping, stopTyping, typingUsersByConversation }}>
             {children}
         </SocketContext.Provider>
     );

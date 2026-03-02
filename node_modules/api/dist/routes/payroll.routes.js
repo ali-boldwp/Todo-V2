@@ -5,6 +5,7 @@ const payroll_controller_1 = require("../controllers/payroll.controller");
 const auth_1 = require("../middleware/auth");
 const router = (0, express_1.Router)();
 router.use(auth_1.authenticate);
+router.use(auth_1.requireProfileImageSetup);
 router.use(auth_1.requireGithubSetupForTeamMembers);
 router.get('/structure', payroll_controller_1.getSalaryStructure);
 router.post('/structure', (0, auth_1.authorize)(['admin']), payroll_controller_1.createSalaryStructure);

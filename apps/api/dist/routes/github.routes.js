@@ -5,6 +5,7 @@ const github_controller_1 = require("../controllers/github.controller");
 const auth_1 = require("../middleware/auth");
 const router = (0, express_1.Router)();
 router.use(auth_1.authenticate);
+router.use(auth_1.requireProfileImageSetup);
 router.get('/config', (0, auth_1.authorize)(['admin']), github_controller_1.getGithubConfig);
 router.post('/config', (0, auth_1.authorize)(['admin']), github_controller_1.saveGithubConfig);
 router.post('/sync', (0, auth_1.authorize)(['admin']), github_controller_1.syncIssues);

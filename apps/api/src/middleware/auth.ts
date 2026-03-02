@@ -5,8 +5,15 @@ import User from '../models/User';
 export interface AuthRequest extends Request {
     user?: {
         userId: string;
+        email?: string;
         role: string;
         clientId?: string;
+        firstName?: string;
+        lastName?: string;
+        profileImageUrl?: string | null;
+        profileSetupCompleted?: boolean;
+        githubUsername?: string;
+        githubSetupCompleted?: boolean;
     };
 }
 
@@ -50,6 +57,25 @@ export const requireGithubSetupForTeamMembers = async (req: AuthRequest, res: Re
         const completed = !!user?.githubUsername && !!user?.githubUserId && !!user?.githubConnectedAt;
         if (!completed) {
             return res.status(403).json({ message: 'You must complete GitHub setup before accessing this feature.' });
+        }
+
+        next();
+    } catch (error) {
+        return res.status(500).json({ message: 'Server error' });
+    }
+};
+
+export const requireProfileImageSetup = async (req: AuthRequest, res: Response, next: NextFunction) => {
+    try {
+        if (!req.user) return res.status(401).json({ message: 'Authentication required' });
+
+        const user = await User.findById(req.user.userId).select('profileImageUrl');
+        const completed = !!user?.profileImageUrl;
+        if (!completed) {
+            return res.status(403).json({
+                message: 'You must upload a profile image before accessing this feature.',
+                code: 'PROFILE_SETUP_REQUIRED'
+            });
         }
 
         next();

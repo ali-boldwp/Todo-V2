@@ -1,6 +1,7 @@
 import React from 'react';
-import { Search, Bell, HelpCircle, User } from 'lucide-react';
+import { Search, Bell, HelpCircle } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import UserAvatar from './UserAvatar';
 
 const Header: React.FC = () => {
     const { user } = useAuth();
@@ -38,9 +39,14 @@ const Header: React.FC = () => {
                 <div className="w-px h-6 bg-gray-200 mx-2"></div>
 
                 <div className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded-md transition-colors">
-                    <div className="w-6 h-6 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-700 text-xs font-medium">
-                        {user?.email?.[0].toUpperCase() || <User size={14} />}
-                    </div>
+                    <UserAvatar
+                        firstName={user?.firstName}
+                        lastName={user?.lastName}
+                        email={user?.email}
+                        profileImageUrl={user?.profileImageUrl}
+                        sizeClassName="w-6 h-6"
+                        textClassName="text-[10px]"
+                    />
                 </div>
             </div>
         </header>

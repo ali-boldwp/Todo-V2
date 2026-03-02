@@ -1,10 +1,15 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { getProfileSetupStatus } from '../services/auth';
 
 interface User {
     id: string;
     email: string;
     role: string;
+    firstName?: string;
+    lastName?: string;
+    profileImageUrl?: string | null;
+    profileSetupCompleted?: boolean;
     githubUsername?: string;
     githubSetupCompleted?: boolean;
 }
@@ -40,6 +45,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             id: decoded.userId,
             email: decoded.email || '',
             role: decoded.role,
+            firstName: decoded.firstName,
+            lastName: decoded.lastName,
+            profileImageUrl: decoded.profileImageUrl || null,
+            profileSetupCompleted: !!decoded.profileSetupCompleted,
             githubUsername: decoded.githubUsername,
             githubSetupCompleted: !!decoded.githubSetupCompleted,
         });
@@ -51,11 +60,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
     }, [token]);
 
+    useEffect(() => {
+        if (!token) return;
+        let cancelled = false;
+        getProfileSetupStatus()
+            .then((status) => {
+                if (cancelled) return;
+                setUser((prev) => prev ? ({
+                    ...prev,
+                    firstName: status.firstName || prev.firstName,
+                    lastName: status.lastName || prev.lastName,
+                    profileImageUrl: status.profileImageUrl,
+                    profileSetupCompleted: !!status.profileSetupCompleted,
+                }) : prev);
+            })
+            .catch(() => {
+                // ignore profile status sync errors; route guards will still rely on token state
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [token]);
+
     const login = (newToken: string, newUser: User) => {
         localStorage.setItem('token', newToken);
         setToken(newToken);
         setUser({
             ...newUser,
+            profileImageUrl: newUser.profileImageUrl ?? null,
+            profileSetupCompleted: newUser.profileSetupCompleted ?? false,
             githubSetupCompleted: newUser.githubSetupCompleted ?? false,
         });
         navigate('/');

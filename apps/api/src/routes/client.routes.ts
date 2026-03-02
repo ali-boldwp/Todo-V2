@@ -1,10 +1,11 @@
 import express from 'express';
-import { authenticate, authorize, requireGithubSetupForTeamMembers } from '../middleware/auth';
+import { authenticate, authorize, requireGithubSetupForTeamMembers, requireProfileImageSetup } from '../middleware/auth';
 import { getClients, createClient, getClient, toggleClientStatus, resetClientPassword, deleteClient } from '../controllers/client.controller';
 
 const router = express.Router();
 
 router.use(authenticate);
+router.use(requireProfileImageSetup);
 router.use(requireGithubSetupForTeamMembers);
 
 router.get('/', authorize(['admin', 'manager']), getClients);

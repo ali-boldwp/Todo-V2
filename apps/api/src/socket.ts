@@ -2,6 +2,7 @@ import { Server, Socket } from 'socket.io';
 import jwt from 'jsonwebtoken';
 
 let io: Server;
+const onlineUserConnections = new Map<string, number>();
 
 export const initSocket = (server: any, allowedOrigins: string[]) => {
     io = new Server(server, {
@@ -18,7 +19,14 @@ export const initSocket = (server: any, allowedOrigins: string[]) => {
             try {
                 const decoded: any = jwt.verify(token, process.env.JWT_SECRET || 'secret');
                 if (decoded?.userId) {
-                    socket.join(`user:${decoded.userId}`);
+                    const userId = String(decoded.userId);
+                    socket.data.userId = userId;
+                    socket.join(`user:${userId}`);
+                    const current = onlineUserConnections.get(userId) || 0;
+                    onlineUserConnections.set(userId, current + 1);
+                    if (current === 0) {
+                        io.emit('presence:online', { userId });
+                    }
                 }
             } catch {
                 // ignore invalid token for socket room join
@@ -38,6 +46,35 @@ export const initSocket = (server: any, allowedOrigins: string[]) => {
         socket.on('leave:conversation', (conversationId: string) => {
             socket.leave(`conversation:${conversationId}`);
         });
+        socket.on('typing:start', (conversationId: string) => {
+            const userId = socket.data?.userId;
+            if (!userId || !conversationId) return;
+            socket.to(`conversation:${conversationId}`).emit('chat:typing', {
+                conversationId,
+                userId,
+                isTyping: true,
+            });
+        });
+        socket.on('typing:stop', (conversationId: string) => {
+            const userId = socket.data?.userId;
+            if (!userId || !conversationId) return;
+            socket.to(`conversation:${conversationId}`).emit('chat:typing', {
+                conversationId,
+                userId,
+                isTyping: false,
+            });
+        });
+        socket.on('disconnect', () => {
+            const userId = socket.data?.userId;
+            if (!userId) return;
+            const current = onlineUserConnections.get(userId) || 0;
+            if (current <= 1) {
+                onlineUserConnections.delete(userId);
+                io.emit('presence:offline', { userId });
+                return;
+            }
+            onlineUserConnections.set(userId, current - 1);
+        });
     });
 
     return io;
@@ -47,6 +84,8 @@ export const getIO = () => {
     if (!io) throw new Error('Socket.IO not initialized');
     return io;
 };
+
+export const getOnlineUserIds = () => Array.from(onlineUserConnections.keys());
 
 // ---- Emit helpers ----
 

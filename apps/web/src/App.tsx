@@ -11,9 +11,13 @@ import Clients from './pages/Clients';
 import Team from './pages/Team';
 import GithubMemberSetup from './pages/GithubMemberSetup';
 import Chat from './pages/Chat';
+import ProfileSetup from './pages/ProfileSetup';
 import Layout from './components/Layout';
 import LoadingScreen from './components/LoadingScreen';
 import { useState, useEffect } from 'react';
+
+const requiresProfileSetup = (user: any) =>
+    !!user && !user.profileSetupCompleted;
 
 const requiresGithubSetup = (user: any) =>
     !!user && ['manager', 'member'].includes(user.role) && !user.githubSetupCompleted;
@@ -33,6 +37,9 @@ const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
     if (!isAuthenticated) {
         return <Navigate to="/login" />;
     }
+    if (requiresProfileSetup(user)) {
+        return <Navigate to="/profile/setup" replace />;
+    }
     if (requiresGithubSetup(user)) {
         return <Navigate to="/github/setup" replace />;
     }
@@ -46,6 +53,9 @@ const AdminRoute = ({ children }: { children: JSX.Element }) => {
     }
     if (!user) {
         return null;
+    }
+    if (requiresProfileSetup(user)) {
+        return <Navigate to="/profile/setup" replace />;
     }
     if (requiresGithubSetup(user)) {
         return <Navigate to="/github/setup" replace />;
@@ -64,6 +74,9 @@ const AdminOrManagerRoute = ({ children }: { children: JSX.Element }) => {
     if (!user) {
         return null;
     }
+    if (requiresProfileSetup(user)) {
+        return <Navigate to="/profile/setup" replace />;
+    }
     if (requiresGithubSetup(user)) {
         return <Navigate to="/github/setup" replace />;
     }
@@ -80,6 +93,9 @@ const InternalTeamRoute = ({ children }: { children: JSX.Element }) => {
     }
     if (!user) {
         return null;
+    }
+    if (requiresProfileSetup(user)) {
+        return <Navigate to="/profile/setup" replace />;
     }
     if (requiresGithubSetup(user)) {
         return <Navigate to="/github/setup" replace />;
@@ -98,10 +114,30 @@ const GithubSetupRoute = ({ children }: { children: JSX.Element }) => {
     if (!user) {
         return null;
     }
+    if (requiresProfileSetup(user)) {
+        return <Navigate to="/profile/setup" replace />;
+    }
     if (!['manager', 'member'].includes(user.role)) {
         return <Navigate to="/" replace />;
     }
     if (user.githubSetupCompleted) {
+        return <Navigate to="/" replace />;
+    }
+    return children;
+};
+
+const ProfileSetupRoute = ({ children }: { children: JSX.Element }) => {
+    const { isAuthenticated, user } = useAuth();
+    if (!isAuthenticated) {
+        return <Navigate to="/login" />;
+    }
+    if (!user) {
+        return null;
+    }
+    if (user.profileSetupCompleted) {
+        if (requiresGithubSetup(user)) {
+            return <Navigate to="/github/setup" replace />;
+        }
         return <Navigate to="/" replace />;
     }
     return children;
@@ -112,6 +148,14 @@ const AppRoutes = () => {
         <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Navigate to="/login" replace />} />
+            <Route
+                path="/profile/setup"
+                element={
+                    <ProfileSetupRoute>
+                        <ProfileSetup />
+                    </ProfileSetupRoute>
+                }
+            />
             <Route
                 path="/github/setup"
                 element={

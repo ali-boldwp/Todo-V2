@@ -5,6 +5,11 @@ export const getChatUsers = async () => {
     return response.data;
 };
 
+export const getOnlineUsers = async () => {
+    const response = await api.get('/chat/presence/online-users');
+    return response.data;
+};
+
 export const getConversations = async () => {
     const response = await api.get('/chat/conversations');
     return response.data;
@@ -22,5 +27,20 @@ export const getConversationMessages = async (conversationId: string) => {
 
 export const sendConversationMessage = async (conversationId: string, text: string) => {
     const response = await api.post(`/chat/conversations/${conversationId}/messages`, { text });
+    return response.data;
+};
+
+export const markConversationRead = async (conversationId: string) => {
+    const response = await api.post(`/chat/conversations/${conversationId}/read`);
+    return response.data;
+};
+
+export const createOrGetTeamGroup = async (name?: string) => {
+    const response = await api.post('/chat/groups/team', { name });
+    return response.data;
+};
+
+export const createOrGetProjectGroup = async (projectId: string) => {
+    const response = await api.post(`/chat/groups/project/${projectId}`);
     return response.data;
 };

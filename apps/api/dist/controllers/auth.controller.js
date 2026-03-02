@@ -3,19 +3,25 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.handleGithubSetupCallback = exports.getGithubSetupStatus = exports.getGithubSetupUrl = exports.login = exports.register = void 0;
+exports.handleGithubSetupCallback = exports.getGithubSetupStatus = exports.getGithubSetupUrl = exports.login = exports.register = exports.uploadProfileImage = exports.getProfileSetupStatus = void 0;
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const User_1 = __importDefault(require("../models/User"));
 const auth_schema_1 = require("@devmanager/shared/dist/auth.schema");
 const isGithubSetupCompleted = (user) => !!user.githubUsername && !!user.githubUserId && !!user.githubConnectedAt;
+const isProfileSetupCompleted = (user) => !!user.profileImageUrl;
 const buildAuthResponse = (user) => {
     const githubSetupCompleted = isGithubSetupCompleted(user);
+    const profileSetupCompleted = isProfileSetupCompleted(user);
     const token = jsonwebtoken_1.default.sign({
         userId: user._id,
         email: user.email,
         role: user.role,
         clientId: user.clientId,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        profileImageUrl: user.profileImageUrl || null,
+        profileSetupCompleted,
         githubUsername: user.githubUsername,
         githubSetupCompleted
     }, process.env.JWT_SECRET || 'secret', { expiresIn: '1d' });
@@ -25,11 +31,67 @@ const buildAuthResponse = (user) => {
             id: user._id,
             email: user.email,
             role: user.role,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            profileImageUrl: user.profileImageUrl || null,
+            profileSetupCompleted,
             githubUsername: user.githubUsername,
             githubSetupCompleted
         }
     };
 };
+const getProfileSetupStatus = async (req, res) => {
+    try {
+        if (!req.user?.userId) {
+            return res.status(401).json({ message: 'Authentication required' });
+        }
+        const user = await User_1.default.findById(req.user.userId)
+            .select('firstName lastName email role profileImageUrl profileImageUploadedAt');
+        if (!user)
+            return res.status(404).json({ message: 'User not found' });
+        res.json({
+            profileSetupCompleted: isProfileSetupCompleted(user),
+            profileImageUrl: user.profileImageUrl || null,
+            profileImageUploadedAt: user.profileImageUploadedAt || null,
+            firstName: user.firstName,
+            lastName: user.lastName,
+            email: user.email,
+            role: user.role,
+        });
+    }
+    catch (error) {
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
+exports.getProfileSetupStatus = getProfileSetupStatus;
+const uploadProfileImage = async (req, res) => {
+    try {
+        if (!req.user?.userId) {
+            return res.status(401).json({ message: 'Authentication required' });
+        }
+        const imageData = `${req.body?.imageData || ''}`.trim();
+        if (!imageData) {
+            return res.status(400).json({ message: 'imageData is required' });
+        }
+        if (!/^data:image\/(png|jpe?g|webp|gif);base64,/i.test(imageData)) {
+            return res.status(400).json({ message: 'Only base64 image data URLs are allowed (png, jpg, jpeg, webp, gif).' });
+        }
+        if (imageData.length > 2000000) {
+            return res.status(400).json({ message: 'Profile image is too large. Please upload a smaller file.' });
+        }
+        const user = await User_1.default.findByIdAndUpdate(req.user.userId, {
+            profileImageUrl: imageData,
+            profileImageUploadedAt: new Date(),
+        }, { new: true });
+        if (!user)
+            return res.status(404).json({ message: 'User not found' });
+        res.json(buildAuthResponse(user));
+    }
+    catch (error) {
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
+exports.uploadProfileImage = uploadProfileImage;
 const register = async (req, res) => {
     try {
         const validated = auth_schema_1.RegisterSchema.parse(req.body);

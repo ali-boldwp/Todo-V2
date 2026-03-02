@@ -37,6 +37,8 @@ const mongoose_1 = __importStar(require("mongoose"));
 const MessageSchema = new mongoose_1.Schema({
     conversationId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Conversation', required: true, index: true },
     senderId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'User', required: true },
+    deliveredTo: [{ type: mongoose_1.Schema.Types.ObjectId, ref: 'User' }],
+    readBy: [{ type: mongoose_1.Schema.Types.ObjectId, ref: 'User' }],
     text: { type: String, required: true },
 }, { timestamps: true });
 MessageSchema.index({ conversationId: 1, createdAt: 1 });

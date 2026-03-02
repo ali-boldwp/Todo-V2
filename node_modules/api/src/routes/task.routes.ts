@@ -1,10 +1,11 @@
 import { Router } from 'express';
 import { createTask, getTasks, updateTask, deleteTask, uploadAttachment, deleteAttachment, startTaskWork, stopTaskWork, pauseTaskWork, resumeTaskWork, finishTaskWork, approveTaskVerification, rejectTaskVerification } from '../controllers/task.controller';
-import { authenticate, requireGithubSetupForTeamMembers } from '../middleware/auth';
+import { authenticate, requireGithubSetupForTeamMembers, requireProfileImageSetup } from '../middleware/auth';
 
 const router = Router();
 
 router.use(authenticate);
+router.use(requireProfileImageSetup);
 router.use(requireGithubSetupForTeamMembers);
 
 router.get('/', getTasks);

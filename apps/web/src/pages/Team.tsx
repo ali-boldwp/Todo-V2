@@ -11,22 +11,12 @@ import {
     UserPlus, MoreVertical, Shield, ShieldOff, KeyRound, Trash2, X, Eye, EyeOff,
 } from 'lucide-react';
 import Switch from '../components/Switch';
+import UserAvatar from '../components/UserAvatar';
 
 const ROLE_STYLES: Record<string, string> = {
     admin: 'bg-purple-100 text-purple-700',
     manager: 'bg-blue-100 text-blue-700',
     member: 'bg-gray-100 text-gray-700',
-};
-
-const initials = (m: any) =>
-    `${m.firstName?.[0] ?? ''}${m.lastName?.[0] ?? ''}`.toUpperCase();
-
-const avatarColor = (id: string) => {
-    const colors = [
-        'bg-indigo-500', 'bg-violet-500', 'bg-sky-500',
-        'bg-emerald-500', 'bg-amber-500', 'bg-rose-500',
-    ];
-    return colors[id.charCodeAt(id.length - 1) % colors.length];
 };
 
 const Team = () => {
@@ -144,9 +134,13 @@ const Team = () => {
                             <tr key={m._id} className="group hover:bg-gray-50/50 transition-colors">
                                 <td className="px-6 py-3.5">
                                     <div className="flex items-center gap-3">
-                                        <div className={`w-8 h-8 rounded-full ${avatarColor(m._id)} text-white text-xs font-bold flex items-center justify-center flex-shrink-0`}>
-                                            {initials(m)}
-                                        </div>
+                                        <UserAvatar
+                                            firstName={m.firstName}
+                                            lastName={m.lastName}
+                                            email={m.email}
+                                            profileImageUrl={m.profileImageUrl}
+                                            sizeClassName="w-8 h-8 flex-shrink-0"
+                                        />
                                         <div>
                                             <p className="font-medium text-gray-900">{m.firstName} {m.lastName}</p>
                                             <p className="text-xs text-gray-400">{m.email}</p>

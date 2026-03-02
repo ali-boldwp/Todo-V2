@@ -5,6 +5,7 @@ const planning_controller_1 = require("../controllers/planning.controller");
 const auth_1 = require("../middleware/auth");
 const router = (0, express_1.Router)();
 router.use(auth_1.authenticate);
+router.use(auth_1.requireProfileImageSetup);
 router.use(auth_1.requireGithubSetupForTeamMembers);
 router.get('/epics', planning_controller_1.getEpics);
 router.post('/epics', planning_controller_1.createEpic);

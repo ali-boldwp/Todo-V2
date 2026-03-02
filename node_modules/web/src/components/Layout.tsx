@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import Header from './Header';
 import icon from '../assets/icon.png';
+import UserAvatar from './UserAvatar';
 
 const SidebarRailItem = ({ icon: Icon, label, active, onClick }: { icon: any; label: string; active?: boolean; onClick?: () => void }) => (
     <div
@@ -202,9 +203,13 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
                 <div className="mt-auto flex flex-col items-center space-y-2">
                     <SidebarRailItem icon={LogOut} label="Logout" onClick={logout} />
-                    <div className="w-8 h-8 rounded-full bg-indigo-600 text-white flex items-center justify-center text-xs font-bold cursor-pointer">
-                        {user?.email ? user.email[0].toUpperCase() : 'U'}
-                    </div>
+                    <UserAvatar
+                        firstName={user?.firstName}
+                        lastName={user?.lastName}
+                        email={user?.email}
+                        profileImageUrl={user?.profileImageUrl}
+                        sizeClassName="w-8 h-8 cursor-pointer"
+                    />
                 </div>
             </div>
 

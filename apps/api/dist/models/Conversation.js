@@ -35,6 +35,10 @@ var __importStar = (this && this.__importStar) || (function () {
 Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose_1 = __importStar(require("mongoose"));
 const ConversationSchema = new mongoose_1.Schema({
+    type: { type: String, enum: ['direct', 'group'], default: 'direct' },
+    name: { type: String },
+    projectId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Project' },
+    createdBy: { type: mongoose_1.Schema.Types.ObjectId, ref: 'User' },
     participants: [{ type: mongoose_1.Schema.Types.ObjectId, ref: 'User', required: true }],
     lastMessage: { type: String },
     lastMessageAt: { type: Date },
