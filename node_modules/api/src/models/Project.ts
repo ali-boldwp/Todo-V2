@@ -12,6 +12,13 @@ export interface IProject extends Document {
     members: mongoose.Types.ObjectId[];
     githubRepoOwner?: string;
     githubRepoName?: string;
+    devWebsiteUrl?: string;
+    accessAccounts: {
+        label: string;
+        username: string;
+        password: string;
+        notes?: string;
+    }[];
     documents: {
         _id?: mongoose.Types.ObjectId;
         title: string;
@@ -36,6 +43,13 @@ const ProjectSchema: Schema = new Schema({
     members: [{ type: Schema.Types.ObjectId, ref: 'User' }],
     githubRepoOwner: { type: String },
     githubRepoName: { type: String },
+    devWebsiteUrl: { type: String },
+    accessAccounts: [{
+        label: { type: String, required: true },
+        username: { type: String, required: true },
+        password: { type: String, required: true },
+        notes: { type: String },
+    }],
     documents: [{
         title: { type: String, required: true },
         description: { type: String },

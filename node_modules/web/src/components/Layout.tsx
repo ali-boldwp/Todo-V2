@@ -23,6 +23,7 @@ import {
     CalendarDays,
     Mail,
     Star,
+    KeyRound,
 } from 'lucide-react';
 import Header from './Header';
 import UserAvatar from './UserAvatar';
@@ -72,6 +73,7 @@ const PROJECT_SUB_ITEMS = [
     { label: 'Tasks', path: 'tasks', icon: ListTodo },
     { label: 'Verifications', path: 'verifications', icon: CheckSquare, staffOnly: true },
     { label: 'Documents', path: 'documents', icon: FileText, adminOnly: false },
+    { label: 'Access', path: 'access', icon: KeyRound, adminOnly: true },
     { label: 'Backlog', path: 'backlog', icon: CheckSquare, adminOnly: false },
     { label: 'Sprints', path: 'sprints', icon: Zap, adminOnly: false },
     { label: 'Settings', path: 'settings', icon: Settings, staffOnly: true },
@@ -83,7 +85,11 @@ const ProjectItem = ({ project, isOpen, onToggle }: { project: any; isOpen: bool
     const basePath = `/projects/${project._id}`;
     const isParentActive = location.pathname.startsWith(basePath);
 
-    const visibleItems = user?.role === 'client' ? PROJECT_SUB_ITEMS.filter((item) => !item.staffOnly) : PROJECT_SUB_ITEMS;
+    const visibleItems = PROJECT_SUB_ITEMS.filter((item: any) => {
+        if (item.adminOnly && user?.role !== 'admin') return false;
+        if (item.staffOnly && user?.role === 'client') return false;
+        return true;
+    });
 
     return (
         <div>

@@ -6,6 +6,18 @@ import User from '../models/User';
 import { ProjectSchema } from '@devmanager/shared/dist/project.schema';
 import { emitToAll } from '../socket';
 
+const ACCESS_FIELD_KEYS = ['devWebsiteUrl', 'accessAccounts'] as const;
+
+const hasProjectAccessFieldInPayload = (payload: Record<string, any>) =>
+    ACCESS_FIELD_KEYS.some((key) => Object.prototype.hasOwnProperty.call(payload || {}, key));
+
+const sanitizeProjectForViewer = (project: any, role?: string) => {
+    const obj = typeof project?.toObject === 'function' ? project.toObject() : project;
+    if (role === 'admin') return obj;
+    const { devWebsiteUrl, accessAccounts, ...rest } = obj || {};
+    return rest;
+};
+
 export const getProjects = async (req: AuthRequest, res: Response) => {
     try {
         const query: any = {};
@@ -20,7 +32,7 @@ export const getProjects = async (req: AuthRequest, res: Response) => {
         }
 
         const projects = await Project.find(query).populate('clientId', 'name');
-        res.json(projects);
+        res.json(projects.map((project) => sanitizeProjectForViewer(project, req.user!.role)));
     } catch (error) {
         res.status(500).json({ message: 'Server error' });
     }
@@ -96,7 +108,7 @@ export const getProject = async (req: AuthRequest, res: Response) => {
             .populate('members', 'firstName lastName email role')
             .populate('documents.uploadedBy', 'firstName lastName email');
         if (!project) return res.status(404).json({ message: 'Project not found' });
-        res.json(project);
+        res.json(sanitizeProjectForViewer(project, req.user!.role));
     } catch (error) {
         res.status(500).json({ message: 'Server error' });
     }
@@ -104,6 +116,10 @@ export const getProject = async (req: AuthRequest, res: Response) => {
 
 export const updateProject = async (req: AuthRequest, res: Response) => {
     try {
+        if (req.user!.role !== 'admin' && hasProjectAccessFieldInPayload(req.body || {})) {
+            return res.status(403).json({ message: 'Only admin can update project access credentials' });
+        }
+
         const validated = ProjectSchema.partial().parse(req.body);
 
         let githubRepoOwner = validated.githubRepoOwner;
@@ -154,7 +170,7 @@ export const updateProject = async (req: AuthRequest, res: Response) => {
         );
 
         if (!project) return res.status(404).json({ message: 'Project not found' });
-        res.json(project);
+        res.json(sanitizeProjectForViewer(project, req.user!.role));
     } catch (error: any) {
         if (error.issues) return res.status(400).json({ errors: error.issues });
         res.status(500).json({ message: 'Server error' });

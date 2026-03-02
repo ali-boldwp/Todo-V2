@@ -53,7 +53,10 @@ export const createComment = async (req: AuthRequest, res: Response) => {
             }
             await task.save();
             if (task.projectId) {
-                emitToProject(task.projectId.toString(), 'task:updated', task);
+                emitToProject(task.projectId.toString(), 'task:updated', {
+                    _id: task._id,
+                    projectId: task.projectId,
+                });
             }
         }
 

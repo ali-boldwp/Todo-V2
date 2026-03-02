@@ -8,6 +8,7 @@ import ProjectSettings from './ProjectSettings';
 import ProjectDocuments from './ProjectDocuments';
 import Sprints from './Sprints';
 import ProjectVerifications from './ProjectVerifications';
+import ProjectAccess from './ProjectAccess';
 import RichTextEditor from '../components/RichTextEditor';
 
 // ─── Project Overview ────────────────────────────────────────────────────────
@@ -80,6 +81,7 @@ const ProjectDetails: React.FC = () => {
                 <Route path="/tasks" element={<ProjectTasks />} />
                 <Route path="/verifications" element={<ProjectVerifications />} />
                 <Route path="/documents" element={<ProjectDocuments />} />
+                <Route path="/access" element={<ProjectAccess />} />
                 <Route path="/sprints" element={<Sprints />} />
                 <Route path="/settings" element={<ProjectSettings project={project} />} />
                 <Route path="*" element={<div className="text-gray-400 text-sm">Module coming soon...</div>} />

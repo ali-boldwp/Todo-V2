@@ -94,12 +94,43 @@ const getComputedWorkedSeconds = (task: any): number => {
     return base + runningExtra;
 };
 
-const toTaskResponse = (task: any) => {
+const getEntityId = (value: any): string | null => {
+    return value?._id?.toString?.() || value?.toString?.() || null;
+};
+
+const toTaskResponse = (task: any, viewer?: { userId: string; role: string }) => {
     const obj = typeof task?.toObject === 'function' ? task.toObject() : task;
-    return {
+    const activeWorkerId = getEntityId(obj?.activeWorkerId);
+    const canViewWorkerIdentity = viewer?.role === 'admin';
+    const isCurrentUserActiveWorker = Boolean(viewer?.userId && activeWorkerId && viewer.userId === activeWorkerId);
+    const sanitized = {
         ...obj,
+        hasActiveWorker: Boolean(activeWorkerId),
+        isCurrentUserActiveWorker
+    };
+
+    if (!canViewWorkerIdentity && activeWorkerId) {
+        sanitized.activeWorkerId = isCurrentUserActiveWorker ? { _id: activeWorkerId } : null;
+    }
+
+    return {
+        ...sanitized,
         totalWorkedSecondsComputed: getComputedWorkedSeconds(obj)
     };
+};
+
+const toTaskSocketPayload = (task: any) => {
+    const obj = typeof task?.toObject === 'function' ? task.toObject() : task;
+    return {
+        _id: obj?._id,
+        projectId: obj?.projectId
+    };
+};
+
+const emitTaskEvent = (event: 'task:created' | 'task:updated', task: any) => {
+    const payload = toTaskSocketPayload(task);
+    if (!payload.projectId) return;
+    emitToProject(payload.projectId.toString(), event, payload);
 };
 
 const mergeWorkLog = (workLogs: any[] = [], userId: string, seconds: number) => {
@@ -244,7 +275,7 @@ export const getTasks = async (req: AuthRequest, res: Response) => {
             .populate('activeWorkerId', 'firstName lastName email role')
             .populate('verifierId', 'firstName lastName email role')
             .populate('workLogs.userId', 'firstName lastName email role');
-        res.json(tasks.map(toTaskResponse));
+        res.json(tasks.map((task) => toTaskResponse(task, req.user!)));
     } catch (error) {
         res.status(500).json({ message: 'Server error' });
     }
@@ -257,9 +288,9 @@ export const createTask = async (req: AuthRequest, res: Response) => {
         // Create task. Branch is created when someone starts work.
         const task = await Task.create({ ...validated });
 
-        res.status(201).json(task);
+        res.status(201).json(toTaskResponse(task, req.user!));
         // Notify project room of new task
-        if (task.projectId) emitToProject(task.projectId.toString(), 'task:created', task);
+        emitTaskEvent('task:created', task);
     } catch (error: any) {
         if (error.issues) return res.status(400).json({ errors: error.issues });
         res.status(500).json({ message: 'Server error' });
@@ -313,7 +344,7 @@ export const updateTask = async (req: AuthRequest, res: Response) => {
             .populate('workLogs.userId', 'firstName lastName email role');
 
         if (!task) return res.status(404).json({ message: 'Task not found' });
-        res.json(toTaskResponse(task));
+        res.json(toTaskResponse(task, req.user!));
 
         if (clarificationRequest && task.projectId) {
             emitToAll('notification:created', {
@@ -328,7 +359,7 @@ export const updateTask = async (req: AuthRequest, res: Response) => {
         }
 
         // Notify project room of updated task
-        if (task.projectId) emitToProject(task.projectId.toString(), 'task:updated', task);
+        emitTaskEvent('task:updated', task);
     } catch (error) {
         res.status(500).json({ message: 'Server error' });
     }
@@ -391,8 +422,8 @@ export const uploadAttachment = async (req: AuthRequest, res: Response) => {
             .populate('verifierId', 'firstName lastName email role')
             .populate('workLogs.userId', 'firstName lastName email role');
         if (!task) return res.status(404).json({ message: 'Task not found' });
-        res.json(toTaskResponse(task));
-        if (task.projectId) emitToProject(task.projectId.toString(), 'task:updated', task);
+        res.json(toTaskResponse(task, req.user!));
+        emitTaskEvent('task:updated', task);
     } catch (error) {
         res.status(500).json({ message: 'Server error' });
     }
@@ -415,8 +446,8 @@ export const deleteAttachment = async (req: AuthRequest, res: Response) => {
         await task.populate('activeWorkerId', 'firstName lastName email role');
         await task.populate('verifierId', 'firstName lastName email role');
         await task.populate('workLogs.userId', 'firstName lastName email role');
-        res.json(toTaskResponse(task));
-        if (task.projectId) emitToProject(task.projectId.toString(), 'task:updated', task);
+        res.json(toTaskResponse(task, req.user!));
+        emitTaskEvent('task:updated', task);
     } catch (error) {
         res.status(500).json({ message: 'Server error' });
     }
@@ -439,7 +470,9 @@ export const startTaskWork = async (req: AuthRequest, res: Response) => {
         if (currentWorkerId && currentWorkerId !== req.user!.userId) {
             const fullName = `${currentWorker?.firstName || ''} ${currentWorker?.lastName || ''}`.trim();
             return res.status(409).json({
-                message: `Task is already being worked on by ${fullName || currentWorker?.email || 'another user'}.`
+                message: req.user!.role === 'admin'
+                    ? `Task is already being worked on by ${fullName || currentWorker?.email || 'another user'}.`
+                    : 'Task is already in progress.'
             });
         }
 
@@ -502,8 +535,8 @@ export const startTaskWork = async (req: AuthRequest, res: Response) => {
             .populate('workLogs.userId', 'firstName lastName email role');
 
         if (!updated) return res.status(404).json({ message: 'Task not found' });
-        res.json(toTaskResponse(updated));
-        if (updated.projectId) emitToProject(updated.projectId.toString(), 'task:updated', updated);
+        res.json(toTaskResponse(updated, req.user!));
+        emitTaskEvent('task:updated', updated);
     } catch (error) {
         res.status(500).json({ message: 'Server error' });
     }
@@ -551,8 +584,8 @@ export const pauseTaskWork = async (req: AuthRequest, res: Response) => {
             .populate('workLogs.userId', 'firstName lastName email role');
 
         if (!updated) return res.status(404).json({ message: 'Task not found' });
-        res.json(toTaskResponse(updated));
-        if (updated.projectId) emitToProject(updated.projectId.toString(), 'task:updated', updated);
+        res.json(toTaskResponse(updated, req.user!));
+        emitTaskEvent('task:updated', updated);
     } catch (error) {
         res.status(500).json({ message: 'Server error' });
     }
@@ -598,8 +631,8 @@ export const resumeTaskWork = async (req: AuthRequest, res: Response) => {
             .populate('workLogs.userId', 'firstName lastName email role');
 
         if (!updated) return res.status(404).json({ message: 'Task not found' });
-        res.json(toTaskResponse(updated));
-        if (updated.projectId) emitToProject(updated.projectId.toString(), 'task:updated', updated);
+        res.json(toTaskResponse(updated, req.user!));
+        emitTaskEvent('task:updated', updated);
     } catch (error) {
         res.status(500).json({ message: 'Server error' });
     }
@@ -678,8 +711,8 @@ export const finishTaskWork = async (req: AuthRequest, res: Response) => {
             .populate('workLogs.userId', 'firstName lastName email role');
 
         if (!updated) return res.status(404).json({ message: 'Task not found' });
-        res.json(toTaskResponse(updated));
-        if (updated.projectId) emitToProject(updated.projectId.toString(), 'task:updated', updated);
+        res.json(toTaskResponse(updated, req.user!));
+        emitTaskEvent('task:updated', updated);
     } catch (error) {
         res.status(500).json({ message: 'Server error' });
     }
@@ -721,8 +754,8 @@ export const approveTaskVerification = async (req: AuthRequest, res: Response) =
             .populate('workLogs.userId', 'firstName lastName email role');
 
         if (!updated) return res.status(404).json({ message: 'Task not found' });
-        res.json(toTaskResponse(updated));
-        if (updated.projectId) emitToProject(updated.projectId.toString(), 'task:updated', updated);
+        res.json(toTaskResponse(updated, req.user!));
+        emitTaskEvent('task:updated', updated);
     } catch (error) {
         res.status(500).json({ message: 'Server error' });
     }
@@ -763,8 +796,8 @@ export const rejectTaskVerification = async (req: AuthRequest, res: Response) =>
             .populate('workLogs.userId', 'firstName lastName email role');
 
         if (!updated) return res.status(404).json({ message: 'Task not found' });
-        res.json(toTaskResponse(updated));
-        if (updated.projectId) emitToProject(updated.projectId.toString(), 'task:updated', updated);
+        res.json(toTaskResponse(updated, req.user!));
+        emitTaskEvent('task:updated', updated);
     } catch (error) {
         res.status(500).json({ message: 'Server error' });
     }

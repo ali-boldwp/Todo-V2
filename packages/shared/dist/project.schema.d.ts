@@ -10,6 +10,23 @@ export declare const ProjectSchema: z.ZodObject<{
     endDate: z.ZodOptional<z.ZodString>;
     githubRepoOwner: z.ZodOptional<z.ZodString>;
     githubRepoName: z.ZodOptional<z.ZodString>;
+    devWebsiteUrl: z.ZodUnion<[z.ZodOptional<z.ZodString>, z.ZodLiteral<"">]>;
+    accessAccounts: z.ZodOptional<z.ZodArray<z.ZodObject<{
+        label: z.ZodString;
+        username: z.ZodString;
+        password: z.ZodString;
+        notes: z.ZodOptional<z.ZodString>;
+    }, "strip", z.ZodTypeAny, {
+        password: string;
+        label: string;
+        username: string;
+        notes?: string | undefined;
+    }, {
+        password: string;
+        label: string;
+        username: string;
+        notes?: string | undefined;
+    }>, "many">>;
     createGithubRepo: z.ZodOptional<z.ZodBoolean>;
 }, "strip", z.ZodTypeAny, {
     status: "active" | "completed" | "archived" | "on_hold" | "draft";
@@ -22,6 +39,13 @@ export declare const ProjectSchema: z.ZodObject<{
     endDate?: string | undefined;
     githubRepoOwner?: string | undefined;
     githubRepoName?: string | undefined;
+    devWebsiteUrl?: string | undefined;
+    accessAccounts?: {
+        password: string;
+        label: string;
+        username: string;
+        notes?: string | undefined;
+    }[] | undefined;
     createGithubRepo?: boolean | undefined;
 }, {
     name: string;
@@ -34,6 +58,13 @@ export declare const ProjectSchema: z.ZodObject<{
     endDate?: string | undefined;
     githubRepoOwner?: string | undefined;
     githubRepoName?: string | undefined;
+    devWebsiteUrl?: string | undefined;
+    accessAccounts?: {
+        password: string;
+        label: string;
+        username: string;
+        notes?: string | undefined;
+    }[] | undefined;
     createGithubRepo?: boolean | undefined;
 }>;
 export type ProjectInput = z.infer<typeof ProjectSchema>;

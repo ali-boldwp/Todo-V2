@@ -1,4 +1,10 @@
 import { z } from 'zod';
+const ProjectAccessAccountSchema = z.object({
+    label: z.string().min(1),
+    username: z.string().min(1),
+    password: z.string().min(1),
+    notes: z.string().optional(),
+});
 export const ProjectSchema = z.object({
     clientId: z.string().optional(),
     name: z.string().min(1),
@@ -10,5 +16,7 @@ export const ProjectSchema = z.object({
     endDate: z.string().optional(),
     githubRepoOwner: z.string().optional(),
     githubRepoName: z.string().optional(),
+    devWebsiteUrl: z.string().url().optional().or(z.literal('')),
+    accessAccounts: z.array(ProjectAccessAccountSchema).optional(),
     createGithubRepo: z.boolean().optional(),
 });

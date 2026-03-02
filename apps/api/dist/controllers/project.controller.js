@@ -9,6 +9,15 @@ const GithubConfig_1 = __importDefault(require("../models/GithubConfig"));
 const User_1 = __importDefault(require("../models/User"));
 const project_schema_1 = require("@devmanager/shared/dist/project.schema");
 const socket_1 = require("../socket");
+const ACCESS_FIELD_KEYS = ['devWebsiteUrl', 'accessAccounts'];
+const hasProjectAccessFieldInPayload = (payload) => ACCESS_FIELD_KEYS.some((key) => Object.prototype.hasOwnProperty.call(payload || {}, key));
+const sanitizeProjectForViewer = (project, role) => {
+    const obj = typeof project?.toObject === 'function' ? project.toObject() : project;
+    if (role === 'admin')
+        return obj;
+    const { devWebsiteUrl, accessAccounts, ...rest } = obj || {};
+    return rest;
+};
 const getProjects = async (req, res) => {
     try {
         const query = {};
@@ -22,7 +31,7 @@ const getProjects = async (req, res) => {
             }
         }
         const projects = await Project_1.default.find(query).populate('clientId', 'name');
-        res.json(projects);
+        res.json(projects.map((project) => sanitizeProjectForViewer(project, req.user.role)));
     }
     catch (error) {
         res.status(500).json({ message: 'Server error' });
@@ -98,7 +107,7 @@ const getProject = async (req, res) => {
             .populate('documents.uploadedBy', 'firstName lastName email');
         if (!project)
             return res.status(404).json({ message: 'Project not found' });
-        res.json(project);
+        res.json(sanitizeProjectForViewer(project, req.user.role));
     }
     catch (error) {
         res.status(500).json({ message: 'Server error' });
@@ -107,6 +116,9 @@ const getProject = async (req, res) => {
 exports.getProject = getProject;
 const updateProject = async (req, res) => {
     try {
+        if (req.user.role !== 'admin' && hasProjectAccessFieldInPayload(req.body || {})) {
+            return res.status(403).json({ message: 'Only admin can update project access credentials' });
+        }
         const validated = project_schema_1.ProjectSchema.partial().parse(req.body);
         let githubRepoOwner = validated.githubRepoOwner;
         let githubRepoName = validated.githubRepoName;
@@ -150,7 +162,7 @@ const updateProject = async (req, res) => {
         const project = await Project_1.default.findByIdAndUpdate(req.params.id, updateData, { new: true });
         if (!project)
             return res.status(404).json({ message: 'Project not found' });
-        res.json(project);
+        res.json(sanitizeProjectForViewer(project, req.user.role));
     }
     catch (error) {
         if (error.issues)

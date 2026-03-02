@@ -55,7 +55,10 @@ const createComment = async (req, res) => {
             }
             await task.save();
             if (task.projectId) {
-                (0, socket_1.emitToProject)(task.projectId.toString(), 'task:updated', task);
+                (0, socket_1.emitToProject)(task.projectId.toString(), 'task:updated', {
+                    _id: task._id,
+                    projectId: task.projectId,
+                });
             }
         }
         const populated = await comment.populate('userId', 'firstName lastName email role');

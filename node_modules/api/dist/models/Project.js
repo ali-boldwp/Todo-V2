@@ -46,6 +46,13 @@ const ProjectSchema = new mongoose_1.Schema({
     members: [{ type: mongoose_1.Schema.Types.ObjectId, ref: 'User' }],
     githubRepoOwner: { type: String },
     githubRepoName: { type: String },
+    devWebsiteUrl: { type: String },
+    accessAccounts: [{
+            label: { type: String, required: true },
+            username: { type: String, required: true },
+            password: { type: String, required: true },
+            notes: { type: String },
+        }],
     documents: [{
             title: { type: String, required: true },
             description: { type: String },

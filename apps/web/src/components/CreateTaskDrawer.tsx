@@ -388,6 +388,7 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
         : 0;
     const totalWorkedSeconds = baseWorkedSeconds + runningSeconds;
     const isUnderVerification = verificationStatus === 'pending' || status === 'under_verification';
+    const isInProgressWithoutVisibleWorker = status === 'in_progress' && !activeWorker;
     const verifierId = verifier?._id || verifier;
     const canVerifyInDrawer =
         !!task &&
@@ -790,6 +791,10 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
                                         isUnderVerification ? (
                                             <span className="px-3 py-1.5 text-xs font-semibold text-violet-700 bg-violet-50 rounded-md">
                                                 Under Verification
+                                            </span>
+                                        ) : isInProgressWithoutVisibleWorker ? (
+                                            <span className="px-3 py-1.5 text-xs font-semibold text-blue-700 bg-blue-50 rounded-md">
+                                                In Progress
                                             </span>
                                         ) : (
                                         <button
