@@ -21,6 +21,41 @@ export const deleteTask = async (id: string) => {
     return response.data;
 };
 
+export const startTaskWork = async (id: string) => {
+    const response = await api.post(`/tasks/${id}/start`);
+    return response.data;
+};
+
+export const stopTaskWork = async (id: string) => {
+    const response = await api.post(`/tasks/${id}/stop`);
+    return response.data;
+};
+
+export const pauseTaskWork = async (id: string) => {
+    const response = await api.post(`/tasks/${id}/pause`);
+    return response.data;
+};
+
+export const resumeTaskWork = async (id: string) => {
+    const response = await api.post(`/tasks/${id}/resume`);
+    return response.data;
+};
+
+export const finishTaskWork = async (id: string) => {
+    const response = await api.post(`/tasks/${id}/finish`);
+    return response.data;
+};
+
+export const approveTaskVerification = async (id: string, comment?: string) => {
+    const response = await api.post(`/tasks/${id}/verify/approve`, { comment });
+    return response.data;
+};
+
+export const rejectTaskVerification = async (id: string, comment?: string) => {
+    const response = await api.post(`/tasks/${id}/verify/reject`, { comment });
+    return response.data;
+};
+
 export const uploadAttachment = async (
     taskId: string,
     file: File

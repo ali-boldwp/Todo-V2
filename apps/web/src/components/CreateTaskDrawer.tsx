@@ -1,21 +1,18 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import Drawer from './Drawer';
-<<<<<<< HEAD
 import RichTextEditor, { RichTextEditorRef } from './RichTextEditor';
-=======
-import RichTextEditor from './RichTextEditor';
 import TaskDetailsDrawer from './TaskDetailsDrawer';
->>>>>>> 40b95f57c2e7f127a17bdceac71ec8de09c9d65b
 import TaskComments from './TaskComments';
 import clsx from 'clsx';
 import { getProjects } from '../services/core';
-import { createTask, updateTask, uploadAttachment, deleteAttachment } from '../services/task';
+import { createTask, updateTask, uploadAttachment, deleteAttachment, startTaskWork, pauseTaskWork, resumeTaskWork, finishTaskWork, approveTaskVerification, rejectTaskVerification } from '../services/task';
 import { useAuth } from '../context/AuthContext';
 import {
     Flag,
     CheckCircle2,
     Folder,
+    GitBranch,
     Save,
     AlertCircle,
     Info,
@@ -66,9 +63,34 @@ const STATUS_OPTIONS = [
     { value: 'in_progress', label: 'In Progress', color: 'text-blue-500' },
     { value: 'review', label: 'Review', color: 'text-amber-500' },
     { value: 'done', label: 'Done', color: 'text-green-500' },
+    { value: 'under_verification', label: 'Under Verification', color: 'text-violet-600' },
     { value: 'clarification', label: 'Clarification', color: 'text-red-500' },
     { value: 'clarified', label: 'Clarified', color: 'text-emerald-500' },
 ];
+
+const STATUS_BADGE_STYLES: Record<string, string> = {
+    todo: 'bg-gray-100 text-gray-700 border-gray-200',
+    in_progress: 'bg-blue-50 text-blue-700 border-blue-100',
+    review: 'bg-amber-50 text-amber-700 border-amber-100',
+    done: 'bg-green-50 text-green-700 border-green-100',
+    under_verification: 'bg-violet-50 text-violet-700 border-violet-100',
+    clarification: 'bg-red-50 text-red-700 border-red-100',
+    clarified: 'bg-emerald-50 text-emerald-700 border-emerald-100',
+};
+
+const VERIFICATION_LABELS: Record<string, string> = {
+    none: 'Not Sent',
+    pending: 'Pending',
+    approved: 'Approved',
+    rejected: 'Rejected',
+};
+
+const VERIFICATION_BADGE_STYLES: Record<string, string> = {
+    none: 'bg-gray-100 text-gray-700 border-gray-200',
+    pending: 'bg-amber-50 text-amber-700 border-amber-100',
+    approved: 'bg-green-50 text-green-700 border-green-100',
+    rejected: 'bg-red-50 text-red-700 border-red-100',
+};
 
 const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, task, initialProjectId }) => {
     const { user } = useAuth();
@@ -86,6 +108,17 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
     const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
     const [editorInstanceKey, setEditorInstanceKey] = useState(0);
     const [isClarificationDrawerOpen, setIsClarificationDrawerOpen] = useState(false);
+    const [activeWorker, setActiveWorker] = useState<any>(task?.activeWorkerId || null);
+    const [githubBranch, setGithubBranch] = useState<string>(task?.githubBranch || '');
+    const [verifier, setVerifier] = useState<any>(task?.verifierId || null);
+    const [verificationStatus, setVerificationStatus] = useState<string>(task?.verificationStatus || 'none');
+    const [verificationComment, setVerificationComment] = useState<string>(task?.verificationComment || '');
+    const [lastWorkStartedAt, setLastWorkStartedAt] = useState<string | null>(task?.lastWorkStartedAt || null);
+    const [isWorkPaused, setIsWorkPaused] = useState<boolean>(!!task?.isWorkPaused);
+    const [baseWorkedSeconds, setBaseWorkedSeconds] = useState<number>(Number(task?.totalWorkedSeconds || 0));
+    const [, setTick] = useState(0);
+    const [isFinishConfirmOpen, setIsFinishConfirmOpen] = useState(false);
+    const [verificationNotify, setVerificationNotify] = useState<{ name: string; email?: string } | null>(null);
 
     // Track whether we've just loaded (to avoid auto-saving on initial populate)
     const isInitialized = useRef(false);
@@ -98,6 +131,7 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
         queryFn: getProjects,
         enabled: isOpen,
     });
+    const selectedProject = projects?.find((p: any) => p._id === projectId);
 
     useEffect(() => {
         isInitialized.current = false;
@@ -110,6 +144,14 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
             setNeedsClarification(task.needsClarification || false);
             setLocalAttachments(task.attachments || []);
             setPendingAttachments([]);
+            setActiveWorker(task.activeWorkerId || null);
+            setGithubBranch(task.githubBranch || '');
+            setVerifier(task.verifierId || null);
+            setVerificationStatus(task.verificationStatus || 'none');
+            setVerificationComment(task.verificationComment || '');
+            setLastWorkStartedAt(task.lastWorkStartedAt || null);
+            setIsWorkPaused(!!task.isWorkPaused);
+            setBaseWorkedSeconds(Number(task.totalWorkedSeconds || 0));
         } else {
             setTitle('');
             setStatus('todo');
@@ -119,6 +161,14 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
             setNeedsClarification(false);
             setLocalAttachments([]);
             setPendingAttachments([]);
+            setActiveWorker(null);
+            setGithubBranch('');
+            setVerifier(null);
+            setVerificationStatus('none');
+            setVerificationComment('');
+            setLastWorkStartedAt(null);
+            setIsWorkPaused(false);
+            setBaseWorkedSeconds(0);
         }
         setEditorInstanceKey((k) => k + 1);
         setSaveStatus('idle');
@@ -127,6 +177,12 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
         const t = setTimeout(() => { isInitialized.current = true; }, 1000);
         return () => clearTimeout(t);
     }, [task, initialProjectId, isOpen]);
+
+    useEffect(() => {
+        if (!activeWorker || isWorkPaused || !lastWorkStartedAt) return;
+        const interval = setInterval(() => setTick((v) => v + 1), 1000);
+        return () => clearInterval(interval);
+    }, [activeWorker, isWorkPaused, lastWorkStartedAt]);
 
     // --- Create mutation (manual save, closes drawer) ---
     const createMutation = useMutation({
@@ -219,6 +275,131 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
         },
     });
 
+    const applyWorkState = (updatedTask: any) => {
+        setActiveWorker(updatedTask.activeWorkerId || null);
+        setGithubBranch(updatedTask.githubBranch || '');
+        setVerifier(updatedTask.verifierId || null);
+        setVerificationStatus(updatedTask.verificationStatus || 'none');
+        setVerificationComment(updatedTask.verificationComment || '');
+        setLastWorkStartedAt(updatedTask.lastWorkStartedAt || null);
+        setIsWorkPaused(!!updatedTask.isWorkPaused);
+        setBaseWorkedSeconds(Number(updatedTask.totalWorkedSeconds || 0));
+        if (updatedTask.status) setStatus(updatedTask.status);
+    };
+
+    const startWorkMutation = useMutation({
+        mutationFn: () => {
+            if (!task?._id) return Promise.reject(new Error('No task selected'));
+            return startTaskWork(task._id);
+        },
+        onSuccess: (updatedTask) => {
+            queryClient.invalidateQueries({ queryKey: ['tasks'] });
+            applyWorkState(updatedTask);
+        },
+        onError: (error: any) => {
+            alert(error?.response?.data?.message || 'Failed to start task');
+        },
+    });
+
+    const pauseWorkMutation = useMutation({
+        mutationFn: () => {
+            if (!task?._id) return Promise.reject(new Error('No task selected'));
+            return pauseTaskWork(task._id);
+        },
+        onSuccess: (updatedTask) => {
+            queryClient.invalidateQueries({ queryKey: ['tasks'] });
+            applyWorkState(updatedTask);
+        },
+        onError: (error: any) => {
+            alert(error?.response?.data?.message || 'Failed to pause task');
+        },
+    });
+
+    const resumeWorkMutation = useMutation({
+        mutationFn: () => {
+            if (!task?._id) return Promise.reject(new Error('No task selected'));
+            return resumeTaskWork(task._id);
+        },
+        onSuccess: (updatedTask) => {
+            queryClient.invalidateQueries({ queryKey: ['tasks'] });
+            applyWorkState(updatedTask);
+        },
+        onError: (error: any) => {
+            alert(error?.response?.data?.message || 'Failed to resume task');
+        },
+    });
+
+    const finishWorkMutation = useMutation({
+        mutationFn: () => {
+            if (!task?._id) return Promise.reject(new Error('No task selected'));
+            return finishTaskWork(task._id);
+        },
+        onSuccess: (updatedTask) => {
+            queryClient.invalidateQueries({ queryKey: ['tasks'] });
+            applyWorkState(updatedTask);
+            const assignedVerifier = updatedTask?.verifierId;
+            const fullName = assignedVerifier
+                ? `${assignedVerifier.firstName || ''} ${assignedVerifier.lastName || ''}`.trim() || assignedVerifier.email || ''
+                : '';
+            if ((updatedTask?.verificationStatus === 'pending' || updatedTask?.status === 'under_verification') && fullName) {
+                setVerificationNotify({
+                    name: fullName,
+                    email: assignedVerifier?.email || undefined,
+                });
+            }
+        },
+        onError: (error: any) => {
+            alert(error?.response?.data?.message || 'Failed to finish task');
+        },
+    });
+
+    const confirmAndFinishTask = () => setIsFinishConfirmOpen(true);
+
+    const approveVerificationMutation = useMutation({
+        mutationFn: (comment?: string) => {
+            if (!task?._id) return Promise.reject(new Error('No task selected'));
+            return approveTaskVerification(task._id, comment);
+        },
+        onSuccess: (updatedTask) => {
+            queryClient.invalidateQueries({ queryKey: ['tasks'] });
+            applyWorkState(updatedTask);
+        },
+        onError: (error: any) => {
+            alert(error?.response?.data?.message || 'Failed to approve task');
+        },
+    });
+
+    const rejectVerificationMutation = useMutation({
+        mutationFn: (comment?: string) => {
+            if (!task?._id) return Promise.reject(new Error('No task selected'));
+            return rejectTaskVerification(task._id, comment);
+        },
+        onSuccess: (updatedTask) => {
+            queryClient.invalidateQueries({ queryKey: ['tasks'] });
+            applyWorkState(updatedTask);
+        },
+        onError: (error: any) => {
+            alert(error?.response?.data?.message || 'Failed to reject task');
+        },
+    });
+
+    const runningSeconds = activeWorker && !isWorkPaused && lastWorkStartedAt
+        ? Math.max(0, Math.floor((Date.now() - new Date(lastWorkStartedAt).getTime()) / 1000))
+        : 0;
+    const totalWorkedSeconds = baseWorkedSeconds + runningSeconds;
+    const isUnderVerification = verificationStatus === 'pending' || status === 'under_verification';
+    const verifierId = verifier?._id || verifier;
+    const canVerifyInDrawer =
+        !!task &&
+        verificationStatus === 'pending' &&
+        (verifierId === user?.id || ['admin', 'manager'].includes(user?.role || ''));
+    const formatDuration = (seconds: number) => {
+        const h = Math.floor(seconds / 3600).toString().padStart(2, '0');
+        const m = Math.floor((seconds % 3600) / 60).toString().padStart(2, '0');
+        const s = Math.floor(seconds % 60).toString().padStart(2, '0');
+        return `${h}:${m}:${s}`;
+    };
+
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
@@ -289,14 +470,9 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
 
                         <div className="min-h-0 text-gray-700 leading-none py-0 my-0">
                             <RichTextEditor
-<<<<<<< HEAD
                                 ref={editorRef}
-                                key={task?._id || 'new-task'}
-                                holder={task ? `editor-${task._id}` : 'new-task-editor'}
-=======
                                 key={`${task?._id || 'new-task'}-${editorInstanceKey}`}
                                 holder={task ? `editor-${task._id}-${editorInstanceKey}` : `new-task-editor-${editorInstanceKey}`}
->>>>>>> 40b95f57c2e7f127a17bdceac71ec8de09c9d65b
                                 data={description}
                                 onChange={setDescription}
                                 placeholder="Add description..."
@@ -358,15 +534,9 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
                                     <CheckCircle2 className="w-3.5 h-3.5" />
                                     <span>Status</span>
                                 </div>
-                                <select
-                                    value={status}
-                                    onChange={(e) => setStatus(e.target.value)}
-                                    className="flex-1 bg-transparent border-none p-0 text-[13px] font-medium text-gray-900 focus:ring-0 cursor-pointer"
-                                >
-                                    {STATUS_OPTIONS.map(opt => (
-                                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                                    ))}
-                                </select>
+                                <div className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${STATUS_BADGE_STYLES[status] || STATUS_BADGE_STYLES.todo}`}>
+                                    {STATUS_OPTIONS.find((opt) => opt.value === status)?.label || status}
+                                </div>
                             </div>
 
                             {/* Priority */}
@@ -375,15 +545,9 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
                                     <Flag className="w-3.5 h-3.5" />
                                     <span>Priority</span>
                                 </div>
-                                <select
-                                    value={priority}
-                                    onChange={(e) => setPriority(e.target.value)}
-                                    className="flex-1 bg-transparent border-none p-0 text-[13px] font-medium text-gray-900 focus:ring-0 cursor-pointer"
-                                >
-                                    {PRIORITY_OPTIONS.map(opt => (
-                                        <option key={opt.value} value={opt.value}>{opt.label}</option>
-                                    ))}
-                                </select>
+                                <div className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${PRIORITY_OPTIONS.find((opt) => opt.value === priority)?.bg || 'bg-gray-100'} ${PRIORITY_OPTIONS.find((opt) => opt.value === priority)?.color || 'text-gray-700'}`}>
+                                    {PRIORITY_OPTIONS.find((opt) => opt.value === priority)?.label || priority}
+                                </div>
                             </div>
 
                             {/* Project */}
@@ -392,17 +556,54 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
                                     <Folder className="w-3.5 h-3.5" />
                                     <span>Project</span>
                                 </div>
-                                <select
-                                    value={projectId}
-                                    onChange={(e) => setProjectId(e.target.value)}
-                                    className="flex-1 bg-transparent border-none p-0 text-[13px] font-medium text-gray-900 focus:ring-0 cursor-pointer"
-                                >
-                                    <option value="" disabled>Select Project</option>
-                                    {projects?.map((p: any) => (
-                                        <option key={p._id} value={p._id}>{p.name}</option>
-                                    ))}
-                                </select>
+                                <div className="text-[13px] font-medium text-gray-900">
+                                    {selectedProject?.name || 'Not set'}
+                                </div>
                             </div>
+
+                            {githubBranch && (
+                                <div className="group flex items-center min-h-[28px] hover:bg-gray-50 rounded-md px-1 transition-colors">
+                                    <div className="w-24 flex items-center space-x-2 text-[13px] text-gray-500">
+                                        <GitBranch className="w-3.5 h-3.5" />
+                                        <span>Branch</span>
+                                    </div>
+                                    <code
+                                        className="text-[12px] font-mono bg-gray-100 text-indigo-700 px-2 py-0.5 rounded cursor-pointer hover:bg-indigo-50 transition-colors"
+                                        onClick={() => navigator.clipboard.writeText(githubBranch)}
+                                        title="Click to copy branch name"
+                                    >
+                                        {githubBranch}
+                                    </code>
+                                </div>
+                            )}
+
+                            {task && (
+                                <div className="group flex items-center min-h-[28px] hover:bg-gray-50 rounded-md px-1 transition-colors">
+                                    <div className="w-24 flex items-center space-x-2 text-[13px] text-gray-500">
+                                        <CheckCircle2 className="w-3.5 h-3.5" />
+                                        <span>Tester</span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[13px] font-medium text-gray-900">
+                                            {verifier ? `${verifier.firstName || ''} ${verifier.lastName || ''}`.trim() || verifier.email : 'Not assigned'}
+                                        </span>
+                                        <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${VERIFICATION_BADGE_STYLES[verificationStatus] || VERIFICATION_BADGE_STYLES.none}`}>
+                                            {VERIFICATION_LABELS[verificationStatus] || verificationStatus}
+                                        </span>
+                                    </div>
+                                </div>
+                            )}
+
+                            {task && verificationStatus === 'rejected' && (
+                                <div className="rounded-md border border-red-100 bg-red-50 px-3 py-2">
+                                    <p className="text-[11px] font-bold uppercase tracking-wider text-red-700">Rejection Note</p>
+                                    <p className="mt-1 text-xs text-red-800">
+                                        {verificationComment?.trim()
+                                            ? verificationComment
+                                            : 'Task was rejected without a written reason.'}
+                                    </p>
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -528,12 +729,91 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
                                 </span>
                             )}
                         </div>
-                        <button
-                            onClick={onClose}
-                            className="px-4 py-1.5 text-sm font-medium text-gray-500 hover:text-gray-900 rounded-md transition-all"
-                        >
-                            Close
-                        </button>
+                        <div className="flex items-center space-x-2">
+                            {canVerifyInDrawer && (
+                                <>
+                                    <button
+                                        onClick={() => {
+                                            const comment = window.prompt('Approval note (optional):') || undefined;
+                                            approveVerificationMutation.mutate(comment);
+                                        }}
+                                        disabled={approveVerificationMutation.isPending}
+                                        className="px-4 py-1.5 text-sm font-semibold text-green-700 hover:bg-green-50 rounded-md transition-all disabled:opacity-50"
+                                    >
+                                        {approveVerificationMutation.isPending ? 'Approving...' : 'Approve'}
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            const comment = window.prompt('Rejection reason (optional):') || undefined;
+                                            rejectVerificationMutation.mutate(comment);
+                                        }}
+                                        disabled={rejectVerificationMutation.isPending}
+                                        className="px-4 py-1.5 text-sm font-semibold text-red-700 hover:bg-red-50 rounded-md transition-all disabled:opacity-50"
+                                    >
+                                        {rejectVerificationMutation.isPending ? 'Rejecting...' : 'Reject'}
+                                    </button>
+                                </>
+                            )}
+                            {['admin', 'manager', 'member'].includes(user?.role || '') && (
+                                <>
+                                    <span className="px-3 py-1.5 text-xs font-semibold text-gray-600 bg-gray-50 rounded-md">
+                                        Time: {formatDuration(totalWorkedSeconds)}
+                                    </span>
+                                    {activeWorker?._id === user?.id ? (
+                                        <>
+                                            {isWorkPaused ? (
+                                                <button
+                                                    onClick={() => resumeWorkMutation.mutate()}
+                                                    disabled={resumeWorkMutation.isPending}
+                                                    className="px-4 py-1.5 text-sm font-semibold text-green-700 hover:bg-green-50 rounded-md transition-all disabled:opacity-50"
+                                                >
+                                                    {resumeWorkMutation.isPending ? 'Resuming...' : 'Resume'}
+                                                </button>
+                                            ) : (
+                                                <button
+                                                    onClick={() => pauseWorkMutation.mutate()}
+                                                    disabled={pauseWorkMutation.isPending}
+                                                    className="px-4 py-1.5 text-sm font-semibold text-amber-700 hover:bg-amber-50 rounded-md transition-all disabled:opacity-50"
+                                                >
+                                                    {pauseWorkMutation.isPending ? 'Pausing...' : 'Pause'}
+                                                </button>
+                                            )}
+                                            <button
+                                                onClick={confirmAndFinishTask}
+                                                disabled={finishWorkMutation.isPending}
+                                                className="px-4 py-1.5 text-sm font-semibold text-blue-700 hover:bg-blue-50 rounded-md transition-all disabled:opacity-50"
+                                            >
+                                                {finishWorkMutation.isPending ? 'Finishing...' : 'Finish'}
+                                            </button>
+                                        </>
+                                    ) : !activeWorker ? (
+                                        isUnderVerification ? (
+                                            <span className="px-3 py-1.5 text-xs font-semibold text-violet-700 bg-violet-50 rounded-md">
+                                                Under Verification
+                                            </span>
+                                        ) : (
+                                        <button
+                                            onClick={() => startWorkMutation.mutate()}
+                                            disabled={startWorkMutation.isPending}
+                                            className="px-4 py-1.5 text-sm font-semibold text-green-700 hover:bg-green-50 rounded-md transition-all disabled:opacity-50"
+                                        >
+                                            {startWorkMutation.isPending ? 'Starting...' : 'Start'}
+                                        </button>
+                                        )
+                                    ) : (
+                                        <span className="px-3 py-1.5 text-xs font-semibold text-gray-500 bg-gray-50 rounded-md">
+                                            {isWorkPaused ? 'Paused by' : 'Working:'} {activeWorker.firstName} {activeWorker.lastName}
+                                        </span>
+                                    )}
+                                </>
+                            )}
+                            <button
+                                onClick={onClose}
+                                className="px-4 py-1.5 text-sm font-medium text-gray-500 hover:text-gray-900 rounded-md transition-all"
+                            >
+                                Close
+                            </button>
+                        </div>
                     </>
                 ) : (
                     // ── Create mode: Cancel + Create button ──
@@ -558,6 +838,83 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
                     </>
                 )}
             </div>
+
+            {isFinishConfirmOpen && (
+                <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-xl w-full max-w-md p-6 shadow-xl border border-gray-100">
+                        <h3 className="text-lg font-bold text-gray-900">Before Finishing Task</h3>
+                        <p className="text-sm text-gray-600 mt-2">
+                            Confirm that you have pushed your latest code to GitHub.
+                        </p>
+                        {githubBranch && (
+                            <div className="mt-3 px-3 py-2 rounded-md bg-indigo-50 border border-indigo-100 text-xs text-indigo-800 font-medium">
+                                Branch: <span className="font-mono">{githubBranch}</span>
+                            </div>
+                        )}
+                        <div className="mt-5 flex gap-2 justify-end">
+                            <button
+                                onClick={() => setIsFinishConfirmOpen(false)}
+                                className="px-4 py-2 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setIsFinishConfirmOpen(false);
+                                    finishWorkMutation.mutate();
+                                }}
+                                disabled={finishWorkMutation.isPending}
+                                className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                            >
+                                {finishWorkMutation.isPending ? 'Finishing...' : 'Yes, Finish Task'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {verificationNotify && (
+                <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-xl w-full max-w-lg p-6 shadow-xl border border-amber-200">
+                        <div className="flex items-start gap-3">
+                            <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+                                <AlertCircle className="w-5 h-5 text-amber-600" />
+                            </div>
+                            <div className="flex-1">
+                                <h3 className="text-lg font-bold text-gray-900">Action Required</h3>
+                                <p className="text-sm text-gray-700 mt-1">
+                                    Inform <span className="font-semibold">{verificationNotify.name}</span> about verification for this task.
+                                </p>
+                                <p className="text-xs text-gray-500 mt-1">
+                                    Task is now under verification and waiting for tester decision.
+                                </p>
+                            </div>
+                        </div>
+                        {verificationNotify.email && (
+                            <div className="mt-4 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2 flex items-center justify-between">
+                                <span className="text-xs text-gray-700">{verificationNotify.email}</span>
+                                <button
+                                    onClick={() => navigator.clipboard.writeText(verificationNotify.email || '')}
+                                    className="text-xs font-semibold text-indigo-600 hover:text-indigo-700"
+                                >
+                                    Copy Email
+                                </button>
+                            </div>
+                        )}
+                        <p className="text-[11px] text-gray-400 mt-3">
+                            Suggested message: "Please verify this task now."
+                        </p>
+                        <div className="mt-5 flex justify-end">
+                            <button
+                                onClick={() => setVerificationNotify(null)}
+                                className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+                            >
+                                OK
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </Drawer>
     );
 };

@@ -6,6 +6,9 @@ const auth_1 = require("../middleware/auth");
 const team_controller_1 = require("../controllers/team.controller");
 const router = (0, express_1.Router)();
 router.post('/login', auth_controller_1.login);
+router.get('/github/setup/callback', auth_controller_1.handleGithubSetupCallback);
+router.get('/github/setup/url', auth_1.authenticate, auth_controller_1.getGithubSetupUrl);
+router.get('/github/setup/status', auth_1.authenticate, auth_controller_1.getGithubSetupStatus);
 // Admin-only team member management
 router.get('/team-members', auth_1.authenticate, auth_1.requireAdmin, team_controller_1.getTeamMembers);
 router.post('/team-members', auth_1.authenticate, auth_1.requireAdmin, team_controller_1.createTeamMember);

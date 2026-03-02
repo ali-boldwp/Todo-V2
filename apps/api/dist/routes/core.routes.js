@@ -6,6 +6,7 @@ const project_controller_1 = require("../controllers/project.controller");
 const auth_1 = require("../middleware/auth");
 const router = (0, express_1.Router)();
 router.use(auth_1.authenticate);
+router.use(auth_1.requireGithubSetupForTeamMembers);
 router.get('/clients', client_controller_1.getClients);
 router.post('/clients', client_controller_1.createClient);
 router.get('/projects', project_controller_1.getProjects);

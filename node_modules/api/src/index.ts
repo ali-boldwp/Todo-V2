@@ -1,10 +1,13 @@
 import dotenv from 'dotenv';
 import http from 'http';
+import path from 'path';
 import app, { logger, allowedOrigins } from './app';
 import { connectDB } from './config/db';
 import { initSocket } from './socket';
 
-dotenv.config();
+// Prefer API-local .env in monorepo workspace runs, then fall back to repo root .env.
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
+dotenv.config({ path: path.resolve(__dirname, '../../../.env') });
 
 const PORT = process.env.PORT || 3001;
 

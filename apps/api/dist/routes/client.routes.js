@@ -8,6 +8,7 @@ const auth_1 = require("../middleware/auth");
 const client_controller_1 = require("../controllers/client.controller");
 const router = express_1.default.Router();
 router.use(auth_1.authenticate);
+router.use(auth_1.requireGithubSetupForTeamMembers);
 router.get('/', (0, auth_1.authorize)(['admin', 'manager']), client_controller_1.getClients);
 router.post('/', (0, auth_1.authorize)(['admin', 'manager']), client_controller_1.createClient);
 router.get('/:id', (0, auth_1.authorize)(['admin', 'manager']), client_controller_1.getClient);

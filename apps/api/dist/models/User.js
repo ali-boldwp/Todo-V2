@@ -36,6 +36,11 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose_1 = __importStar(require("mongoose"));
 const UserSchema = new mongoose_1.Schema({
     email: { type: String, required: true, unique: true },
+    githubUsername: { type: String },
+    githubUserId: { type: String },
+    githubProfileUrl: { type: String },
+    githubConnectedAt: { type: Date },
+    canVerifyTasks: { type: Boolean, default: false },
     passwordHash: { type: String, required: true },
     role: { type: String, enum: ['admin', 'manager', 'member', 'client'], default: 'member' },
     clientId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Client' },

@@ -10,6 +10,7 @@ import {
 import {
     UserPlus, MoreVertical, Shield, ShieldOff, KeyRound, Trash2, X, Eye, EyeOff,
 } from 'lucide-react';
+import Switch from '../components/Switch';
 
 const ROLE_STYLES: Record<string, string> = {
     admin: 'bg-purple-100 text-purple-700',
@@ -35,6 +36,7 @@ const Team = () => {
     const [pwModal, setPwModal] = useState<{ isOpen: boolean; password?: string }>({ isOpen: false });
     const [showPw, setShowPw] = useState(false);
     const [formError, setFormError] = useState('');
+    const [testerFilter, setTesterFilter] = useState<'all' | 'eligible'>('all');
 
     const { data: members = [], isLoading } = useQuery({
         queryKey: ['team-members'],
@@ -70,7 +72,7 @@ const Team = () => {
     });
 
     // Form state
-    const [form, setForm] = useState({ firstName: '', lastName: '', email: '', password: '', role: 'member' as 'manager' | 'member' });
+    const [form, setForm] = useState({ firstName: '', lastName: '', email: '', githubUsername: '', canVerifyTasks: false, password: '', role: 'member' as 'manager' | 'member' });
     const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
         setForm(f => ({ ...f, [e.target.name]: e.target.value }));
     const handleSubmit = (e: React.FormEvent) => {
@@ -78,6 +80,10 @@ const Team = () => {
         setFormError('');
         createMutation.mutate(form);
     };
+
+    const displayedMembers = testerFilter === 'eligible'
+        ? members.filter((m: any) => !!m.canVerifyTasks)
+        : members;
 
     if (isLoading) return <div className="p-8 text-gray-400 text-sm">Loading team...</div>;
 
@@ -87,10 +93,33 @@ const Team = () => {
             <div className="flex items-center justify-between mb-8">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900">Team</h1>
-                    <p className="text-sm text-gray-500 mt-1">{members.length} member{members.length !== 1 ? 's' : ''}</p>
+                    <p className="text-sm text-gray-500 mt-1">
+                        {displayedMembers.length} member{displayedMembers.length !== 1 ? 's' : ''}
+                        {testerFilter === 'eligible' && <span> (can test)</span>}
+                    </p>
+                    <div className="mt-2 flex items-center gap-2">
+                        <button
+                            onClick={() => setTesterFilter('all')}
+                            className={`px-2.5 py-1 text-xs font-semibold rounded-full border transition-colors ${testerFilter === 'all'
+                                ? 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                                : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                                }`}
+                        >
+                            All
+                        </button>
+                        <button
+                            onClick={() => setTesterFilter('eligible')}
+                            className={`px-2.5 py-1 text-xs font-semibold rounded-full border transition-colors ${testerFilter === 'eligible'
+                                ? 'bg-green-50 text-green-700 border-green-200'
+                                : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                                }`}
+                        >
+                            Can Test
+                        </button>
+                    </div>
                 </div>
                 <button
-                    onClick={() => { setIsModalOpen(true); setFormError(''); setForm({ firstName: '', lastName: '', email: '', password: '', role: 'member' }); }}
+                    onClick={() => { setIsModalOpen(true); setFormError(''); setForm({ firstName: '', lastName: '', email: '', githubUsername: '', canVerifyTasks: false, password: '', role: 'member' }); }}
                     className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
                 >
                     <UserPlus className="w-4 h-4" />
@@ -105,12 +134,13 @@ const Team = () => {
                         <tr className="text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-100 bg-gray-50/60">
                             <th className="px-6 py-3 text-left">Member</th>
                             <th className="px-6 py-3 text-left">Role</th>
+                            <th className="px-6 py-3 text-left">Can Test</th>
                             <th className="px-6 py-3 text-left">Status</th>
                             <th className="px-6 py-3 text-right">Actions</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
-                        {members.map((m: any) => (
+                        {displayedMembers.map((m: any) => (
                             <tr key={m._id} className="group hover:bg-gray-50/50 transition-colors">
                                 <td className="px-6 py-3.5">
                                     <div className="flex items-center gap-3">
@@ -135,6 +165,23 @@ const Team = () => {
                                             <option value="manager">Manager</option>
                                             <option value="member">Member</option>
                                         </select>
+                                    )}
+                                </td>
+                                <td className="px-6 py-3.5">
+                                    {m.role === 'admin' ? (
+                                        <span className="text-[11px] font-semibold text-gray-400">N/A</span>
+                                    ) : (
+                                        <div className="inline-flex items-center gap-2">
+                                            <div className="scale-75 origin-left">
+                                                <Switch
+                                                    checked={!!m.canVerifyTasks}
+                                                    onChange={(checked) => updateMutation.mutate({ id: m._id, data: { canVerifyTasks: checked } })}
+                                                />
+                                            </div>
+                                            <span className={`text-[11px] font-semibold ${m.canVerifyTasks ? 'text-green-700' : 'text-gray-500'}`}>
+                                                {m.canVerifyTasks ? 'Enabled' : 'Disabled'}
+                                            </span>
+                                        </div>
                                     )}
                                 </td>
                                 <td className="px-6 py-3.5">
@@ -214,6 +261,12 @@ const Team = () => {
                                     className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                             </div>
                             <div>
+                                <label className="block text-xs font-semibold text-gray-600 mb-1">GitHub Username (optional)</label>
+                                <input name="githubUsername" value={form.githubUsername} onChange={handleFormChange}
+                                    placeholder="e.g. octocat"
+                                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                            </div>
+                            <div>
                                 <label className="block text-xs font-semibold text-gray-600 mb-1">Password</label>
                                 <div className="relative">
                                     <input name="password" type={showPw ? 'text' : 'password'} value={form.password} onChange={handleFormChange} required
@@ -231,6 +284,15 @@ const Team = () => {
                                     <option value="member">Member</option>
                                     <option value="manager">Manager</option>
                                 </select>
+                            </div>
+                            <div className="flex items-center gap-2 text-sm text-gray-700">
+                                <div className="scale-90 origin-left">
+                                    <Switch
+                                        checked={form.canVerifyTasks}
+                                        onChange={(checked) => setForm(f => ({ ...f, canVerifyTasks: checked }))}
+                                    />
+                                </div>
+                                <span>Can test/verify finished tasks</span>
                             </div>
                             {formError && <p className="text-sm text-red-500">{formError}</p>}
                             <div className="flex gap-3 pt-2">

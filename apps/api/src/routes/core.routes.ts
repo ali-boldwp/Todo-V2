@@ -1,11 +1,12 @@
 import { Router } from 'express';
 import { createClient, getClients } from '../controllers/client.controller';
 import { createProject, getProject, getProjects, updateProject, deleteProject, addProjectMember, removeProjectMember, uploadProjectDocument, deleteProjectDocument } from '../controllers/project.controller';
-import { authenticate, requireAdmin } from '../middleware/auth';
+import { authenticate, requireAdmin, requireGithubSetupForTeamMembers } from '../middleware/auth';
 
 const router = Router();
 
 router.use(authenticate);
+router.use(requireGithubSetupForTeamMembers);
 
 router.get('/clients', getClients);
 router.post('/clients', createClient);

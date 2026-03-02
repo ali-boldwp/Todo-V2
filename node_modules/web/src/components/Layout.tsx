@@ -17,6 +17,7 @@ import {
     Github,
     Briefcase,
     FileText,
+    MessageCircle,
 } from 'lucide-react';
 import Header from './Header';
 import icon from '../assets/icon.png';
@@ -72,6 +73,7 @@ const SectionHeader = ({ label }: { label: string }) => (
 const PROJECT_SUB_ITEMS = [
     { label: 'Overview', path: 'overview', icon: LayoutGrid },
     { label: 'Tasks', path: 'tasks', icon: ListTodo },
+    { label: 'Verifications', path: 'verifications', icon: CheckSquare, staffOnly: true },
     { label: 'Documents', path: 'documents', icon: FileText, adminOnly: false },
     { label: 'Backlog', path: 'backlog', icon: CheckSquare, adminOnly: false },
     { label: 'Sprints', path: 'sprints', icon: Zap, adminOnly: false },
@@ -227,6 +229,9 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
                     <SidebarItem to="/" icon={LayoutDashboard} label="Home" exact />
                     <SidebarItem to="/tasks" icon={CheckSquare} label="Your work" />
+                    {user?.role !== 'client' && (
+                        <SidebarItem to="/chat" icon={MessageCircle} label="Chat" />
+                    )}
 
                     <div className="pt-2">
                         <SectionHeader label="Projects" />

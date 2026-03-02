@@ -24,6 +24,7 @@ const attendance_routes_1 = __importDefault(require("./routes/attendance.routes"
 const payroll_routes_1 = __importDefault(require("./routes/payroll.routes"));
 const github_routes_1 = __importDefault(require("./routes/github.routes"));
 const client_routes_1 = __importDefault(require("./routes/client.routes"));
+const chat_routes_1 = __importDefault(require("./routes/chat.routes"));
 app.use((0, helmet_1.default)());
 exports.allowedOrigins = [
     'http://localhost:3000',
@@ -56,6 +57,7 @@ app.use('/api/attendance', attendance_routes_1.default);
 app.use('/api/payroll', payroll_routes_1.default);
 app.use('/api/github', github_routes_1.default);
 app.use('/api/clients', client_routes_1.default);
+app.use('/api/chat', chat_routes_1.default);
 app.get('/health', (_req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });

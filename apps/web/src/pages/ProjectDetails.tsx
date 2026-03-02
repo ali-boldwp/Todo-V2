@@ -7,6 +7,7 @@ import ProjectTasks from './ProjectTasks';
 import ProjectSettings from './ProjectSettings';
 import ProjectDocuments from './ProjectDocuments';
 import Sprints from './Sprints';
+import ProjectVerifications from './ProjectVerifications';
 import RichTextEditor from '../components/RichTextEditor';
 
 // ─── Project Overview ────────────────────────────────────────────────────────
@@ -77,6 +78,7 @@ const ProjectDetails: React.FC = () => {
                 <Route path="/" element={<ProjectOverview project={project} />} />
                 <Route path="/overview" element={<ProjectOverview project={project} />} />
                 <Route path="/tasks" element={<ProjectTasks />} />
+                <Route path="/verifications" element={<ProjectVerifications />} />
                 <Route path="/documents" element={<ProjectDocuments />} />
                 <Route path="/sprints" element={<Sprints />} />
                 <Route path="/settings" element={<ProjectSettings project={project} />} />

@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import Project from '../models/Project';
 import GithubConfig from '../models/GithubConfig';
+import User from '../models/User';
 import { ProjectSchema } from '@devmanager/shared/dist/project.schema';
 import { emitToAll } from '../socket';
 
@@ -178,16 +179,61 @@ export const addProjectMember = async (req: AuthRequest, res: Response) => {
         const { userId } = req.body;
         if (!userId) return res.status(400).json({ message: 'userId is required' });
 
+        const user = await User.findById(userId).select('githubUsername githubUserId githubConnectedAt email role');
+        if (!user) return res.status(404).json({ message: 'User not found' });
+
+        const needsGithubSetup = ['manager', 'member'].includes(user.role || '');
+        if (needsGithubSetup && (!user.githubUsername || !user.githubUserId || !user.githubConnectedAt)) {
+            return res.status(400).json({ message: 'This team member must complete GitHub setup before being assigned to projects.' });
+        }
+
         const project = await Project.findByIdAndUpdate(
             req.params.id,
             { $addToSet: { members: userId } },
             { new: true }
-        ).populate('members', 'firstName lastName email role');
+        ).populate('members', 'firstName lastName email role githubUsername');
 
         if (!project) return res.status(404).json({ message: 'Project not found' });
+
+        // Best-effort GitHub collaborator sync. Do not block assignment on GitHub errors.
+        if (project.githubRepoOwner && project.githubRepoName) {
+            const githubUsername = user.githubUsername?.trim();
+            if (githubUsername) {
+                const config = await GithubConfig.findOne();
+                if (config?.personalAccessToken) {
+                    const response = await fetch(
+                        `https://api.github.com/repos/${project.githubRepoOwner}/${project.githubRepoName}/collaborators/${encodeURIComponent(githubUsername)}`,
+                        {
+                            method: 'PUT',
+                            headers: {
+                                Authorization: `Bearer ${config.personalAccessToken}`,
+                                Accept: 'application/vnd.github.v3+json',
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ permission: 'push' })
+                        }
+                    );
+
+                    if (!response.ok) {
+                        const errorText = await response.text();
+                        console.error(
+                            `Failed to add GitHub collaborator ${githubUsername} to ${project.githubRepoOwner}/${project.githubRepoName}:`,
+                            response.status,
+                            errorText
+                        );
+                    }
+                }
+            } else {
+                console.warn(
+                    `Skipped GitHub collaborator sync for user ${user._id}: missing githubUsername`
+                );
+            }
+        }
+
         res.json(project);
         emitToAll('project:updated', project);
     } catch (error) {
+        console.error('addProjectMember error:', error);
         res.status(500).json({ message: 'Server error' });
     }
 };

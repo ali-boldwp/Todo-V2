@@ -15,3 +15,17 @@ export const getMe = async () => {
     const response = await api.get('/auth/me');
     return response.data;
 };
+
+export const getGithubSetupUrl = async () => {
+    const response = await api.get('/auth/github/setup/url');
+    return response.data as { url: string };
+};
+
+export const getGithubSetupStatus = async () => {
+    const response = await api.get('/auth/github/setup/status');
+    return response.data as {
+        githubSetupCompleted: boolean;
+        githubUsername: string | null;
+        githubConnectedAt: string | null;
+    };
+};

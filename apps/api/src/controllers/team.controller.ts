@@ -16,13 +16,16 @@ export const getTeamMembers = async (_req: AuthRequest, res: Response) => {
 
 export const createTeamMember = async (req: AuthRequest, res: Response) => {
     try {
-        const { firstName, lastName, email, password, role } = req.body;
+        const { firstName, lastName, email, password, role, githubUsername, canVerifyTasks } = req.body;
 
         if (!firstName || !lastName || !email || !password) {
             return res.status(400).json({ message: 'firstName, lastName, email, and password are required' });
         }
         if (!['manager', 'member'].includes(role)) {
             return res.status(400).json({ message: 'Role must be manager or member' });
+        }
+        if (githubUsername && !/^[a-z\d](?:[a-z\d]|-(?=[a-z\d])){0,38}$/i.test(githubUsername)) {
+            return res.status(400).json({ message: 'Invalid GitHub username format' });
         }
 
         const existing = await User.findOne({ email });
@@ -31,7 +34,16 @@ export const createTeamMember = async (req: AuthRequest, res: Response) => {
         const salt = await bcrypt.genSalt(10);
         const passwordHash = await bcrypt.hash(password, salt);
 
-        const user = await User.create({ firstName, lastName, email, passwordHash, role, isActive: true });
+        const user = await User.create({
+            firstName,
+            lastName,
+            email,
+            passwordHash,
+            role,
+            isActive: true,
+            githubUsername: githubUsername?.trim() || undefined,
+            canVerifyTasks: Boolean(canVerifyTasks)
+        });
 
         const { passwordHash: _, ...userOut } = (user as any).toObject();
         res.status(201).json(userOut);
@@ -42,10 +54,17 @@ export const createTeamMember = async (req: AuthRequest, res: Response) => {
 
 export const updateTeamMember = async (req: AuthRequest, res: Response) => {
     try {
-        const { role, isActive } = req.body;
+        const { role, isActive, githubUsername, canVerifyTasks } = req.body;
         const update: any = {};
         if (role && ['manager', 'member'].includes(role)) update.role = role;
         if (typeof isActive === 'boolean') update.isActive = isActive;
+        if (typeof canVerifyTasks === 'boolean') update.canVerifyTasks = canVerifyTasks;
+        if (typeof githubUsername === 'string') {
+            if (githubUsername && !/^[a-z\d](?:[a-z\d]|-(?=[a-z\d])){0,38}$/i.test(githubUsername)) {
+                return res.status(400).json({ message: 'Invalid GitHub username format' });
+            }
+            update.githubUsername = githubUsername.trim() || undefined;
+        }
 
         const user = await User.findByIdAndUpdate(req.params.id, update, { new: true }).select('-passwordHash');
         if (!user) return res.status(404).json({ message: 'User not found' });

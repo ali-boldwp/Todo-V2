@@ -34,6 +34,7 @@ const STATUS_ICONS: any = {
     in_progress: <PlayCircle className="w-4 h-4 text-blue-500" />,
     review: <Clock className="w-4 h-4 text-amber-500" />,
     done: <CheckCircle2 className="w-4 h-4 text-green-500" />,
+    under_verification: <CheckCircle2 className="w-4 h-4 text-violet-600" />,
     clarification: <Info className="w-4 h-4 text-red-500" />,
     clarified: <CheckCircle2 className="w-4 h-4 text-emerald-500" />,
 };
@@ -43,6 +44,7 @@ const STATUS_LABELS: any = {
     in_progress: 'In Progress',
     review: 'Review',
     done: 'Done',
+    under_verification: 'Under Verification',
     clarification: 'Clarification',
     clarified: 'Clarified',
 };
@@ -52,6 +54,7 @@ const STATUS_BADGES: any = {
     in_progress: 'bg-blue-50 text-blue-700 border-blue-100',
     review: 'bg-amber-50 text-amber-700 border-amber-100',
     done: 'bg-green-50 text-green-700 border-green-100',
+    under_verification: 'bg-violet-50 text-violet-700 border-violet-100',
     clarification: 'bg-red-50 text-red-700 border-red-100',
     clarified: 'bg-blue-50 text-blue-700 border-blue-100',
 };
@@ -145,13 +148,14 @@ const ProjectTasks: React.FC = () => {
                             </th>
                             <th className="px-6 py-3 border-b border-gray-100">Status</th>
                             <th className="px-6 py-3 border-b border-gray-100">Priority</th>
+                            <th className="px-6 py-3 border-b border-gray-100">Working</th>
                             <th className="px-6 py-3 border-b border-gray-100 text-right pr-12">Action</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
                         {filteredTasks?.length === 0 ? (
                             <tr>
-                                <td colSpan={4} className="px-6 py-12 text-center text-gray-500 text-sm">
+                                <td colSpan={5} className="px-6 py-12 text-center text-gray-500 text-sm">
                                     No tasks found
                                 </td>
                             </tr>
@@ -191,6 +195,20 @@ const ProjectTasks: React.FC = () => {
                                         <div className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${PRIORITY_STYLES[task.priority] || PRIORITY_STYLES.medium}`}>
                                             {task.priority || 'medium'}
                                         </div>
+                                    </td>
+                                    <td className="px-6 py-3.5">
+                                        {task.activeWorkerId ? (
+                                            <div className="text-xs text-gray-700">
+                                                <span className="font-semibold">
+                                                    {task.activeWorkerId.firstName} {task.activeWorkerId.lastName}
+                                                </span>
+                                                {task.workStartedAt && (
+                                                    <span className="text-gray-500"> · since {new Date(task.workStartedAt).toLocaleTimeString()}</span>
+                                                )}
+                                            </div>
+                                        ) : (
+                                            <span className="text-xs text-gray-400">No one</span>
+                                        )}
                                     </td>
                                     <td className="px-6 py-3.5 text-right pr-6">
                                         <div className="flex items-center justify-end gap-1">

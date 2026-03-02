@@ -5,6 +5,7 @@ const attendance_controller_1 = require("../controllers/attendance.controller");
 const auth_1 = require("../middleware/auth");
 const router = (0, express_1.Router)();
 router.use(auth_1.authenticate);
+router.use(auth_1.requireGithubSetupForTeamMembers);
 router.get('/', attendance_controller_1.getAttendance);
 router.post('/check-in', attendance_controller_1.checkIn);
 router.post('/check-out', attendance_controller_1.checkOut);

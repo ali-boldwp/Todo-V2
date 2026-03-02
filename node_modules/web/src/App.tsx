@@ -9,9 +9,14 @@ import Payroll from './pages/Payroll';
 import GithubIntegration from './pages/GithubIntegration';
 import Clients from './pages/Clients';
 import Team from './pages/Team';
+import GithubMemberSetup from './pages/GithubMemberSetup';
+import Chat from './pages/Chat';
 import Layout from './components/Layout';
 import LoadingScreen from './components/LoadingScreen';
 import { useState, useEffect } from 'react';
+
+const requiresGithubSetup = (user: any) =>
+    !!user && ['manager', 'member'].includes(user.role) && !user.githubSetupCompleted;
 
 const Dashboard = () => {
     const { user } = useAuth();
@@ -24,9 +29,12 @@ const Dashboard = () => {
 };
 
 const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
-    const { isAuthenticated } = useAuth();
+    const { isAuthenticated, user } = useAuth();
     if (!isAuthenticated) {
         return <Navigate to="/login" />;
+    }
+    if (requiresGithubSetup(user)) {
+        return <Navigate to="/github/setup" replace />;
     }
     return <Layout>{children}</Layout>;
 };
@@ -38,6 +46,9 @@ const AdminRoute = ({ children }: { children: JSX.Element }) => {
     }
     if (!user) {
         return null;
+    }
+    if (requiresGithubSetup(user)) {
+        return <Navigate to="/github/setup" replace />;
     }
     if (user?.role !== 'admin') {
         return <Navigate to="/" />;
@@ -53,10 +64,47 @@ const AdminOrManagerRoute = ({ children }: { children: JSX.Element }) => {
     if (!user) {
         return null;
     }
+    if (requiresGithubSetup(user)) {
+        return <Navigate to="/github/setup" replace />;
+    }
     if (user?.role !== 'admin' && user?.role !== 'manager') {
         return <Navigate to="/" />;
     }
     return <Layout>{children}</Layout>;
+};
+
+const InternalTeamRoute = ({ children }: { children: JSX.Element }) => {
+    const { isAuthenticated, user } = useAuth();
+    if (!isAuthenticated) {
+        return <Navigate to="/login" />;
+    }
+    if (!user) {
+        return null;
+    }
+    if (requiresGithubSetup(user)) {
+        return <Navigate to="/github/setup" replace />;
+    }
+    if (!['admin', 'manager', 'member'].includes(user.role)) {
+        return <Navigate to="/" replace />;
+    }
+    return <Layout>{children}</Layout>;
+};
+
+const GithubSetupRoute = ({ children }: { children: JSX.Element }) => {
+    const { isAuthenticated, user } = useAuth();
+    if (!isAuthenticated) {
+        return <Navigate to="/login" />;
+    }
+    if (!user) {
+        return null;
+    }
+    if (!['manager', 'member'].includes(user.role)) {
+        return <Navigate to="/" replace />;
+    }
+    if (user.githubSetupCompleted) {
+        return <Navigate to="/" replace />;
+    }
+    return children;
 };
 
 const AppRoutes = () => {
@@ -64,6 +112,14 @@ const AppRoutes = () => {
         <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Navigate to="/login" replace />} />
+            <Route
+                path="/github/setup"
+                element={
+                    <GithubSetupRoute>
+                        <GithubMemberSetup />
+                    </GithubSetupRoute>
+                }
+            />
             <Route
                 path="/"
                 element={
@@ -102,6 +158,14 @@ const AppRoutes = () => {
                     <ProtectedRoute>
                         <Time />
                     </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/chat"
+                element={
+                    <InternalTeamRoute>
+                        <Chat />
+                    </InternalTeamRoute>
                 }
             />
             <Route

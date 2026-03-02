@@ -50,6 +50,10 @@ const ProjectSettings: React.FC<{ project: any }> = ({ project }) => {
             setShowAddMember(false);
             setSelectedUserId('');
         },
+        onError: (error: any) => {
+            const msg = error?.response?.data?.message || 'Failed to add member to project';
+            alert(msg);
+        }
     });
 
     const removeMemberMutation = useMutation({

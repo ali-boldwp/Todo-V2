@@ -21,6 +21,7 @@ import attendanceRoutes from './routes/attendance.routes';
 import payrollRoutes from './routes/payroll.routes';
 import githubRoutes from './routes/github.routes';
 import clientRoutes from './routes/client.routes';
+import chatRoutes from './routes/chat.routes';
 
 app.use(helmet());
 
@@ -56,6 +57,7 @@ app.use('/api/attendance', attendanceRoutes);
 app.use('/api/payroll', payrollRoutes);
 app.use('/api/github', githubRoutes);
 app.use('/api/clients', clientRoutes);
+app.use('/api/chat', chatRoutes);
 
 app.get('/health', (_req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });

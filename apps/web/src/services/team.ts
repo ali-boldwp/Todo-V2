@@ -9,6 +9,8 @@ export const createTeamMember = async (data: {
     firstName: string;
     lastName: string;
     email: string;
+    githubUsername?: string;
+    canVerifyTasks?: boolean;
     password: string;
     role: 'manager' | 'member';
 }) => {
@@ -16,7 +18,7 @@ export const createTeamMember = async (data: {
     return res.data;
 };
 
-export const updateTeamMember = async (id: string, data: { role?: string; isActive?: boolean }) => {
+export const updateTeamMember = async (id: string, data: { role?: string; isActive?: boolean; githubUsername?: string; canVerifyTasks?: boolean }) => {
     const res = await api.patch(`/auth/team-members/${id}`, data);
     return res.data;
 };

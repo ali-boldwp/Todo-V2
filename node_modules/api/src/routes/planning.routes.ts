@@ -1,10 +1,11 @@
 import { Router } from 'express';
 import { createEpic, createSprint, getEpics, getSprints } from '../controllers/planning.controller';
-import { authenticate } from '../middleware/auth';
+import { authenticate, requireGithubSetupForTeamMembers } from '../middleware/auth';
 
 const router = Router();
 
 router.use(authenticate);
+router.use(requireGithubSetupForTeamMembers);
 
 router.get('/epics', getEpics);
 router.post('/epics', createEpic);

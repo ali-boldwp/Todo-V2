@@ -1,10 +1,11 @@
 import { Router } from 'express';
 import { createTimeEntry, getTimeEntries, startTimer, stopTimer } from '../controllers/time.controller';
-import { authenticate } from '../middleware/auth';
+import { authenticate, requireGithubSetupForTeamMembers } from '../middleware/auth';
 
 const router = Router();
 
 router.use(authenticate);
+router.use(requireGithubSetupForTeamMembers);
 
 router.get('/', getTimeEntries);
 router.post('/', createTimeEntry);

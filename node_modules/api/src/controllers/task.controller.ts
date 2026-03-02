@@ -3,6 +3,7 @@ import { AuthRequest } from '../middleware/auth';
 import Task from '../models/Task';
 import Project from '../models/Project';
 import GithubConfig from '../models/GithubConfig';
+import User from '../models/User';
 import { TaskSchema } from '@devmanager/shared/dist/task.schema';
 import { emitToAll, emitToProject } from '../socket';
 
@@ -57,6 +58,9 @@ async function createGithubBranch(
 
         if (!createRes.ok) {
             const errData = await createRes.json();
+            if (createRes.status === 422 && typeof errData?.message === 'string' && errData.message.includes('Reference already exists')) {
+                return branchName;
+            }
             console.error('GitHub branch creation failed:', errData.message);
             return null;
         }
@@ -65,6 +69,137 @@ async function createGithubBranch(
     } catch (err: any) {
         console.error('createGithubBranch error:', err.message);
         return null;
+    }
+}
+
+const slugify = (value: string) =>
+    value
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '')
+        .substring(0, 30);
+
+const getElapsedSeconds = (startedAt?: Date | string | null): number => {
+    if (!startedAt) return 0;
+    const started = new Date(startedAt).getTime();
+    if (Number.isNaN(started)) return 0;
+    return Math.max(0, Math.floor((Date.now() - started) / 1000));
+};
+
+const getComputedWorkedSeconds = (task: any): number => {
+    const base = Number(task?.totalWorkedSeconds || 0);
+    const runningExtra = task?.activeWorkerId && !task?.isWorkPaused
+        ? getElapsedSeconds(task?.lastWorkStartedAt)
+        : 0;
+    return base + runningExtra;
+};
+
+const toTaskResponse = (task: any) => {
+    const obj = typeof task?.toObject === 'function' ? task.toObject() : task;
+    return {
+        ...obj,
+        totalWorkedSecondsComputed: getComputedWorkedSeconds(obj)
+    };
+};
+
+const mergeWorkLog = (workLogs: any[] = [], userId: string, seconds: number) => {
+    if (!seconds || seconds <= 0) return workLogs;
+    const next = Array.isArray(workLogs) ? [...workLogs] : [];
+    const idx = next.findIndex((entry: any) => {
+        const id = entry?.userId?._id?.toString?.() || entry?.userId?.toString?.();
+        return id === userId;
+    });
+    if (idx >= 0) {
+        next[idx] = { ...next[idx], seconds: Number(next[idx].seconds || 0) + seconds };
+    } else {
+        next.push({ userId, seconds });
+    }
+    return next;
+};
+
+const pickRandom = <T>(arr: T[]): T | null => {
+    if (!arr.length) return null;
+    const index = Math.floor(Math.random() * arr.length);
+    return arr[index];
+};
+
+async function restrictBranchToUser(
+    token: string,
+    owner: string,
+    repo: string,
+    branch: string,
+    githubUsername: string
+): Promise<boolean> {
+    try {
+        const response = await fetch(
+            `https://api.github.com/repos/${owner}/${repo}/branches/${encodeURIComponent(branch)}/protection`,
+            {
+                method: 'PUT',
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    Accept: 'application/vnd.github+json',
+                    'Content-Type': 'application/json',
+                    'X-GitHub-Api-Version': '2022-11-28'
+                },
+                body: JSON.stringify({
+                    required_status_checks: null,
+                    enforce_admins: null,
+                    required_pull_request_reviews: null,
+                    restrictions: { users: [githubUsername], teams: [], apps: [] },
+                    required_linear_history: false,
+                    allow_force_pushes: false,
+                    allow_deletions: false,
+                    block_creations: false,
+                    required_conversation_resolution: false,
+                    lock_branch: false,
+                    allow_fork_syncing: false
+                })
+            }
+        );
+
+        if (!response.ok) {
+            const data = await response.text();
+            console.warn(`Unable to apply branch restriction for ${branch}:`, response.status, data);
+            return false;
+        }
+
+        return true;
+    } catch (error: any) {
+        console.warn(`Branch restriction request failed for ${branch}:`, error?.message || error);
+        return false;
+    }
+}
+
+async function deleteGithubBranch(
+    token: string,
+    owner: string,
+    repo: string,
+    branch: string
+): Promise<boolean> {
+    try {
+        const response = await fetch(
+            `https://api.github.com/repos/${owner}/${repo}/git/refs/heads/${encodeURIComponent(branch)}`,
+            {
+                method: 'DELETE',
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    Accept: 'application/vnd.github+json',
+                    'X-GitHub-Api-Version': '2022-11-28'
+                }
+            }
+        );
+
+        // 204 = deleted, 422/404 can happen if branch already removed
+        if (response.status === 204 || response.status === 404 || response.status === 422) {
+            return true;
+        }
+
+        const body = await response.text();
+        console.warn(`Failed to delete GitHub branch ${branch}:`, response.status, body);
+        return false;
+    } catch (error: any) {
+        console.warn(`GitHub branch delete request failed for ${branch}:`, error?.message || error);
+        return false;
     }
 }
 
@@ -104,8 +239,12 @@ export const getTasks = async (req: AuthRequest, res: Response) => {
             }
         }
 
-        const tasks = await Task.find(query).populate('assigneeId', 'firstName lastName email');
-        res.json(tasks);
+        const tasks = await Task.find(query)
+            .populate('assigneeId', 'firstName lastName email')
+            .populate('activeWorkerId', 'firstName lastName email role')
+            .populate('verifierId', 'firstName lastName email role')
+            .populate('workLogs.userId', 'firstName lastName email role');
+        res.json(tasks.map(toTaskResponse));
     } catch (error) {
         res.status(500).json({ message: 'Server error' });
     }
@@ -115,37 +254,8 @@ export const createTask = async (req: AuthRequest, res: Response) => {
     try {
         const validated = TaskSchema.parse(req.body);
 
-        // Create the task first
+        // Create task. Branch is created when someone starts work.
         const task = await Task.create({ ...validated });
-
-        // Auto-create GitHub branch if project has a linked repo
-        if (validated.projectId) {
-            const project = await Project.findById(validated.projectId);
-            if (project?.githubRepoOwner && project?.githubRepoName) {
-                const config = await GithubConfig.findOne();
-                if (config?.personalAccessToken) {
-                    // Branch name: task/{taskId}-{slugified-title}
-                    const slug = validated.title
-                        .toLowerCase()
-                        .replace(/[^a-z0-9]+/g, '-')
-                        .replace(/^-|-$/g, '')
-                        .substring(0, 40);
-                    const branchName = `task/${task._id.toString().slice(-6)}-${slug}`;
-
-                    const createdBranch = await createGithubBranch(
-                        config.personalAccessToken,
-                        project.githubRepoOwner,
-                        project.githubRepoName,
-                        branchName
-                    );
-
-                    if (createdBranch) {
-                        task.githubBranch = createdBranch;
-                        await task.save();
-                    }
-                }
-            }
-        }
 
         res.status(201).json(task);
         // Notify project room of new task
@@ -174,15 +284,36 @@ export const updateTask = async (req: AuthRequest, res: Response) => {
         if (patch.status === 'clarified') {
             patch.needsClarification = false;
         }
+        if (typeof patch.status === 'string' && patch.status !== 'in_progress') {
+            const elapsed = existingTask.activeWorkerId && !existingTask.isWorkPaused
+                ? getElapsedSeconds(existingTask.lastWorkStartedAt)
+                : 0;
+            const activeWorkerId = existingTask.activeWorkerId?.toString?.();
+            patch.totalWorkedSeconds = Number(existingTask.totalWorkedSeconds || 0) + elapsed;
+            patch.workLogs = activeWorkerId
+                ? mergeWorkLog(existingTask.workLogs as any[], activeWorkerId, elapsed)
+                : existingTask.workLogs;
+            patch.activeWorkerId = null;
+            patch.workStartedAt = null;
+            patch.lastWorkStartedAt = null;
+            patch.isWorkPaused = false;
+            if (patch.status === 'done') {
+                patch.finishedAt = new Date();
+            }
+        }
 
         const task = await Task.findByIdAndUpdate(
             req.params.id,
             patch,
             { new: true }
-        );
+        )
+            .populate('assigneeId', 'firstName lastName email')
+            .populate('activeWorkerId', 'firstName lastName email role')
+            .populate('verifierId', 'firstName lastName email role')
+            .populate('workLogs.userId', 'firstName lastName email role');
 
         if (!task) return res.status(404).json({ message: 'Task not found' });
-        res.json(task);
+        res.json(toTaskResponse(task));
 
         if (clarificationRequest && task.projectId) {
             emitToAll('notification:created', {
@@ -209,8 +340,24 @@ export const deleteTask = async (req: AuthRequest, res: Response) => {
             return res.status(403).json({ message: 'Only admin and team members can delete tasks' });
         }
 
-        const task = await Task.findByIdAndDelete(req.params.id);
+        const task = await Task.findById(req.params.id);
         if (!task) return res.status(404).json({ message: 'Task not found' });
+
+        // Best-effort cleanup: remove task branch from GitHub when task is deleted.
+        if (task.githubBranch && task.projectId) {
+            const project = await Project.findById(task.projectId).select('githubRepoOwner githubRepoName');
+            const config = await GithubConfig.findOne().select('personalAccessToken');
+            if (project?.githubRepoOwner && project?.githubRepoName && config?.personalAccessToken) {
+                await deleteGithubBranch(
+                    config.personalAccessToken,
+                    project.githubRepoOwner,
+                    project.githubRepoName,
+                    task.githubBranch
+                );
+            }
+        }
+
+        await Task.findByIdAndDelete(req.params.id);
 
         res.json({ message: 'Task deleted' });
         if (task.projectId) {
@@ -238,9 +385,13 @@ export const uploadAttachment = async (req: AuthRequest, res: Response) => {
             req.params.id,
             { $push: { attachments: { name, mimeType, size, data, uploadedAt: new Date() } } },
             { new: true }
-        );
+        )
+            .populate('assigneeId', 'firstName lastName email')
+            .populate('activeWorkerId', 'firstName lastName email role')
+            .populate('verifierId', 'firstName lastName email role')
+            .populate('workLogs.userId', 'firstName lastName email role');
         if (!task) return res.status(404).json({ message: 'Task not found' });
-        res.json(task);
+        res.json(toTaskResponse(task));
         if (task.projectId) emitToProject(task.projectId.toString(), 'task:updated', task);
     } catch (error) {
         res.status(500).json({ message: 'Server error' });
@@ -260,8 +411,360 @@ export const deleteAttachment = async (req: AuthRequest, res: Response) => {
 
         task.attachments.splice(idx, 1);
         await task.save();
-        res.json(task);
+        await task.populate('assigneeId', 'firstName lastName email');
+        await task.populate('activeWorkerId', 'firstName lastName email role');
+        await task.populate('verifierId', 'firstName lastName email role');
+        await task.populate('workLogs.userId', 'firstName lastName email role');
+        res.json(toTaskResponse(task));
         if (task.projectId) emitToProject(task.projectId.toString(), 'task:updated', task);
+    } catch (error) {
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+export const startTaskWork = async (req: AuthRequest, res: Response) => {
+    try {
+        if (!INTERNAL_ROLES.includes(req.user!.role)) {
+            return res.status(403).json({ message: 'Only admin and team members can start work on tasks' });
+        }
+
+        const task = await Task.findById(req.params.id).populate('activeWorkerId', 'firstName lastName email role');
+        if (!task) return res.status(404).json({ message: 'Task not found' });
+        if (task.verificationStatus === 'pending' || task.status === 'under_verification') {
+            return res.status(400).json({ message: 'Task is under verification and cannot be started' });
+        }
+
+        const currentWorker: any = task.activeWorkerId;
+        const currentWorkerId = currentWorker?._id?.toString?.() || currentWorker?.toString?.();
+        if (currentWorkerId && currentWorkerId !== req.user!.userId) {
+            const fullName = `${currentWorker?.firstName || ''} ${currentWorker?.lastName || ''}`.trim();
+            return res.status(409).json({
+                message: `Task is already being worked on by ${fullName || currentWorker?.email || 'another user'}.`
+            });
+        }
+
+        const patch: any = {
+            activeWorkerId: req.user!.userId,
+            status: 'in_progress',
+            isWorkPaused: false,
+            finishedAt: null
+        };
+        const now = new Date();
+        if (!task.workStartedAt) patch.workStartedAt = now;
+        if (task.isWorkPaused || !task.lastWorkStartedAt) patch.lastWorkStartedAt = now;
+
+        // On start: create user-specific GitHub branch for this task.
+        if (task.projectId && !task.githubBranch) {
+            const project = await Project.findById(task.projectId).select('githubRepoOwner githubRepoName');
+            const config = await GithubConfig.findOne().select('personalAccessToken');
+            const user = await User.findById(req.user!.userId).select('githubUsername');
+
+            if (project?.githubRepoOwner && project?.githubRepoName) {
+                if (!config?.personalAccessToken) {
+                    return res.status(400).json({ message: 'GitHub integration is not connected. Cannot start task.' });
+                }
+                if (!user?.githubUsername) {
+                    return res.status(400).json({ message: 'Your GitHub account is not set up. Cannot start task.' });
+                }
+
+                const branchName = `task/${task._id.toString().slice(-6)}-${slugify(task.title)}-${slugify(user.githubUsername)}`;
+                const createdBranch = await createGithubBranch(
+                    config.personalAccessToken,
+                    project.githubRepoOwner,
+                    project.githubRepoName,
+                    branchName
+                );
+
+                if (!createdBranch) {
+                    return res.status(400).json({ message: 'Failed to create GitHub branch. Task was not started.' });
+                }
+
+                const restricted = await restrictBranchToUser(
+                    config.personalAccessToken,
+                    project.githubRepoOwner,
+                    project.githubRepoName,
+                    createdBranch,
+                    user.githubUsername
+                );
+                if (!restricted) {
+                    // Best effort only: do not block task start if branch restriction cannot be enforced.
+                    console.warn(`Proceeding without branch restriction for ${createdBranch}`);
+                }
+
+                patch.githubBranch = createdBranch;
+            }
+        }
+
+        const updated = await Task.findByIdAndUpdate(req.params.id, patch, { new: true })
+            .populate('assigneeId', 'firstName lastName email')
+            .populate('activeWorkerId', 'firstName lastName email role')
+            .populate('verifierId', 'firstName lastName email role')
+            .populate('workLogs.userId', 'firstName lastName email role');
+
+        if (!updated) return res.status(404).json({ message: 'Task not found' });
+        res.json(toTaskResponse(updated));
+        if (updated.projectId) emitToProject(updated.projectId.toString(), 'task:updated', updated);
+    } catch (error) {
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+export const pauseTaskWork = async (req: AuthRequest, res: Response) => {
+    try {
+        if (!INTERNAL_ROLES.includes(req.user!.role)) {
+            return res.status(403).json({ message: 'Only admin and team members can pause work on tasks' });
+        }
+
+        const task = await Task.findById(req.params.id).populate('activeWorkerId', 'firstName lastName email role');
+        if (!task) return res.status(404).json({ message: 'Task not found' });
+
+        const currentWorker: any = task.activeWorkerId;
+        const currentWorkerId = currentWorker?._id?.toString?.() || currentWorker?.toString?.();
+        if (!currentWorkerId) {
+            return res.status(400).json({ message: 'Task is not currently in progress' });
+        }
+
+        const canPause = currentWorkerId === req.user!.userId || ['admin', 'manager'].includes(req.user!.role);
+        if (!canPause) {
+            return res.status(403).json({ message: 'Only the active worker, manager, or admin can pause this task' });
+        }
+        if (task.isWorkPaused) {
+            return res.status(400).json({ message: 'Task is already paused' });
+        }
+
+        const elapsed = getElapsedSeconds(task.lastWorkStartedAt);
+        const workLogs = mergeWorkLog(task.workLogs as any[], currentWorkerId, elapsed);
+
+        const updated = await Task.findByIdAndUpdate(
+            req.params.id,
+            {
+                totalWorkedSeconds: Number(task.totalWorkedSeconds || 0) + elapsed,
+                workLogs,
+                isWorkPaused: true,
+                lastWorkStartedAt: null,
+            },
+            { new: true }
+        )
+            .populate('assigneeId', 'firstName lastName email')
+            .populate('activeWorkerId', 'firstName lastName email role')
+            .populate('verifierId', 'firstName lastName email role')
+            .populate('workLogs.userId', 'firstName lastName email role');
+
+        if (!updated) return res.status(404).json({ message: 'Task not found' });
+        res.json(toTaskResponse(updated));
+        if (updated.projectId) emitToProject(updated.projectId.toString(), 'task:updated', updated);
+    } catch (error) {
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+export const resumeTaskWork = async (req: AuthRequest, res: Response) => {
+    try {
+        if (!INTERNAL_ROLES.includes(req.user!.role)) {
+            return res.status(403).json({ message: 'Only admin and team members can resume work on tasks' });
+        }
+
+        const task = await Task.findById(req.params.id).populate('activeWorkerId', 'firstName lastName email role');
+        if (!task) return res.status(404).json({ message: 'Task not found' });
+        if (task.verificationStatus === 'pending' || task.status === 'under_verification') {
+            return res.status(400).json({ message: 'Task is under verification and cannot be resumed' });
+        }
+
+        const currentWorker: any = task.activeWorkerId;
+        const currentWorkerId = currentWorker?._id?.toString?.() || currentWorker?.toString?.();
+        if (!currentWorkerId) {
+            return res.status(400).json({ message: 'Task is not assigned to an active worker' });
+        }
+        const canResume = currentWorkerId === req.user!.userId || ['admin', 'manager'].includes(req.user!.role);
+        if (!canResume) {
+            return res.status(403).json({ message: 'Only the active worker, manager, or admin can resume this task' });
+        }
+        if (!task.isWorkPaused) {
+            return res.status(400).json({ message: 'Task is already running' });
+        }
+
+        const updated = await Task.findByIdAndUpdate(
+            req.params.id,
+            {
+                isWorkPaused: false,
+                lastWorkStartedAt: new Date(),
+                status: 'in_progress'
+            },
+            { new: true }
+        )
+            .populate('assigneeId', 'firstName lastName email')
+            .populate('activeWorkerId', 'firstName lastName email role')
+            .populate('verifierId', 'firstName lastName email role')
+            .populate('workLogs.userId', 'firstName lastName email role');
+
+        if (!updated) return res.status(404).json({ message: 'Task not found' });
+        res.json(toTaskResponse(updated));
+        if (updated.projectId) emitToProject(updated.projectId.toString(), 'task:updated', updated);
+    } catch (error) {
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+export const finishTaskWork = async (req: AuthRequest, res: Response) => {
+    try {
+        if (!INTERNAL_ROLES.includes(req.user!.role)) {
+            return res.status(403).json({ message: 'Only admin and team members can finish tasks' });
+        }
+
+        const task = await Task.findById(req.params.id).populate('activeWorkerId', 'firstName lastName email role');
+        if (!task) return res.status(404).json({ message: 'Task not found' });
+
+        const currentWorker: any = task.activeWorkerId;
+        const currentWorkerId = currentWorker?._id?.toString?.() || currentWorker?.toString?.();
+        if (!currentWorkerId) {
+            return res.status(400).json({ message: 'Task is not currently assigned to an active worker' });
+        }
+        const canFinish = currentWorkerId === req.user!.userId || ['admin', 'manager'].includes(req.user!.role);
+        if (!canFinish) {
+            return res.status(403).json({ message: 'Only the active worker, manager, or admin can finish this task' });
+        }
+
+        const elapsed = task.isWorkPaused ? 0 : getElapsedSeconds(task.lastWorkStartedAt);
+        const workLogs = mergeWorkLog(task.workLogs as any[], currentWorkerId, elapsed);
+
+        const project = await Project.findById(task.projectId).select('members');
+        const eligibleQuery = {
+            role: { $in: ['manager', 'member'] },
+            isActive: true,
+            canVerifyTasks: true
+        };
+        const eligibleProjectTesters = project?.members?.length
+            ? await User.find({
+                _id: { $in: project.members, $ne: currentWorkerId },
+                ...eligibleQuery
+            }).select('_id')
+            : [];
+
+        const eligibleGlobalTesters = await User.find({
+            _id: { $ne: currentWorkerId },
+            ...eligibleQuery
+        }).select('_id');
+
+        const pool = eligibleProjectTesters.length ? eligibleProjectTesters : eligibleGlobalTesters;
+        if (!pool.length) {
+            return res.status(400).json({ message: 'No eligible tester available besides the user who finished the task' });
+        }
+
+        const selectedVerifier: any = pickRandom(pool);
+        if (!selectedVerifier?._id) {
+            return res.status(400).json({ message: 'Failed to assign verifier' });
+        }
+
+        const updated = await Task.findByIdAndUpdate(
+            req.params.id,
+            {
+                totalWorkedSeconds: Number(task.totalWorkedSeconds || 0) + elapsed,
+                workLogs,
+                activeWorkerId: null,
+                lastWorkStartedAt: null,
+                isWorkPaused: false,
+                status: 'under_verification',
+                finishedAt: new Date(),
+                verificationStatus: 'pending',
+                verifierId: selectedVerifier._id,
+                verificationComment: null,
+                verificationDecidedAt: null,
+            },
+            { new: true }
+        )
+            .populate('assigneeId', 'firstName lastName email')
+            .populate('activeWorkerId', 'firstName lastName email role')
+            .populate('verifierId', 'firstName lastName email role')
+            .populate('workLogs.userId', 'firstName lastName email role');
+
+        if (!updated) return res.status(404).json({ message: 'Task not found' });
+        res.json(toTaskResponse(updated));
+        if (updated.projectId) emitToProject(updated.projectId.toString(), 'task:updated', updated);
+    } catch (error) {
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+export const stopTaskWork = pauseTaskWork;
+
+export const approveTaskVerification = async (req: AuthRequest, res: Response) => {
+    try {
+        if (!INTERNAL_ROLES.includes(req.user!.role)) {
+            return res.status(403).json({ message: 'Only team members can verify tasks' });
+        }
+
+        const task = await Task.findById(req.params.id).populate('verifierId', 'firstName lastName email role');
+        if (!task) return res.status(404).json({ message: 'Task not found' });
+        if (task.verificationStatus !== 'pending') {
+            return res.status(400).json({ message: 'Task is not pending verification' });
+        }
+
+        const verifierId = (task.verifierId as any)?._id?.toString?.() || (task.verifierId as any)?.toString?.();
+        const canVerify = verifierId === req.user!.userId || ['admin', 'manager'].includes(req.user!.role);
+        if (!canVerify) {
+            return res.status(403).json({ message: 'Only assigned verifier can approve this task' });
+        }
+
+        const updated = await Task.findByIdAndUpdate(
+            req.params.id,
+            {
+                status: 'done',
+                verificationStatus: 'approved',
+                verificationComment: req.body?.comment || null,
+                verificationDecidedAt: new Date(),
+            },
+            { new: true }
+        )
+            .populate('assigneeId', 'firstName lastName email')
+            .populate('activeWorkerId', 'firstName lastName email role')
+            .populate('verifierId', 'firstName lastName email role')
+            .populate('workLogs.userId', 'firstName lastName email role');
+
+        if (!updated) return res.status(404).json({ message: 'Task not found' });
+        res.json(toTaskResponse(updated));
+        if (updated.projectId) emitToProject(updated.projectId.toString(), 'task:updated', updated);
+    } catch (error) {
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+export const rejectTaskVerification = async (req: AuthRequest, res: Response) => {
+    try {
+        if (!INTERNAL_ROLES.includes(req.user!.role)) {
+            return res.status(403).json({ message: 'Only team members can verify tasks' });
+        }
+
+        const task = await Task.findById(req.params.id).populate('verifierId', 'firstName lastName email role');
+        if (!task) return res.status(404).json({ message: 'Task not found' });
+        if (task.verificationStatus !== 'pending') {
+            return res.status(400).json({ message: 'Task is not pending verification' });
+        }
+
+        const verifierId = (task.verifierId as any)?._id?.toString?.() || (task.verifierId as any)?.toString?.();
+        const canVerify = verifierId === req.user!.userId || ['admin', 'manager'].includes(req.user!.role);
+        if (!canVerify) {
+            return res.status(403).json({ message: 'Only assigned verifier can reject this task' });
+        }
+
+        const updated = await Task.findByIdAndUpdate(
+            req.params.id,
+            {
+                verificationStatus: 'rejected',
+                verificationComment: req.body?.comment || null,
+                verificationDecidedAt: new Date(),
+                status: 'review',
+                finishedAt: null,
+            },
+            { new: true }
+        )
+            .populate('assigneeId', 'firstName lastName email')
+            .populate('activeWorkerId', 'firstName lastName email role')
+            .populate('verifierId', 'firstName lastName email role')
+            .populate('workLogs.userId', 'firstName lastName email role');
+
+        if (!updated) return res.status(404).json({ message: 'Task not found' });
+        res.json(toTaskResponse(updated));
+        if (updated.projectId) emitToProject(updated.projectId.toString(), 'task:updated', updated);
     } catch (error) {
         res.status(500).json({ message: 'Server error' });
     }

@@ -38,10 +38,13 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 const dotenv_1 = __importDefault(require("dotenv"));
 const http_1 = __importDefault(require("http"));
+const path_1 = __importDefault(require("path"));
 const app_1 = __importStar(require("./app"));
 const db_1 = require("./config/db");
 const socket_1 = require("./socket");
-dotenv_1.default.config();
+// Prefer API-local .env in monorepo workspace runs, then fall back to repo root .env.
+dotenv_1.default.config({ path: path_1.default.resolve(__dirname, '../.env') });
+dotenv_1.default.config({ path: path_1.default.resolve(__dirname, '../../../.env') });
 const PORT = process.env.PORT || 3001;
 const startServer = async () => {
     try {

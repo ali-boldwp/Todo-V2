@@ -7,17 +7,23 @@ import { login as loginApi } from '../services/auth';
 
 const Login: React.FC = () => {
     const { login } = useAuth();
+    const [serverError, setServerError] = React.useState('');
     const { register, handleSubmit, formState: { errors } } = useForm<LoginInput>({
         resolver: zodResolver(LoginSchema),
     });
 
     const onSubmit = async (data: LoginInput) => {
         try {
+            setServerError('');
             const result = await loginApi(data);
             login(result.token, result.user);
-        } catch (error) {
+        } catch (error: any) {
             console.error(error);
-            alert('Login failed');
+            const apiMessage =
+                error?.response?.data?.message ||
+                (Array.isArray(error?.response?.data?.errors) && error.response.data.errors[0]?.message) ||
+                'Login failed';
+            setServerError(apiMessage);
         }
     };
 
@@ -50,6 +56,7 @@ const Login: React.FC = () => {
                     >
                         Sign In
                     </button>
+                    {serverError && <p className="text-red-500 text-xs mt-1">{serverError}</p>}
                 </form>
             </div>
         </div>

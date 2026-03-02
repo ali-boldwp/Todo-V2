@@ -2,6 +2,11 @@ import mongoose, { Document, Schema } from 'mongoose';
 
 export interface IUser extends Document {
     email: string;
+    githubUsername?: string;
+    githubUserId?: string;
+    githubProfileUrl?: string;
+    githubConnectedAt?: Date;
+    canVerifyTasks: boolean;
     passwordHash: string;
     role: 'admin' | 'manager' | 'member' | 'client';
     clientId?: mongoose.Types.ObjectId;
@@ -12,6 +17,11 @@ export interface IUser extends Document {
 
 const UserSchema: Schema = new Schema({
     email: { type: String, required: true, unique: true },
+    githubUsername: { type: String },
+    githubUserId: { type: String },
+    githubProfileUrl: { type: String },
+    githubConnectedAt: { type: Date },
+    canVerifyTasks: { type: Boolean, default: false },
     passwordHash: { type: String, required: true },
     role: { type: String, enum: ['admin', 'manager', 'member', 'client'], default: 'member' },
     clientId: { type: Schema.Types.ObjectId, ref: 'Client' },
