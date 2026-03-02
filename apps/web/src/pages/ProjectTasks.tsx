@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getTasks, deleteTask } from '../services/task';
@@ -6,38 +6,15 @@ import CreateTaskDrawer from '../components/CreateTaskDrawer';
 import { useAuth } from '../context/AuthContext';
 import {
     Plus,
-    CheckCircle2,
-    Clock,
-    PlayCircle,
     Search,
-    Filter,
-    ArrowUpDown,
-    Info,
+    ArrowUp,
+    ArrowDown,
+    Check,
+    Pencil,
+    Trash2,
     Eye,
-    Trash2
+    ChevronDown,
 } from 'lucide-react';
-
-const PRIORITY_STYLES: any = {
-    high: 'bg-red-50 text-red-700 border-red-100',
-    medium: 'bg-amber-50 text-amber-700 border-amber-100',
-    low: 'bg-blue-50 text-blue-700 border-blue-100',
-};
-
-const Circle = ({ className }: { className?: string }) => (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <circle cx="12" cy="12" r="10" />
-    </svg>
-);
-
-const STATUS_ICONS: any = {
-    todo: <Circle className="w-4 h-4 text-gray-400" />,
-    in_progress: <PlayCircle className="w-4 h-4 text-blue-500" />,
-    review: <Clock className="w-4 h-4 text-amber-500" />,
-    done: <CheckCircle2 className="w-4 h-4 text-green-500" />,
-    under_verification: <CheckCircle2 className="w-4 h-4 text-violet-600" />,
-    clarification: <Info className="w-4 h-4 text-red-500" />,
-    clarified: <CheckCircle2 className="w-4 h-4 text-emerald-500" />,
-};
 
 const STATUS_LABELS: any = {
     todo: 'To Do',
@@ -49,35 +26,46 @@ const STATUS_LABELS: any = {
     clarified: 'Clarified',
 };
 
-const STATUS_BADGES: any = {
-    todo: 'bg-gray-100 text-gray-700 border-gray-200',
-    in_progress: 'bg-blue-50 text-blue-700 border-blue-100',
-    review: 'bg-amber-50 text-amber-700 border-amber-100',
-    done: 'bg-green-50 text-green-700 border-green-100',
-    under_verification: 'bg-violet-50 text-violet-700 border-violet-100',
-    clarification: 'bg-red-50 text-red-700 border-red-100',
-    clarified: 'bg-blue-50 text-blue-700 border-blue-100',
-};
+const SECTION_ORDER = ['todo', 'in_progress', 'under_verification', 'review', 'clarification', 'clarified', 'done'];
 
 const ProjectTasks: React.FC = () => {
     const { user } = useAuth();
-    const canManageClarification = ['admin', 'manager', 'member'].includes(user?.role || '');
     const canDeleteTask = ['admin', 'manager', 'member'].includes(user?.role || '');
     const { id: projectId } = useParams<{ id: string }>();
     const queryClient = useQueryClient();
-    const { data: tasks, isLoading } = useQuery({
+
+    const { data: tasks = [], isLoading } = useQuery({
         queryKey: ['tasks', projectId],
-        queryFn: () => getTasks(projectId!)
+        queryFn: () => getTasks(projectId!),
     });
+
     const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false);
     const [selectedTask, setSelectedTask] = useState<any>(null);
     const [searchTerm, setSearchTerm] = useState('');
+    const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+
     const deleteMutation = useMutation({
         mutationFn: (id: string) => deleteTask(id),
-        onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: ['tasks', projectId] });
-        },
+        onSuccess: () => queryClient.invalidateQueries({ queryKey: ['tasks', projectId] }),
     });
+
+    const filteredTasks = useMemo(
+        () => tasks.filter((task: any) => task.title.toLowerCase().includes(searchTerm.toLowerCase())),
+        [tasks, searchTerm]
+    );
+
+    const sections = useMemo(() => {
+        const grouped: Record<string, any[]> = {};
+        for (const task of filteredTasks) {
+            const key = task.status || 'todo';
+            if (!grouped[key]) grouped[key] = [];
+            grouped[key].push(task);
+        }
+        const orderedKeys = [...SECTION_ORDER, ...Object.keys(grouped).filter((k) => !SECTION_ORDER.includes(k))].filter((k, idx, arr) => arr.indexOf(k) === idx && grouped[k]?.length);
+        return orderedKeys.map((key) => ({ key, label: STATUS_LABELS[key] || key, tasks: grouped[key] || [] }));
+    }, [filteredTasks]);
+
+    const remainingCount = filteredTasks.filter((t: any) => t.status !== 'done').length;
 
     const handleOpenCreate = () => {
         setSelectedTask(null);
@@ -89,172 +77,157 @@ const ProjectTasks: React.FC = () => {
         setIsCreateDrawerOpen(true);
     };
 
-    if (isLoading) return <div className="p-8 text-gray-500">Loading tasks...</div>;
-
-    const filteredTasks = tasks?.filter((task: any) =>
-        task.title.toLowerCase().includes(searchTerm.toLowerCase())
-    );
-
-    const handleDeleteTask = (task: any, e: React.MouseEvent) => {
-        e.stopPropagation();
-        if (!canDeleteTask || deleteMutation.isPending) return;
-        const ok = window.confirm(`Delete task "${task.title}"?`);
-        if (!ok) return;
-        deleteMutation.mutate(task._id);
+    const priorityIcon = (priority: string) => {
+        if (priority === 'high') return <ArrowUp className="w-4 h-4 text-red-500" strokeWidth={2.2} />;
+        if (priority === 'medium') return <ArrowUp className="w-4 h-4 text-orange-500" strokeWidth={2.2} />;
+        return <ArrowDown className="w-4 h-4 text-green-500" strokeWidth={2.2} />;
     };
 
+    if (isLoading) return <div className="p-8 text-gray-500">Loading tasks...</div>;
+
     return (
-        <div className="flex flex-col h-full bg-white">
-            {/* Header / Toolbar */}
-            <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between bg-white sticky top-0 z-10">
-                <div className="flex items-center space-x-4 flex-1">
-                    <h2 className="text-lg font-semibold text-gray-900">Tasks</h2>
-                    <div className="relative w-64">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                        <input
-                            type="text"
-                            placeholder="Filter tasks..."
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full pl-9 pr-4 py-1.5 bg-gray-50 border-none rounded-md text-sm focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all"
-                        />
+        <div className="h-full bg-white">
+            <div className="px-7 pt-5 pb-3 border-b border-gray-100 flex items-end justify-between">
+                <div>
+                    <div className="flex items-center gap-1 text-xs text-gray-400 mb-1.5">
+                        <span>Home</span>
+                        <span>{'>'}</span>
+                        <span>Projects</span>
+                        <span>{'>'}</span>
+                        <span className="text-gray-600">Tasks</span>
                     </div>
+                    <h2 className="text-[22px] font-extrabold text-gray-900 tracking-[-0.4px]">Tasks</h2>
+                    <p className="text-xs text-gray-400 mt-0.5">{remainingCount} remaining tasks</p>
                 </div>
 
-                <div className="flex items-center space-x-2">
-                    <button className="p-1.5 hover:bg-gray-100 rounded-md text-gray-500 transition-colors">
-                        <Filter className="w-4 h-4" />
+                <div className="flex items-center gap-2">
+                    <div className="h-8 w-52 border border-gray-200 rounded-md px-2.5 flex items-center gap-2 focus-within:border-[#4f6ef7] focus-within:ring-2 focus-within:ring-[#4f6ef7]/10 transition-all">
+                        <Search className="w-3.5 h-3.5 text-gray-400" />
+                        <input
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                            placeholder="Search"
+                            className="w-full bg-transparent outline-none text-[12.5px] text-gray-700 placeholder:text-gray-400"
+                        />
+                    </div>
+
+                    <button className="h-8 px-3 rounded-md bg-gray-900 text-white text-[12.5px] font-semibold hover:bg-gray-700 transition-colors flex items-center gap-1.5">
+                        <Plus className="w-3.5 h-3.5" />
+                        Add Section
                     </button>
                     <button
                         onClick={handleOpenCreate}
-                        className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-md text-sm font-medium transition-colors flex items-center"
+                        className="h-8 px-3 rounded-md bg-[#4f6ef7] text-white text-[12.5px] font-semibold hover:bg-[#3a56e0] transition-colors flex items-center gap-1.5 shadow-sm shadow-[#4f6ef7]/30"
                     >
-                        <Plus className="w-4 h-4 mr-1.5" />
-                        New Task
+                        <Plus className="w-3.5 h-3.5" />
+                        Add Task
                     </button>
                 </div>
             </div>
 
-            {/* Table */}
-            <div className="flex-1 overflow-auto">
-                <table className="w-full border-collapse text-left">
-                    <thead className="sticky top-0 bg-white z-10 shadow-[0_1px_0_0_rgba(0,0,0,0.05)]">
-                        <tr className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                            <th className="px-6 py-3 border-b border-gray-100">
-                                <div className="flex items-center cursor-pointer hover:text-gray-900">
-                                    Task Name
-                                    <ArrowUpDown className="w-3 h-3 ml-1.5" />
-                                </div>
-                            </th>
-                            <th className="px-6 py-3 border-b border-gray-100">Status</th>
-                            <th className="px-6 py-3 border-b border-gray-100">Priority</th>
-                            <th className="px-6 py-3 border-b border-gray-100">Working</th>
-                            <th className="px-6 py-3 border-b border-gray-100 text-right pr-12">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-50">
-                        {filteredTasks?.length === 0 ? (
-                            <tr>
-                                <td colSpan={5} className="px-6 py-12 text-center text-gray-500 text-sm">
-                                    No tasks found
-                                </td>
-                            </tr>
-                        ) : (
-                            filteredTasks?.map((task: any) => (
-                                <tr
-                                    key={task._id}
-                                    onClick={() => handleOpenEdit(task)}
-                                    className="group hover:bg-gray-50/50 transition-colors cursor-pointer"
+            <div className="px-7 pb-10">
+                {sections.length === 0 ? (
+                    <div className="py-14 text-sm text-gray-400 text-center">No tasks found</div>
+                ) : (
+                    sections.map((section, index) => {
+                        const isCollapsed = !!collapsed[section.key];
+                        const sectionRemaining = section.tasks.filter((t) => t.status !== 'done').length;
+                        return (
+                            <div key={section.key} className="mt-5" style={{ animation: `fadeIn .25s ease ${index * 0.06}s both` }}>
+                                <button
+                                    onClick={() => setCollapsed((prev) => ({ ...prev, [section.key]: !prev[section.key] }))}
+                                    className="w-full flex items-center gap-2 py-2 text-left"
                                 >
-                                    <td className="px-6 py-3.5">
-                                        <div className="flex items-center space-x-3">
-                                            <div className="flex-shrink-0">
-                                                {task.status === 'clarification' ? (
-                                                    <span title="Clarification required">
-                                                        <Info className="w-4 h-4 text-red-500" />
-                                                    </span>
-                                                ) : (
-                                                    STATUS_ICONS[task.status] || <Circle className="w-4 h-4 text-gray-400" />
-                                                )}
-                                            </div>
-                                            <span className={`text-sm font-medium transition-colors ${
-                                                task.status === 'clarification'
-                                                    ? 'text-red-600 group-hover:text-red-700'
-                                                    : 'text-gray-900 group-hover:text-indigo-600'
-                                            }`}>
-                                                {task.title}
-                                            </span>
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-3.5">
-                                        <div className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${STATUS_BADGES[task.status] || STATUS_BADGES.todo}`}>
-                                            {STATUS_LABELS[task.status] || task.status}
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-3.5">
-                                        <div className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider border ${PRIORITY_STYLES[task.priority] || PRIORITY_STYLES.medium}`}>
-                                            {task.priority || 'medium'}
-                                        </div>
-                                    </td>
-                                    <td className="px-6 py-3.5">
-                                        {task.activeWorkerId ? (
-                                            <div className="text-xs text-gray-700">
-                                                <span className="font-semibold">
-                                                    {task.activeWorkerId.firstName} {task.activeWorkerId.lastName}
-                                                </span>
-                                                {task.workStartedAt && (
-                                                    <span className="text-gray-500"> · since {new Date(task.workStartedAt).toLocaleTimeString()}</span>
-                                                )}
-                                            </div>
-                                        ) : (
-                                            <span className="text-xs text-gray-400">No one</span>
-                                        )}
-                                    </td>
-                                    <td className="px-6 py-3.5 text-right pr-6">
-                                        <div className="flex items-center justify-end gap-1">
-                                            <button
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleOpenEdit(task);
-                                                }}
-                                                className="p-1 rounded text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 transition-all"
-                                                title="View task"
+                                    <span className="text-[13.5px] font-bold text-gray-800">{section.label}</span>
+                                    <span className="text-xs text-gray-400">{sectionRemaining} remaining</span>
+                                    <ChevronDown className={`ml-auto w-3.5 h-3.5 text-gray-300 transition-transform ${isCollapsed ? '-rotate-90' : ''}`} />
+                                </button>
+
+                                {!isCollapsed && (
+                                    <div>
+                                        {section.tasks.map((task: any) => (
+                                            <div
+                                                key={task._id}
+                                                onClick={() => handleOpenEdit(task)}
+                                                className="group flex items-center gap-2.5 py-2.5 border-t border-gray-100 cursor-pointer hover:bg-gray-50 hover:px-2 hover:mx-[-8px] hover:rounded-md transition-all"
                                             >
-                                                <Eye className="w-4 h-4" />
-                                            </button>
-                                            {canManageClarification && task.status === 'clarification' && (
                                                 <button
                                                     onClick={(e) => {
                                                         e.stopPropagation();
                                                         handleOpenEdit(task);
                                                     }}
-                                                    className="px-2 py-1 text-[11px] font-semibold rounded text-red-600 hover:bg-red-50 transition-all"
+                                                    className={`w-4 h-4 rounded-full border-[1.5px] flex items-center justify-center transition-colors ${task.status === 'done' ? 'bg-[#4f6ef7] border-[#4f6ef7]' : 'border-gray-300 hover:border-[#4f6ef7]'}`}
                                                 >
-                                                    Clarify
+                                                    {task.status === 'done' && <Check className="w-2.5 h-2.5 text-white" strokeWidth={3} />}
                                                 </button>
-                                            )}
-                                            {canDeleteTask && (
-                                                <button
-                                                    onClick={(e) => handleDeleteTask(task, e)}
-                                                    className="p-1 rounded text-gray-400 hover:text-red-600 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all"
-                                                    title="Delete task"
-                                                >
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
-                                            )}
-                                        </div>
-                                    </td>
-                                </tr>
-                            ))
-                        )}
-                    </tbody>
-                </table>
+
+                                                <div className="min-w-0 flex-1">
+                                                    <p className={`text-[13px] ${task.status === 'done' ? 'text-gray-400 line-through' : 'text-gray-700'}`}>{task.title}</p>
+                                                </div>
+
+                                                <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-opacity">
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleOpenEdit(task);
+                                                        }}
+                                                        className="w-6 h-6 rounded flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+                                                        title="View"
+                                                    >
+                                                        <Eye className="w-3.5 h-3.5" />
+                                                    </button>
+                                                    <button
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleOpenEdit(task);
+                                                        }}
+                                                        className="w-6 h-6 rounded flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100"
+                                                        title="Edit"
+                                                    >
+                                                        <Pencil className="w-3.5 h-3.5" />
+                                                    </button>
+                                                    {canDeleteTask && (
+                                                        <button
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                if (window.confirm(`Delete task \"${task.title}\"?`)) deleteMutation.mutate(task._id);
+                                                            }}
+                                                            className="w-6 h-6 rounded flex items-center justify-center text-gray-400 hover:text-red-600 hover:bg-red-50"
+                                                            title="Delete"
+                                                        >
+                                                            <Trash2 className="w-3.5 h-3.5" />
+                                                        </button>
+                                                    )}
+                                                </div>
+
+                                                <div className="flex items-center gap-2 shrink-0">
+                                                    {priorityIcon(task.priority || 'medium')}
+                                                    {task.dueDate && <span className="text-xs text-gray-400">{new Date(task.dueDate).toLocaleDateString()}</span>}
+                                                </div>
+                                            </div>
+                                        ))}
+
+                                        <button
+                                            onClick={handleOpenCreate}
+                                            className="w-full flex items-center gap-2 py-2 border-t border-gray-100 text-gray-400 hover:text-[#4f6ef7] transition-colors"
+                                        >
+                                            <Plus className="w-3.5 h-3.5" />
+                                            <span className="text-[12.5px]">Add task</span>
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })
+                )}
             </div>
 
-            {/* Create / Edit Task Drawer */}
             <CreateTaskDrawer
                 isOpen={isCreateDrawerOpen}
-                onClose={() => { setIsCreateDrawerOpen(false); setSelectedTask(null); }}
+                onClose={() => {
+                    setIsCreateDrawerOpen(false);
+                    setSelectedTask(null);
+                }}
                 task={selectedTask}
                 initialProjectId={projectId}
             />

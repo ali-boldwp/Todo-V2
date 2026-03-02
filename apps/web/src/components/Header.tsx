@@ -1,54 +1,63 @@
 import React from 'react';
-import { Search, Bell, HelpCircle } from 'lucide-react';
-import { useAuth } from '../context/AuthContext';
-import UserAvatar from './UserAvatar';
+import {
+    Bell,
+    Calendar,
+    Maximize,
+    MenuSquare,
+    MessageSquare,
+    Search,
+    Star,
+    Sun,
+    Users,
+} from 'lucide-react';
+
+const IconBtn = ({ title, children }: { title: string; children: React.ReactNode }) => (
+    <button
+        title={title}
+        className="w-[30px] h-[30px] rounded-md flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+    >
+        {children}
+    </button>
+);
 
 const Header: React.FC = () => {
-    const { user } = useAuth();
-
     return (
-        <header className="h-14 border-b border-gray-100 bg-white flex items-center justify-between px-4 sticky top-0 z-10">
-            {/* Left: Breadcrumbs / Context */}
-            <div className="flex items-center space-x-2 text-sm text-gray-500">
-                <span className="font-medium text-gray-900">Acme Inc.</span>
-                <span className="text-gray-300">/</span>
-                <span className="hover:text-gray-900 cursor-pointer">Projects</span>
-            </div>
+        <header className="h-12 border-b border-gray-200 px-5 flex items-center gap-1 shrink-0 bg-white">
+            <IconBtn title="Menu">
+                <MenuSquare size={15} strokeWidth={1.8} />
+            </IconBtn>
+            <IconBtn title="Calendar">
+                <Calendar size={15} strokeWidth={1.8} />
+            </IconBtn>
+            <IconBtn title="Messages">
+                <MessageSquare size={15} strokeWidth={1.8} />
+            </IconBtn>
+            <IconBtn title="Team">
+                <Users size={15} strokeWidth={1.8} />
+            </IconBtn>
+            <IconBtn title="Star">
+                <Star size={15} strokeWidth={1.8} />
+            </IconBtn>
 
-            {/* Center: Search */}
-            <div className="flex-1 max-w-xl mx-4">
-                <div className="relative group">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4 group-focus-within:text-gray-600" />
-                    <input
-                        type="text"
-                        placeholder="Search..."
-                        className="w-full bg-gray-50 border border-transparent rounded-lg py-1.5 pl-9 pr-4 text-sm text-gray-900 placeholder-gray-500 focus:bg-white focus:border-gray-200 focus:ring-0 focus:outline-none transition-all"
-                    />
-                </div>
-            </div>
+            <div className="w-px h-5 bg-gray-200 mx-1" />
+            <div className="flex-1" />
 
-            {/* Right: Actions & Profile */}
-            <div className="flex items-center space-x-3">
-                <button className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-50 rounded-md transition-colors">
-                    <Bell className="w-4 h-4" />
-                </button>
-                <button className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-50 rounded-md transition-colors">
-                    <HelpCircle className="w-4 h-4" />
-                </button>
+            <button className="px-2 py-1 rounded-md text-xs text-gray-600 hover:bg-gray-100 transition-colors">EN</button>
 
-                <div className="w-px h-6 bg-gray-200 mx-2"></div>
+            <IconBtn title="Theme">
+                <Sun size={15} strokeWidth={1.8} />
+            </IconBtn>
+            <IconBtn title="Fullscreen">
+                <Maximize size={15} strokeWidth={1.8} />
+            </IconBtn>
+            <IconBtn title="Search">
+                <Search size={15} strokeWidth={1.8} />
+            </IconBtn>
 
-                <div className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded-md transition-colors">
-                    <UserAvatar
-                        firstName={user?.firstName}
-                        lastName={user?.lastName}
-                        email={user?.email}
-                        profileImageUrl={user?.profileImageUrl}
-                        sizeClassName="w-6 h-6"
-                        textClassName="text-[10px]"
-                    />
-                </div>
-            </div>
+            <button title="Notifications" className="relative w-[30px] h-[30px] rounded-md flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
+                <Bell size={15} strokeWidth={1.8} />
+                <span className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-[#4f6ef7] border border-white" />
+            </button>
         </header>
     );
 };

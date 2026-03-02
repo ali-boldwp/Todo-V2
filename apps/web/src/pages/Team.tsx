@@ -78,11 +78,14 @@ const Team = () => {
     if (isLoading) return <div className="p-8 text-gray-400 text-sm">Loading team...</div>;
 
     return (
-        <div className="p-8 max-w-5xl mx-auto">
+        <div className="p-7 max-w-5xl mx-auto app-fade-in">
             {/* Header */}
-            <div className="flex items-center justify-between mb-8">
+            <div className="flex items-end justify-between mb-6">
                 <div>
-                    <h1 className="text-2xl font-bold text-gray-900">Team</h1>
+                    <div className="flex items-center gap-1 text-xs text-gray-400 mb-1.5">
+                        <span>Home</span><span>{'>'}</span><span className="text-gray-600">Team</span>
+                    </div>
+                    <h1 className="text-[22px] font-extrabold tracking-[-0.4px] text-gray-900">Team</h1>
                     <p className="text-sm text-gray-500 mt-1">
                         {displayedMembers.length} member{displayedMembers.length !== 1 ? 's' : ''}
                         {testerFilter === 'eligible' && <span> (can test)</span>}
@@ -110,7 +113,7 @@ const Team = () => {
                 </div>
                 <button
                     onClick={() => { setIsModalOpen(true); setFormError(''); setForm({ firstName: '', lastName: '', email: '', githubUsername: '', canVerifyTasks: false, password: '', role: 'member' }); }}
-                    className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold px-4 py-2 rounded-lg transition-colors"
+                    className="h-8 flex items-center gap-2 bg-[#4f6ef7] hover:bg-[#3a56e0] text-white text-[12.5px] font-semibold px-4 rounded-md transition-colors shadow-sm shadow-[#4f6ef7]/30"
                 >
                     <UserPlus className="w-4 h-4" />
                     Invite Member
@@ -118,10 +121,10 @@ const Team = () => {
             </div>
 
             {/* Member Table */}
-            <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
+            <div className="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
                 <table className="w-full text-sm">
                     <thead>
-                        <tr className="text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-100 bg-gray-50/60">
+                        <tr className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-100 bg-gray-50/80">
                             <th className="px-6 py-3 text-left">Member</th>
                             <th className="px-6 py-3 text-left">Role</th>
                             <th className="px-6 py-3 text-left">Can Test</th>

@@ -47,7 +47,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             role: decoded.role,
             firstName: decoded.firstName,
             lastName: decoded.lastName,
-            profileImageUrl: decoded.profileImageUrl || null,
+            profileImageUrl: null,
             profileSetupCompleted: !!decoded.profileSetupCompleted,
             githubUsername: decoded.githubUsername,
             githubSetupCompleted: !!decoded.githubSetupCompleted,

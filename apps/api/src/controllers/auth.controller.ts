@@ -20,7 +20,6 @@ const buildAuthResponse = (user: any) => {
             clientId: user.clientId,
             firstName: user.firstName,
             lastName: user.lastName,
-            profileImageUrl: user.profileImageUrl || null,
             profileSetupCompleted,
             githubUsername: user.githubUsername,
             githubSetupCompleted

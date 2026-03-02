@@ -23,7 +23,7 @@ const renderDescription = (desc: any) => {
 
 const Projects: React.FC = () => {
     const [searchParams, setSearchParams] = useSearchParams();
-    const { data: projects, isLoading } = useQuery({ queryKey: ['projects'], queryFn: getProjects });
+    const { data: projects, isLoading, error } = useQuery({ queryKey: ['projects'], queryFn: getProjects });
     const queryClient = useQueryClient();
     const [isDrawerOpen, setIsDrawerOpen] = useState(false);
 
@@ -130,26 +130,43 @@ const Projects: React.FC = () => {
     };
 
     if (isLoading) return <div>Loading...</div>;
+    if (error) {
+        return (
+            <div className="p-8">
+                <div className="max-w-lg rounded-lg border border-red-200 bg-red-50 p-4">
+                    <p className="text-sm font-semibold text-red-700">Unable to load projects</p>
+                    <p className="mt-1 text-sm text-red-600">
+                        {((error as any)?.response?.data?.message) || 'Please refresh the page or complete required account setup.'}
+                    </p>
+                </div>
+            </div>
+        );
+    }
 
     return (
-        <div className="p-8 max-w-[1600px] mx-auto">
-            <div className="flex justify-between items-center mb-8">
-                <div className="flex items-center space-x-3">
-                    <h1 className="text-xl font-semibold text-gray-900">Projects</h1>
-                    <span className="text-sm text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{projects?.length || 0}</span>
+        <div className="p-7 max-w-[1600px] mx-auto app-fade-in">
+            <div className="flex justify-between items-end mb-6">
+                <div>
+                    <div className="flex items-center gap-1 text-xs text-gray-400 mb-1.5">
+                        <span>Home</span><span>{'>'}</span><span className="text-gray-600">Projects</span>
+                    </div>
+                    <div className="flex items-center space-x-3">
+                        <h1 className="text-[22px] font-extrabold tracking-[-0.4px] text-gray-900">Projects</h1>
+                        <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{projects?.length || 0}</span>
+                    </div>
                 </div>
                 <button
                     onClick={() => setIsDrawerOpen(true)}
-                    className="bg-gray-900 hover:bg-gray-800 text-white px-3 py-1.5 rounded-md text-sm font-medium transition-colors shadow-sm flex items-center"
+                    className="h-8 bg-[#4f6ef7] hover:bg-[#3a56e0] text-white px-3 rounded-md text-[12.5px] font-semibold transition-colors shadow-sm shadow-[#4f6ef7]/30 flex items-center"
                 >
-                    <span className="mr-1.5">+</span> New Project
+                    <span className="mr-1.5 text-base leading-none">+</span> New Project
                 </button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                 {projects?.map((project: any) => (
                     <Link to={`/projects/${project._id}`} key={project._id} className="block group">
-                        <div className="bg-white border border-gray-200 rounded-lg p-4 hover:border-gray-300 hover:shadow-sm transition-all h-full flex flex-col relative">
+                        <div className="bg-white border border-gray-200 rounded-lg p-4 hover:border-gray-300 hover:shadow-sm transition-all h-full flex flex-col relative app-fade-in">
                             <div className="flex justify-between items-start mb-3">
                                 <div className="flex items-center space-x-2">
                                     <div className={`w-2 h-2 rounded-full ${project.status === 'active' ? 'bg-yellow-400' :
@@ -168,7 +185,7 @@ const Projects: React.FC = () => {
                                 </span>
                             </div>
 
-                            <h3 className="text-sm font-semibold text-gray-900 mb-1 group-hover:text-indigo-600 transition-colors">
+                            <h3 className="text-[13.5px] font-bold text-gray-900 mb-1 group-hover:text-[#4f6ef7] transition-colors">
                                 {project.name}
                             </h3>
 

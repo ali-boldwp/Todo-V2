@@ -1,10 +1,20 @@
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
+    :root {
+        --app-blue: #4f6ef7;
+        --app-blue-dark: #3a56e0;
+    }
+
+    html,
     body {
-        @apply bg-[#F7F8FA] text-gray-900 font-sans antialiased;
+        @apply bg-white text-gray-900 antialiased;
+        font-family: 'Plus Jakarta Sans', sans-serif;
+        font-size: 13px;
     }
 }
 
@@ -24,4 +34,19 @@
 
 ::-webkit-scrollbar-thumb:hover {
     @apply bg-gray-300;
+}
+
+@keyframes appFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.app-fade-in {
+    animation: appFadeIn 0.28s ease both;
 }
