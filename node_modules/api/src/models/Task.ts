@@ -22,6 +22,7 @@ export interface ITask extends Document {
     verifierId?: mongoose.Types.ObjectId;
     verificationComment?: string;
     verificationDecidedAt?: Date;
+    isMergedToDev?: boolean;
     dueDate?: Date;
     needsClarification?: boolean;
     clarificationText?: any;
@@ -57,6 +58,7 @@ const TaskSchema: Schema = new Schema({
     verifierId: { type: Schema.Types.ObjectId, ref: 'User' },
     verificationComment: { type: String },
     verificationDecidedAt: { type: Date },
+    isMergedToDev: { type: Boolean, default: false },
     dueDate: { type: Date },
     needsClarification: { type: Boolean, default: false },
     clarificationText: { type: Schema.Types.Mixed },

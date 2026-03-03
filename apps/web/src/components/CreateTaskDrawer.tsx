@@ -166,6 +166,7 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
     const [verifier, setVerifier] = useState<any>(task?.verifierId || null);
     const [verificationStatus, setVerificationStatus] = useState<string>(task?.verificationStatus || 'none');
     const [verificationComment, setVerificationComment] = useState<string>(task?.verificationComment || '');
+    const [isMergedToDev, setIsMergedToDev] = useState<boolean>(!!task?.isMergedToDev);
     const [lastWorkStartedAt, setLastWorkStartedAt] = useState<string | null>(task?.lastWorkStartedAt || null);
     const [isWorkPaused, setIsWorkPaused] = useState<boolean>(!!task?.isWorkPaused);
     const [baseWorkedSeconds, setBaseWorkedSeconds] = useState<number>(Number(task?.totalWorkedSeconds || 0));
@@ -221,6 +222,7 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
             setVerifier(task.verifierId || null);
             setVerificationStatus(task.verificationStatus || 'none');
             setVerificationComment(task.verificationComment || '');
+            setIsMergedToDev(!!task.isMergedToDev);
             setLastWorkStartedAt(task.lastWorkStartedAt || null);
             setIsWorkPaused(!!task.isWorkPaused);
             setBaseWorkedSeconds(Number(task.totalWorkedSeconds || 0));
@@ -238,6 +240,7 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
             setVerifier(null);
             setVerificationStatus('none');
             setVerificationComment('');
+            setIsMergedToDev(false);
             setLastWorkStartedAt(null);
             setIsWorkPaused(false);
             setBaseWorkedSeconds(0);
@@ -380,6 +383,7 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
         setVerifier(updatedTask.verifierId || null);
         setVerificationStatus(updatedTask.verificationStatus || 'none');
         setVerificationComment(updatedTask.verificationComment || '');
+        setIsMergedToDev(!!updatedTask.isMergedToDev);
         setLastWorkStartedAt(updatedTask.lastWorkStartedAt || null);
         setIsWorkPaused(!!updatedTask.isWorkPaused);
         setBaseWorkedSeconds(Number(updatedTask.totalWorkedSeconds || 0));
@@ -705,6 +709,20 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
                 <div className="pb-20">
                     {/* Header: Title and Description combined */}
                     <div className="space-y-1">
+                        {task && (
+                            <div className="flex justify-end">
+                                <span
+                                    className={clsx(
+                                        'inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider border',
+                                        isMergedToDev
+                                            ? 'bg-green-50 text-green-700 border-green-200'
+                                            : 'bg-gray-50 text-gray-600 border-gray-200'
+                                    )}
+                                >
+                                    {isMergedToDev ? 'Merged To Dev' : 'Not Merged'}
+                                </span>
+                            </div>
+                        )}
                         <textarea
                             value={title}
                             onChange={(e) => {

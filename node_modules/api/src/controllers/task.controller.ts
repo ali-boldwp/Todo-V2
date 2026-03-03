@@ -1113,6 +1113,7 @@ export const finishTaskWork = async (req: AuthRequest, res: Response) => {
                 status: 'under_verification',
                 finishedAt: new Date(),
                 verificationStatus: 'pending',
+                isMergedToDev: true,
                 verifierId: selectedVerifier._id,
                 verificationComment: null,
                 verificationDecidedAt: null,
@@ -1307,6 +1308,7 @@ export const rejectTaskVerification = async (req: AuthRequest, res: Response) =>
                 verificationComment: req.body?.comment || null,
                 verificationDecidedAt: new Date(),
                 status: 'review',
+                isMergedToDev: false,
                 finishedAt: null,
             },
             { new: true }

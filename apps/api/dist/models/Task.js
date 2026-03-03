@@ -56,6 +56,7 @@ const TaskSchema = new mongoose_1.Schema({
     verifierId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'User' },
     verificationComment: { type: String },
     verificationDecidedAt: { type: Date },
+    isMergedToDev: { type: Boolean, default: false },
     dueDate: { type: Date },
     needsClarification: { type: Boolean, default: false },
     clarificationText: { type: mongoose_1.Schema.Types.Mixed },

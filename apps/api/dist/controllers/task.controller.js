@@ -951,6 +951,7 @@ const finishTaskWork = async (req, res) => {
             status: 'under_verification',
             finishedAt: new Date(),
             verificationStatus: 'pending',
+            isMergedToDev: true,
             verifierId: selectedVerifier._id,
             verificationComment: null,
             verificationDecidedAt: null,
@@ -1112,6 +1113,7 @@ const rejectTaskVerification = async (req, res) => {
             verificationComment: req.body?.comment || null,
             verificationDecidedAt: new Date(),
             status: 'review',
+            isMergedToDev: false,
             finishedAt: null,
         }, { new: true })
             .populate('assigneeId', 'firstName lastName email')
