@@ -30,17 +30,6 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
     const socketRef = useRef<Socket | null>(null);
     const [typingUsersByConversation, setTypingUsersByConversation] = useState<Record<string, string[]>>({});
 
-    const getCurrentUserRole = () => {
-        try {
-            const token = localStorage.getItem('token');
-            if (!token) return null;
-            const payload = JSON.parse(atob(token.split('.')[1]));
-            return payload?.role || null;
-        } catch {
-            return null;
-        }
-    };
-
     useEffect(() => {
         const token = localStorage.getItem('token');
         const socket = io(SOCKET_URL, {
@@ -70,11 +59,9 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
         });
 
         socket.on('notification:created', (notification: any) => {
-            const role = getCurrentUserRole();
-            if (!role) return;
-            const recipients = notification?.recipientRoles;
-            if (Array.isArray(recipients) && recipients.length > 0 && !recipients.includes(role)) return;
-            if (notification?.message) alert(notification.message);
+            if (!notification) return;
+            queryClient.invalidateQueries({ queryKey: ['notifications'] });
+            queryClient.invalidateQueries({ queryKey: ['notifications-unread-count'] });
         });
 
         socket.on('chat:message', (payload: any) => {

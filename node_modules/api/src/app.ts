@@ -23,6 +23,7 @@ import githubRoutes from './routes/github.routes';
 import dockployRoutes from './routes/dockploy.routes';
 import clientRoutes from './routes/client.routes';
 import chatRoutes from './routes/chat.routes';
+import notificationRoutes from './routes/notification.routes';
 
 app.use(helmet());
 
@@ -60,6 +61,7 @@ app.use('/api/github', githubRoutes);
 app.use('/api/dockploy', dockployRoutes);
 app.use('/api/clients', clientRoutes);
 app.use('/api/chat', chatRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 app.get('/health', (_req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });

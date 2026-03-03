@@ -10,6 +10,7 @@ const GithubConfig_1 = __importDefault(require("../models/GithubConfig"));
 const User_1 = __importDefault(require("../models/User"));
 const task_schema_1 = require("@devmanager/shared/dist/task.schema");
 const socket_1 = require("../socket");
+const notification_service_1 = require("../services/notification.service");
 const INTERNAL_ROLES = ['admin', 'manager', 'member'];
 const isClarificationRequestPayload = (body) => {
     if (body?.status === 'clarified')
@@ -280,6 +281,32 @@ const extractUsernameFromLegacyBranch = (branch) => {
     }
     return null;
 };
+const buildTaskLink = (projectId, taskId) => projectId && taskId ? `/projects/${projectId.toString()}/tasks?taskId=${taskId.toString()}` : undefined;
+const notifyTaskAudience = async (input) => {
+    const task = input.task;
+    if (!task?._id || !task?.projectId)
+        return;
+    const projectAudience = input.includeProjectAudience === false
+        ? []
+        : await (0, notification_service_1.getProjectRelatedUserIds)(task.projectId);
+    const directIds = [
+        ...(input.recipientIds || []),
+        task.assigneeId?._id?.toString?.() || task.assigneeId?.toString?.(),
+        task.activeWorkerId?._id?.toString?.() || task.activeWorkerId?.toString?.(),
+        task.verifierId?._id?.toString?.() || task.verifierId?.toString?.(),
+    ].filter(Boolean);
+    await (0, notification_service_1.createAndDispatchNotifications)({
+        recipientIds: [...projectAudience, ...directIds],
+        actorUserId: input.actorUserId,
+        projectId: task.projectId,
+        taskId: task._id,
+        type: input.type,
+        title: input.title,
+        message: input.message,
+        link: buildTaskLink(task.projectId, task._id),
+        metadata: input.metadata,
+    });
+};
 async function restrictBranchToUser(token, owner, repo, branch, githubUsername) {
     try {
         const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/branches/${encodeURIComponent(branch)}/protection`, {
@@ -489,6 +516,13 @@ const createTask = async (req, res) => {
         // Create task. Branch is created when someone starts work.
         const task = await Task_1.default.create({ ...validated });
         res.status(201).json(toTaskResponse(task, req.user));
+        await notifyTaskAudience({
+            task,
+            actorUserId: req.user.userId,
+            type: 'task_created',
+            title: 'Task Created',
+            message: `A new task "${task.title}" was created.`,
+        });
         // Notify project room of new task
         emitTaskEvent('task:created', task);
     }
@@ -541,15 +575,22 @@ const updateTask = async (req, res) => {
         if (!task)
             return res.status(404).json({ message: 'Task not found' });
         res.json(toTaskResponse(task, req.user));
-        if (clarificationRequest && task.projectId) {
-            (0, socket_1.emitToAll)('notification:created', {
-                type: 'clarification_requested',
-                taskId: task._id,
-                projectId: task.projectId,
-                title: task.title,
-                message: `Clarification requested for task: ${task.title}`,
-                recipientRoles: ['admin', 'client'],
-                createdAt: new Date().toISOString(),
+        if (clarificationRequest) {
+            await notifyTaskAudience({
+                task,
+                actorUserId: req.user.userId,
+                type: 'task_clarification_requested',
+                title: 'Clarification Requested',
+                message: `Clarification requested for "${task.title}".`,
+            });
+        }
+        else {
+            await notifyTaskAudience({
+                task,
+                actorUserId: req.user.userId,
+                type: 'task_updated',
+                title: 'Task Updated',
+                message: `Task "${task.title}" was updated.`,
             });
         }
         // Notify project room of updated task
@@ -578,6 +619,13 @@ const deleteTask = async (req, res) => {
         }
         await Task_1.default.findByIdAndDelete(req.params.id);
         res.json({ message: 'Task deleted' });
+        await notifyTaskAudience({
+            task,
+            actorUserId: req.user.userId,
+            type: 'task_deleted',
+            title: 'Task Deleted',
+            message: `Task "${task.title}" was deleted.`,
+        });
         if (task.projectId) {
             (0, socket_1.emitToProject)(task.projectId.toString(), 'task:deleted', {
                 _id: task._id,
@@ -733,6 +781,13 @@ const startTaskWork = async (req, res) => {
         if (!updated)
             return res.status(404).json({ message: 'Task not found' });
         res.json(toTaskResponse(updated, req.user));
+        await notifyTaskAudience({
+            task: updated,
+            actorUserId: req.user.userId,
+            type: 'task_work_started',
+            title: 'Task Work Started',
+            message: `${req.user?.firstName || 'A team member'} started work on "${updated.title}".`,
+        });
         emitTaskEvent('task:updated', updated);
     }
     catch (error) {
@@ -775,6 +830,13 @@ const pauseTaskWork = async (req, res) => {
         if (!updated)
             return res.status(404).json({ message: 'Task not found' });
         res.json(toTaskResponse(updated, req.user));
+        await notifyTaskAudience({
+            task: updated,
+            actorUserId: req.user.userId,
+            type: 'task_work_paused',
+            title: 'Task Work Paused',
+            message: `${req.user?.firstName || 'A team member'} paused work on "${updated.title}".`,
+        });
         emitTaskEvent('task:updated', updated);
     }
     catch (error) {
@@ -817,6 +879,13 @@ const resumeTaskWork = async (req, res) => {
         if (!updated)
             return res.status(404).json({ message: 'Task not found' });
         res.json(toTaskResponse(updated, req.user));
+        await notifyTaskAudience({
+            task: updated,
+            actorUserId: req.user.userId,
+            type: 'task_work_resumed',
+            title: 'Task Work Resumed',
+            message: `${req.user?.firstName || 'A team member'} resumed work on "${updated.title}".`,
+        });
         emitTaskEvent('task:updated', updated);
     }
     catch (error) {
@@ -963,6 +1032,14 @@ const finishTaskWork = async (req, res) => {
         if (!updated)
             return res.status(404).json({ message: 'Task not found' });
         res.json(toTaskResponse(updated, req.user));
+        await notifyTaskAudience({
+            task: updated,
+            actorUserId: req.user.userId,
+            type: 'task_sent_for_verification',
+            title: 'Task Sent For Verification',
+            message: `"${updated.title}" is now under verification.`,
+            recipientIds: [selectedVerifier._id?.toString?.() || String(selectedVerifier._id)],
+        });
         emitTaskEvent('task:updated', updated);
     }
     catch (error) {
@@ -1085,6 +1162,13 @@ const approveTaskVerification = async (req, res) => {
         if (!updated)
             return res.status(404).json({ message: 'Task not found' });
         res.json(toTaskResponse(updated, req.user));
+        await notifyTaskAudience({
+            task: updated,
+            actorUserId: req.user.userId,
+            type: 'task_verification_approved',
+            title: 'Task Verified',
+            message: `"${updated.title}" was approved in verification.`,
+        });
         emitTaskEvent('task:updated', updated);
     }
     catch (error) {
@@ -1123,6 +1207,13 @@ const rejectTaskVerification = async (req, res) => {
         if (!updated)
             return res.status(404).json({ message: 'Task not found' });
         res.json(toTaskResponse(updated, req.user));
+        await notifyTaskAudience({
+            task: updated,
+            actorUserId: req.user.userId,
+            type: 'task_verification_rejected',
+            title: 'Task Verification Rejected',
+            message: `"${updated.title}" was rejected in verification and moved back to review.`,
+        });
         emitTaskEvent('task:updated', updated);
     }
     catch (error) {

@@ -7,6 +7,7 @@ exports.createComment = exports.getComments = void 0;
 const Comment_1 = __importDefault(require("../models/Comment"));
 const Task_1 = __importDefault(require("../models/Task"));
 const socket_1 = require("../socket");
+const notification_service_1 = require("../services/notification.service");
 const getComments = async (req, res) => {
     try {
         const { taskId } = req.params;
@@ -62,6 +63,19 @@ const createComment = async (req, res) => {
             }
         }
         const populated = await comment.populate('userId', 'firstName lastName email role');
+        if (task?.projectId) {
+            const recipientIds = await (0, notification_service_1.getProjectRelatedUserIds)(task.projectId);
+            await (0, notification_service_1.createAndDispatchNotifications)({
+                recipientIds,
+                actorUserId: req.user.userId,
+                projectId: task.projectId,
+                taskId: task._id,
+                type: commentType === 'clarification' ? 'task_clarification_comment' : 'task_comment_added',
+                title: commentType === 'clarification' ? 'Clarification Comment Added' : 'Task Comment Added',
+                message: `New ${commentType} comment on "${task.title}".`,
+                link: `/projects/${task.projectId.toString()}/tasks?taskId=${task._id.toString()}`,
+            });
+        }
         res.status(201).json(populated);
     }
     catch (error) {

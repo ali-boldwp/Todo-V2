@@ -94,6 +94,11 @@ export const emitToProject = (projectId: string, event: string, payload?: any) =
     getIO().to(`project:${projectId}`).emit(event, payload);
 };
 
+/** Emit to one authenticated user room */
+export const emitToUser = (userId: string, event: string, payload?: any) => {
+    getIO().to(`user:${userId}`).emit(event, payload);
+};
+
 /** Broadcast to all connected clients */
 export const emitToAll = (event: string, payload?: any) => {
     getIO().emit(event, payload);

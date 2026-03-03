@@ -3,6 +3,7 @@ import { AuthRequest } from '../middleware/auth';
 import Comment from '../models/Comment';
 import Task from '../models/Task';
 import { emitToProject } from '../socket';
+import { createAndDispatchNotifications, getProjectRelatedUserIds } from '../services/notification.service';
 
 export const getComments = async (req: AuthRequest, res: Response) => {
     try {
@@ -61,6 +62,19 @@ export const createComment = async (req: AuthRequest, res: Response) => {
         }
 
         const populated = await comment.populate('userId', 'firstName lastName email role');
+        if (task?.projectId) {
+            const recipientIds = await getProjectRelatedUserIds(task.projectId);
+            await createAndDispatchNotifications({
+                recipientIds,
+                actorUserId: req.user!.userId,
+                projectId: task.projectId,
+                taskId: task._id,
+                type: commentType === 'clarification' ? 'task_clarification_comment' : 'task_comment_added',
+                title: commentType === 'clarification' ? 'Clarification Comment Added' : 'Task Comment Added',
+                message: `New ${commentType} comment on "${task.title}".`,
+                link: `/projects/${task.projectId.toString()}/tasks?taskId=${task._id.toString()}`,
+            });
+        }
         res.status(201).json(populated);
     } catch (error) {
         res.status(500).json({ message: 'Server error' });

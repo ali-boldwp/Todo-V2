@@ -15,26 +15,38 @@ const DockployIntegration: React.FC = () => {
 
     const [baseUrl, setBaseUrl] = React.useState('');
     const [apiToken, setApiToken] = React.useState('');
-    const [deployPathTemplate, setDeployPathTemplate] = React.useState('/api/apps/{appId}/deploy');
-    const [appStatusPathTemplate, setAppStatusPathTemplate] = React.useState('/api/apps/{appId}');
+    const [deployPathTemplate, setDeployPathTemplate] = React.useState('/api/application/{appId}/deploy');
+    const [appStatusPathTemplate, setAppStatusPathTemplate] = React.useState('/api/application/{appId}');
+    const [formMessage, setFormMessage] = React.useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
     React.useEffect(() => {
         if (!dockployConfig) return;
         setBaseUrl(dockployConfig.baseUrl || '');
-        setDeployPathTemplate(dockployConfig.deployPathTemplate || '/api/apps/{appId}/deploy');
-        setAppStatusPathTemplate(dockployConfig.appStatusPathTemplate || '/api/apps/{appId}');
+        setDeployPathTemplate(dockployConfig.deployPathTemplate || '/api/application/{appId}/deploy');
+        setAppStatusPathTemplate(dockployConfig.appStatusPathTemplate || '/api/application/{appId}');
     }, [dockployConfig]);
 
     const saveMutation = useMutation({
         mutationFn: saveDockployConfig,
-        onSuccess: () => {
+        onSuccess: (result: any) => {
             queryClient.invalidateQueries({ queryKey: ['dockploy-config'] });
             queryClient.invalidateQueries({ queryKey: ['dockploy-connection-status'] });
             setApiToken('');
-            alert('Dockploy settings saved');
+            if (result?.connectionVerified) {
+                setFormMessage({ type: 'success', text: 'Dockploy settings saved and connection verified.' });
+                return;
+            }
+            if (result?.endpointDiscoveryFailed) {
+                setFormMessage({
+                    type: 'error',
+                    text: `Settings saved, but endpoint auto-detection failed. ${result?.connectionMessage || ''} Configure path templates manually for your Dockploy version.`,
+                });
+                return;
+            }
+            setFormMessage({ type: 'success', text: 'Dockploy settings saved.' });
         },
         onError: (err: any) => {
-            alert(err?.response?.data?.message || 'Failed to save Dockploy settings');
+            setFormMessage({ type: 'error', text: err?.response?.data?.message || 'Failed to save Dockploy settings' });
         }
     });
 
@@ -69,6 +81,17 @@ const DockployIntegration: React.FC = () => {
                 </div>
                 {!statusLoading && connectionStatus?.message && (
                     <p className="mb-3 text-xs text-gray-500">{connectionStatus.message}</p>
+                )}
+                {formMessage && (
+                    <div
+                        className={`mb-3 rounded-lg border px-3 py-2 text-sm ${
+                            formMessage.type === 'success'
+                                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                : 'border-red-200 bg-red-50 text-red-700'
+                        }`}
+                    >
+                        {formMessage.text}
+                    </div>
                 )}
                 <div className="space-y-4">
                     <div>
@@ -109,8 +132,15 @@ const DockployIntegration: React.FC = () => {
                     <button
                         type="button"
                         onClick={() => {
-                            if (!baseUrl.trim()) return alert('Base URL is required');
-                            if (!apiToken.trim() && !dockployConfig?.hasApiToken) return alert('API token is required');
+                            setFormMessage(null);
+                            if (!baseUrl.trim()) {
+                                setFormMessage({ type: 'error', text: 'Base URL is required.' });
+                                return;
+                            }
+                            if (!apiToken.trim() && !dockployConfig?.hasApiToken) {
+                                setFormMessage({ type: 'error', text: 'API token is required.' });
+                                return;
+                            }
                             saveMutation.mutate({
                                 baseUrl: baseUrl.trim(),
                                 apiToken: apiToken.trim(),

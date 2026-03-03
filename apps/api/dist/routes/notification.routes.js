@@ -1,0 +1,14 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const notification_controller_1 = require("../controllers/notification.controller");
+const auth_1 = require("../middleware/auth");
+const router = (0, express_1.Router)();
+router.use(auth_1.authenticate);
+router.use(auth_1.requireProfileImageSetup);
+router.use(auth_1.requireGithubSetupForTeamMembers);
+router.get('/', notification_controller_1.getMyNotifications);
+router.get('/unread-count', notification_controller_1.getMyUnreadNotificationCount);
+router.post('/read-all', notification_controller_1.markAllNotificationsRead);
+router.post('/:id/read', notification_controller_1.markNotificationRead);
+exports.default = router;

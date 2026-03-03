@@ -6,6 +6,7 @@ import DockployConfig from '../models/DockployConfig';
 import User from '../models/User';
 import { ProjectSchema } from '@devmanager/shared/dist/project.schema';
 import { emitToAll } from '../socket';
+import { createAndDispatchNotifications, getProjectRelatedUserIds } from '../services/notification.service';
 
 const ACCESS_FIELD_KEYS = ['projectUrl', 'devWebsiteUrl', 'accessAccounts'] as const;
 const DOCKPLOY_FIELD_KEYS = ['dockployAppId', 'dockployAutoDeploy'] as const;
@@ -40,6 +41,29 @@ const ensureProjectAccess = (project: any, user: AuthRequest['user']) => {
         return project.members?.some?.((member: any) => member?.toString?.() === user.userId);
     }
     return false;
+};
+
+const buildProjectLink = (projectId: any) => (projectId ? `/projects/${projectId.toString()}/overview` : undefined);
+
+const notifyProjectAudience = async (input: {
+    project: any;
+    actorUserId?: string;
+    type: string;
+    title: string;
+    message: string;
+    recipientIds?: string[];
+}) => {
+    if (!input.project?._id) return;
+    const audience = await getProjectRelatedUserIds(input.project._id);
+    await createAndDispatchNotifications({
+        recipientIds: [...audience, ...(input.recipientIds || [])],
+        actorUserId: input.actorUserId,
+        projectId: input.project._id,
+        type: input.type,
+        title: input.title,
+        message: input.message,
+        link: buildProjectLink(input.project._id),
+    });
 };
 
 const getRepoDetails = async (token: string, owner: string, repo: string) => {
@@ -238,6 +262,13 @@ export const createProject = async (req: AuthRequest, res: Response) => {
             dockployAppId: req.body?.dockployAppId ? String(req.body.dockployAppId).trim() : undefined,
             dockployAutoDeploy: Boolean(req.body?.dockployAutoDeploy),
         });
+        await notifyProjectAudience({
+            project,
+            actorUserId: req.user!.userId,
+            type: 'project_created',
+            title: 'Project Created',
+            message: `Project "${project.name}" was created.`,
+        });
         res.status(201).json(project);
     } catch (error: any) {
         if (error.issues) return res.status(400).json({ errors: error.issues });
@@ -360,6 +391,13 @@ export const updateProject = async (req: AuthRequest, res: Response) => {
         );
 
         if (!project) return res.status(404).json({ message: 'Project not found' });
+        await notifyProjectAudience({
+            project,
+            actorUserId: req.user!.userId,
+            type: 'project_updated',
+            title: 'Project Updated',
+            message: `Project "${project.name}" was updated.`,
+        });
         res.json(sanitizeProjectForViewer(project, req.user!.role));
     } catch (error: any) {
         if (error.issues) return res.status(400).json({ errors: error.issues });
@@ -373,11 +411,21 @@ export const deleteProject = async (req: AuthRequest, res: Response) => {
             return res.status(403).json({ message: 'Only admins can delete projects' });
         }
 
-        const project = await Project.findByIdAndDelete(req.params.id);
-
+        const project = await Project.findById(req.params.id).select('_id name');
         if (!project) return res.status(404).json({ message: 'Project not found' });
+        const recipientIds = await getProjectRelatedUserIds(project._id);
+        await Project.findByIdAndDelete(req.params.id);
 
         emitToAll('project:updated', null); // Optionally notify clients to refresh project list
+        await createAndDispatchNotifications({
+            recipientIds,
+            actorUserId: req.user!.userId,
+            projectId: project._id,
+            type: 'project_deleted',
+            title: 'Project Deleted',
+            message: `Project "${project.name}" was deleted.`,
+            link: '/projects',
+        });
         res.json({ message: 'Project deleted successfully' });
     } catch (error) {
         console.error('Error deleting project:', error);
@@ -390,7 +438,7 @@ export const addProjectMember = async (req: AuthRequest, res: Response) => {
         const { userId } = req.body;
         if (!userId) return res.status(400).json({ message: 'userId is required' });
 
-        const user = await User.findById(userId).select('githubUsername githubUserId githubConnectedAt email role');
+        const user = await User.findById(userId).select('githubUsername githubUserId githubConnectedAt email role firstName');
         if (!user) return res.status(404).json({ message: 'User not found' });
 
         const needsGithubSetup = ['manager', 'member'].includes(user.role || '');
@@ -441,6 +489,14 @@ export const addProjectMember = async (req: AuthRequest, res: Response) => {
             }
         }
 
+        await notifyProjectAudience({
+            project,
+            actorUserId: req.user!.userId,
+            type: 'project_member_added',
+            title: 'Project Member Added',
+            message: `${user.firstName || user.email} was added to project "${project.name}".`,
+            recipientIds: [userId],
+        });
         res.json(project);
         emitToAll('project:updated', project);
     } catch (error) {
@@ -545,7 +601,7 @@ export const getProjectDockployStatus = async (req: AuthRequest, res: Response) 
             return res.status(400).json({ message: 'Dockploy integration is not configured globally' });
         }
 
-        const template = config.appStatusPathTemplate || '/api/apps/{appId}';
+        const template = config.appStatusPathTemplate || '/api/application/{appId}';
         const path = applyDockployPathTemplate(template, project.dockployAppId);
         const result = await requestDockploy(
             { baseUrl: config.baseUrl, apiToken: config.apiToken, appStatusPathTemplate: config.appStatusPathTemplate },
@@ -584,7 +640,7 @@ export const triggerProjectDockployDeploy = async (req: AuthRequest, res: Respon
             return res.status(400).json({ message: 'Dockploy integration is not configured globally' });
         }
 
-        const template = config.deployPathTemplate || '/api/apps/{appId}/deploy';
+        const template = config.deployPathTemplate || '/api/application/{appId}/deploy';
         const path = applyDockployPathTemplate(template, project.dockployAppId);
         const result = await requestDockploy(
             { baseUrl: config.baseUrl, apiToken: config.apiToken, deployPathTemplate: config.deployPathTemplate },
@@ -601,12 +657,26 @@ export const triggerProjectDockployDeploy = async (req: AuthRequest, res: Respon
         await project.save();
 
         if (!result.ok) {
+            await notifyProjectAudience({
+                project,
+                actorUserId: req.user!.userId,
+                type: 'project_deploy_failed',
+                title: 'Deploy Failed',
+                message: `Deploy failed for project "${project.name}".`,
+            });
             return res.status(400).json({
                 message: `Failed to trigger deploy (${result.status})`,
                 dockployResponse: result.data,
             });
         }
 
+        await notifyProjectAudience({
+            project,
+            actorUserId: req.user!.userId,
+            type: 'project_deploy_triggered',
+            title: 'Deploy Triggered',
+            message: `Deploy was triggered for project "${project.name}".`,
+        });
         return res.json({
             message: 'Deploy triggered successfully',
             dockployResponse: result.data,
@@ -627,6 +697,14 @@ export const removeProjectMember = async (req: AuthRequest, res: Response) => {
         ).populate('members', 'firstName lastName email role');
 
         if (!project) return res.status(404).json({ message: 'Project not found' });
+        await notifyProjectAudience({
+            project,
+            actorUserId: req.user!.userId,
+            type: 'project_member_removed',
+            title: 'Project Member Removed',
+            message: `A member was removed from project "${project.name}".`,
+            recipientIds: [req.params.userId],
+        });
         res.json(project);
         emitToAll('project:updated', project);
     } catch (error) {
@@ -671,6 +749,13 @@ export const uploadProjectDocument = async (req: AuthRequest, res: Response) => 
         await project.save();
         await project.populate('documents.uploadedBy', 'firstName lastName email');
 
+        await notifyProjectAudience({
+            project,
+            actorUserId: req.user!.userId,
+            type: 'project_document_uploaded',
+            title: 'Project Document Uploaded',
+            message: `A document "${title}" was uploaded in "${project.name}".`,
+        });
         res.status(201).json(project.documents[project.documents.length - 1]);
     } catch (error: any) {
         console.error('Error uploading document:', error);
@@ -698,6 +783,13 @@ export const deleteProjectDocument = async (req: AuthRequest, res: Response) => 
         project.documents.splice(docIndex, 1);
         await project.save();
 
+        await notifyProjectAudience({
+            project,
+            actorUserId: req.user!.userId,
+            type: 'project_document_deleted',
+            title: 'Project Document Deleted',
+            message: `A project document was deleted in "${project.name}".`,
+        });
         res.json({ message: 'Document deleted successfully' });
     } catch (error) {
         console.error('Error deleting document:', error);

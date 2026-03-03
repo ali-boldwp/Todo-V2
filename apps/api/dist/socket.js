@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.emitToAll = exports.emitToProject = exports.getOnlineUserIds = exports.getIO = exports.initSocket = void 0;
+exports.emitToAll = exports.emitToUser = exports.emitToProject = exports.getOnlineUserIds = exports.getIO = exports.initSocket = void 0;
 const socket_io_1 = require("socket.io");
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 let io;
@@ -99,6 +99,11 @@ const emitToProject = (projectId, event, payload) => {
     (0, exports.getIO)().to(`project:${projectId}`).emit(event, payload);
 };
 exports.emitToProject = emitToProject;
+/** Emit to one authenticated user room */
+const emitToUser = (userId, event, payload) => {
+    (0, exports.getIO)().to(`user:${userId}`).emit(event, payload);
+};
+exports.emitToUser = emitToUser;
 /** Broadcast to all connected clients */
 const emitToAll = (event, payload) => {
     (0, exports.getIO)().emit(event, payload);

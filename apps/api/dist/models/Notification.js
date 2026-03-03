@@ -34,10 +34,17 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 const mongoose_1 = __importStar(require("mongoose"));
-const DockployConfigSchema = new mongoose_1.Schema({
-    baseUrl: { type: String, required: true },
-    apiToken: { type: String, required: true },
-    deployPathTemplate: { type: String, default: '/api/application/{appId}/deploy' },
-    appStatusPathTemplate: { type: String, default: '/api/application/{appId}' },
+const NotificationSchema = new mongoose_1.Schema({
+    recipientId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+    actorUserId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'User' },
+    projectId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Project', index: true },
+    taskId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Task', index: true },
+    type: { type: String, required: true, index: true },
+    title: { type: String, required: true },
+    message: { type: String, required: true },
+    link: { type: String },
+    metadata: { type: mongoose_1.Schema.Types.Mixed },
+    readAt: { type: Date, default: null, index: true },
 }, { timestamps: true });
-exports.default = mongoose_1.default.model('DockployConfig', DockployConfigSchema);
+NotificationSchema.index({ recipientId: 1, createdAt: -1 });
+exports.default = mongoose_1.default.model('Notification', NotificationSchema);
