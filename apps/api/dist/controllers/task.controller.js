@@ -423,6 +423,16 @@ async function mergeGithubBranches(token, owner, repo, base, head) {
         return { ok: false, status: 500, message: error?.message || 'Merge request failed' };
     }
 }
+const buildGithubCompareUrl = (owner, repo, base, head) => {
+    const encodedBase = encodeURIComponent(base);
+    const encodedHead = encodeURIComponent(head);
+    return `https://github.com/${owner}/${repo}/compare/${encodedBase}...${encodedHead}?expand=1`;
+};
+const buildGithubPullRequestUrl = (owner, repo, base, head) => {
+    const encodedBase = encodeURIComponent(base);
+    const encodedHead = encodeURIComponent(head);
+    return `https://github.com/${owner}/${repo}/pull/new/${encodedBase}...${encodedHead}`;
+};
 const getTasks = async (req, res) => {
     try {
         const { projectId } = req.query;
@@ -857,12 +867,17 @@ const finishTaskWork = async (req, res) => {
                     responseText: mergeDevToTask.responseText || null,
                 });
                 if (mergeDevToTask.conflict) {
+                    const compareUrl = buildGithubCompareUrl(project.githubRepoOwner, project.githubRepoName, taskBranch, 'dev');
+                    const pullRequestUrl = buildGithubPullRequestUrl(project.githubRepoOwner, project.githubRepoName, taskBranch, 'dev');
                     return res.status(409).json({
                         code: 'merge_conflict_dev_to_task',
                         mergeStep: 'dev_to_task',
                         message: `Merge conflict detected while updating ${taskBranch} from dev. Please resolve conflicts in your branch, push, and finish task again.`,
                         details: mergeDevToTask.message,
-                        branch: taskBranch
+                        branch: taskBranch,
+                        compareUrl,
+                        pullRequestUrl,
+                        resolveUrl: compareUrl
                     });
                 }
                 return res.status(400).json({
@@ -883,12 +898,17 @@ const finishTaskWork = async (req, res) => {
                     responseText: mergeTaskToDev.responseText || null,
                 });
                 if (mergeTaskToDev.conflict) {
+                    const compareUrl = buildGithubCompareUrl(project.githubRepoOwner, project.githubRepoName, 'dev', taskBranch);
+                    const pullRequestUrl = buildGithubPullRequestUrl(project.githubRepoOwner, project.githubRepoName, 'dev', taskBranch);
                     return res.status(409).json({
                         code: 'merge_conflict_task_to_dev',
                         mergeStep: 'task_to_dev',
                         message: `Merge conflict detected while merging ${taskBranch} into dev. Please resolve conflicts and finish task again.`,
                         details: mergeTaskToDev.message,
-                        branch: taskBranch
+                        branch: taskBranch,
+                        compareUrl,
+                        pullRequestUrl,
+                        resolveUrl: compareUrl
                     });
                 }
                 return res.status(400).json({

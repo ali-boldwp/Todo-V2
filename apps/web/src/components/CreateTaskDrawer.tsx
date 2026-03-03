@@ -365,14 +365,22 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
         },
         onError: (error: any) => {
             const data = error?.response?.data || {};
+            const conflictUrl = data?.pullRequestUrl || data?.compareUrl || data?.resolveUrl;
             const pieces = [
                 data?.message || 'Failed to finish task',
                 data?.mergeStep ? `Step: ${data.mergeStep}` : '',
                 data?.code ? `Code: ${data.code}` : '',
                 data?.branch ? `Branch: ${data.branch}` : '',
                 data?.details ? `Details: ${data.details}` : '',
+                conflictUrl ? `Resolve: ${conflictUrl}` : '',
             ].filter(Boolean);
             alert(pieces.join('\n'));
+            if (conflictUrl) {
+                const shouldOpen = window.confirm('Open GitHub conflict resolution page now?');
+                if (shouldOpen) {
+                    window.open(conflictUrl, '_blank', 'noopener,noreferrer');
+                }
+            }
         },
     });
 
