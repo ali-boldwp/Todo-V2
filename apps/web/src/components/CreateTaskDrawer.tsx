@@ -36,6 +36,44 @@ interface PendingAttachment {
     file: File;
 }
 
+type FinishFlowPhase = 'running' | 'conflict' | 'error' | 'success';
+
+interface FinishFlowErrorDetail {
+    message: string;
+    code?: string;
+    mergeStep?: string;
+    branch?: string;
+    details?: string;
+    conflictUrl?: string;
+}
+
+interface FinishFlowState {
+    isOpen: boolean;
+    phase: FinishFlowPhase;
+    progressStep: number;
+    error: FinishFlowErrorDetail | null;
+    hasOpenedResolveUrl: boolean;
+}
+
+type TaskActionType = 'start' | 'pause' | 'resume' | 'approve' | 'reject' | 'fix_branch';
+type TaskActionModalPhase = 'running' | 'success' | 'error';
+
+interface TaskActionModalState {
+    isOpen: boolean;
+    phase: TaskActionModalPhase;
+    action: TaskActionType | null;
+    title: string;
+    message: string;
+    details?: string;
+}
+
+const FINISH_PROGRESS_STEPS = [
+    'Preparing finish request',
+    'Syncing dev into task branch',
+    'Merging task branch into dev',
+    'Assigning verifier and moving task to verification',
+];
+
 const normalizeDescription = (value: any): OutputData | undefined => {
     if (!value) return undefined;
     if (typeof value === 'object' && Array.isArray(value.blocks)) {
@@ -134,6 +172,25 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
     const [, setTick] = useState(0);
     const [isFinishConfirmOpen, setIsFinishConfirmOpen] = useState(false);
     const [verificationNotify, setVerificationNotify] = useState<{ name: string; email?: string } | null>(null);
+    const [verificationDecision, setVerificationDecision] = useState<{ isOpen: boolean; type: 'approve' | 'reject' | null; comment: string }>({
+        isOpen: false,
+        type: null,
+        comment: '',
+    });
+    const [taskActionModal, setTaskActionModal] = useState<TaskActionModalState>({
+        isOpen: false,
+        phase: 'running',
+        action: null,
+        title: '',
+        message: '',
+    });
+    const [finishFlow, setFinishFlow] = useState<FinishFlowState>({
+        isOpen: false,
+        phase: 'running',
+        progressStep: 0,
+        error: null,
+        hasOpenedResolveUrl: false,
+    });
 
     // Track whether we've just loaded (to avoid auto-saving on initial populate)
     const isInitialized = useRef(false);
@@ -188,6 +245,22 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
         setEditorInstanceKey((k) => k + 1);
         setSaveStatus('idle');
         setUploadError(null);
+        setIsFinishConfirmOpen(false);
+        setVerificationDecision({ isOpen: false, type: null, comment: '' });
+        setTaskActionModal({
+            isOpen: false,
+            phase: 'running',
+            action: null,
+            title: '',
+            message: '',
+        });
+        setFinishFlow({
+            isOpen: false,
+            phase: 'running',
+            progressStep: 0,
+            error: null,
+            hasOpenedResolveUrl: false,
+        });
         // Mark as initialized after a short delay so first render doesn't trigger auto-save
         const t = setTimeout(() => { isInitialized.current = true; }, 1000);
         return () => clearTimeout(t);
@@ -198,6 +271,17 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
         const interval = setInterval(() => setTick((v) => v + 1), 1000);
         return () => clearInterval(interval);
     }, [activeWorker, isWorkPaused, lastWorkStartedAt]);
+
+    useEffect(() => {
+        if (!finishFlow.isOpen || finishFlow.phase !== 'running') return;
+        const interval = setInterval(() => {
+            setFinishFlow((prev) => ({
+                ...prev,
+                progressStep: Math.min(prev.progressStep + 1, FINISH_PROGRESS_STEPS.length - 1),
+            }));
+        }, 1400);
+        return () => clearInterval(interval);
+    }, [finishFlow.isOpen, finishFlow.phase]);
 
     // --- Create mutation (manual save, closes drawer) ---
     const createMutation = useMutation({
@@ -302,6 +386,38 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
         if (updatedTask.status) setStatus(updatedTask.status);
     };
 
+    const openTaskActionRunning = (action: TaskActionType, title: string, message: string) => {
+        setTaskActionModal({
+            isOpen: true,
+            phase: 'running',
+            action,
+            title,
+            message,
+        });
+    };
+
+    const markTaskActionSuccess = (title: string, message: string) => {
+        setTaskActionModal((prev) => ({
+            ...prev,
+            isOpen: true,
+            phase: 'success',
+            title,
+            message,
+            details: undefined,
+        }));
+    };
+
+    const markTaskActionError = (title: string, message: string, details?: string) => {
+        setTaskActionModal((prev) => ({
+            ...prev,
+            isOpen: true,
+            phase: 'error',
+            title,
+            message,
+            details,
+        }));
+    };
+
     const startWorkMutation = useMutation({
         mutationFn: () => {
             if (!task?._id) return Promise.reject(new Error('No task selected'));
@@ -310,9 +426,10 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
         onSuccess: (updatedTask) => {
             queryClient.invalidateQueries({ queryKey: ['tasks'] });
             applyWorkState(updatedTask);
+            markTaskActionSuccess('Task Started', 'Task work has started successfully.');
         },
         onError: (error: any) => {
-            alert(error?.response?.data?.message || 'Failed to start task');
+            markTaskActionError('Failed to Start Task', error?.response?.data?.message || 'Failed to start task');
         },
     });
 
@@ -324,9 +441,10 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
         onSuccess: (updatedTask) => {
             queryClient.invalidateQueries({ queryKey: ['tasks'] });
             applyWorkState(updatedTask);
+            markTaskActionSuccess('Task Paused', 'Task work is paused.');
         },
         onError: (error: any) => {
-            alert(error?.response?.data?.message || 'Failed to pause task');
+            markTaskActionError('Failed to Pause Task', error?.response?.data?.message || 'Failed to pause task');
         },
     });
 
@@ -338,9 +456,10 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
         onSuccess: (updatedTask) => {
             queryClient.invalidateQueries({ queryKey: ['tasks'] });
             applyWorkState(updatedTask);
+            markTaskActionSuccess('Task Resumed', 'Task work has resumed.');
         },
         onError: (error: any) => {
-            alert(error?.response?.data?.message || 'Failed to resume task');
+            markTaskActionError('Failed to Resume Task', error?.response?.data?.message || 'Failed to resume task');
         },
     });
 
@@ -352,6 +471,13 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
         onSuccess: (updatedTask) => {
             queryClient.invalidateQueries({ queryKey: ['tasks'] });
             applyWorkState(updatedTask);
+            setFinishFlow({
+                isOpen: true,
+                phase: 'success',
+                progressStep: FINISH_PROGRESS_STEPS.length - 1,
+                error: null,
+                hasOpenedResolveUrl: false,
+            });
             const assignedVerifier = updatedTask?.verifierId;
             const fullName = assignedVerifier
                 ? `${assignedVerifier.firstName || ''} ${assignedVerifier.lastName || ''}`.trim() || assignedVerifier.email || ''
@@ -366,21 +492,22 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
         onError: (error: any) => {
             const data = error?.response?.data || {};
             const conflictUrl = data?.pullRequestUrl || data?.compareUrl || data?.resolveUrl;
-            const pieces = [
-                data?.message || 'Failed to finish task',
-                data?.mergeStep ? `Step: ${data.mergeStep}` : '',
-                data?.code ? `Code: ${data.code}` : '',
-                data?.branch ? `Branch: ${data.branch}` : '',
-                data?.details ? `Details: ${data.details}` : '',
-                conflictUrl ? `Resolve: ${conflictUrl}` : '',
-            ].filter(Boolean);
-            alert(pieces.join('\n'));
-            if (conflictUrl) {
-                const shouldOpen = window.confirm('Open GitHub conflict resolution page now?');
-                if (shouldOpen) {
-                    window.open(conflictUrl, '_blank', 'noopener,noreferrer');
-                }
-            }
+            const mergeStep = String(data?.mergeStep || '');
+            const stepIndex = mergeStep === 'dev_to_task' ? 1 : mergeStep === 'task_to_dev' ? 2 : 0;
+            setFinishFlow({
+                isOpen: true,
+                phase: conflictUrl ? 'conflict' : 'error',
+                progressStep: stepIndex,
+                error: {
+                    message: data?.message || 'Failed to finish task',
+                    code: data?.code,
+                    mergeStep: data?.mergeStep,
+                    branch: data?.branch,
+                    details: data?.details,
+                    conflictUrl,
+                },
+                hasOpenedResolveUrl: false,
+            });
         },
     });
 
@@ -392,11 +519,62 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
         onSuccess: (updatedTask) => {
             queryClient.invalidateQueries({ queryKey: ['tasks'] });
             applyWorkState(updatedTask);
+            markTaskActionSuccess('Branch Fixed', 'Task branch naming has been fixed.');
         },
         onError: (error: any) => {
-            alert(error?.response?.data?.message || 'Failed to fix task branch');
+            markTaskActionError('Failed to Fix Branch', error?.response?.data?.message || 'Failed to fix task branch');
         },
     });
+
+    const runFinishFlow = () => {
+        setFinishFlow({
+            isOpen: true,
+            phase: 'running',
+            progressStep: 0,
+            error: null,
+            hasOpenedResolveUrl: false,
+        });
+        finishWorkMutation.mutate();
+    };
+
+    const runStartWork = () => {
+        openTaskActionRunning('start', 'Starting Task', 'System is assigning you as active worker and starting timer.');
+        startWorkMutation.mutate();
+    };
+
+    const runPauseWork = () => {
+        openTaskActionRunning('pause', 'Pausing Task', 'System is pausing timer and saving elapsed work.');
+        pauseWorkMutation.mutate();
+    };
+
+    const runResumeWork = () => {
+        openTaskActionRunning('resume', 'Resuming Task', 'System is resuming timer for this task.');
+        resumeWorkMutation.mutate();
+    };
+
+    const runFixBranch = () => {
+        openTaskActionRunning('fix_branch', 'Fixing Branch', 'System is updating task branch to the current naming format.');
+        fixBranchMutation.mutate();
+    };
+
+    const openVerificationDecision = (type: 'approve' | 'reject') => {
+        setVerificationDecision({
+            isOpen: true,
+            type,
+            comment: '',
+        });
+    };
+
+    const submitVerificationDecision = () => {
+        if (verificationDecision.type === 'approve') {
+            openTaskActionRunning('approve', 'Approving Verification', 'System is marking this task as verified.');
+            approveVerificationMutation.mutate(verificationDecision.comment || undefined);
+        } else if (verificationDecision.type === 'reject') {
+            openTaskActionRunning('reject', 'Rejecting Verification', 'System is sending this task back for rework.');
+            rejectVerificationMutation.mutate(verificationDecision.comment || undefined);
+        }
+        setVerificationDecision({ isOpen: false, type: null, comment: '' });
+    };
 
     const confirmAndFinishTask = () => setIsFinishConfirmOpen(true);
 
@@ -408,9 +586,10 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
         onSuccess: (updatedTask) => {
             queryClient.invalidateQueries({ queryKey: ['tasks'] });
             applyWorkState(updatedTask);
+            markTaskActionSuccess('Verification Approved', 'Task verification has been approved.');
         },
         onError: (error: any) => {
-            alert(error?.response?.data?.message || 'Failed to approve task');
+            markTaskActionError('Failed to Approve Verification', error?.response?.data?.message || 'Failed to approve task');
         },
     });
 
@@ -422,9 +601,10 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
         onSuccess: (updatedTask) => {
             queryClient.invalidateQueries({ queryKey: ['tasks'] });
             applyWorkState(updatedTask);
+            markTaskActionSuccess('Verification Rejected', 'Task verification has been rejected and sent back.');
         },
         onError: (error: any) => {
-            alert(error?.response?.data?.message || 'Failed to reject task');
+            markTaskActionError('Failed to Reject Verification', error?.response?.data?.message || 'Failed to reject task');
         },
     });
 
@@ -652,7 +832,7 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
                             {canShowFixBranchButton && (
                                 <div className="flex items-center min-h-[28px] px-1">
                                     <button
-                                        onClick={() => fixBranchMutation.mutate()}
+                                        onClick={runFixBranch}
                                         disabled={fixBranchMutation.isPending}
                                         className="px-3 py-1 text-xs font-semibold rounded-md bg-amber-100 text-amber-800 hover:bg-amber-200 disabled:opacity-50"
                                     >
@@ -820,21 +1000,15 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
                             {canVerifyInDrawer && (
                                 <>
                                     <button
-                                        onClick={() => {
-                                            const comment = window.prompt('Approval note (optional):') || undefined;
-                                            approveVerificationMutation.mutate(comment);
-                                        }}
-                                        disabled={approveVerificationMutation.isPending}
+                                        onClick={() => openVerificationDecision('approve')}
+                                        disabled={approveVerificationMutation.isPending || rejectVerificationMutation.isPending}
                                         className="px-4 py-1.5 text-sm font-semibold text-green-700 hover:bg-green-50 rounded-md transition-all disabled:opacity-50"
                                     >
                                         {approveVerificationMutation.isPending ? 'Approving...' : 'Approve'}
                                     </button>
                                     <button
-                                        onClick={() => {
-                                            const comment = window.prompt('Rejection reason (optional):') || undefined;
-                                            rejectVerificationMutation.mutate(comment);
-                                        }}
-                                        disabled={rejectVerificationMutation.isPending}
+                                        onClick={() => openVerificationDecision('reject')}
+                                        disabled={rejectVerificationMutation.isPending || approveVerificationMutation.isPending}
                                         className="px-4 py-1.5 text-sm font-semibold text-red-700 hover:bg-red-50 rounded-md transition-all disabled:opacity-50"
                                     >
                                         {rejectVerificationMutation.isPending ? 'Rejecting...' : 'Reject'}
@@ -850,7 +1024,7 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
                                         <>
                                             {isWorkPaused ? (
                                                 <button
-                                                    onClick={() => resumeWorkMutation.mutate()}
+                                                    onClick={runResumeWork}
                                                     disabled={resumeWorkMutation.isPending}
                                                     className="px-4 py-1.5 text-sm font-semibold text-green-700 hover:bg-green-50 rounded-md transition-all disabled:opacity-50"
                                                 >
@@ -858,7 +1032,7 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
                                                 </button>
                                             ) : (
                                                 <button
-                                                    onClick={() => pauseWorkMutation.mutate()}
+                                                    onClick={runPauseWork}
                                                     disabled={pauseWorkMutation.isPending}
                                                     className="px-4 py-1.5 text-sm font-semibold text-amber-700 hover:bg-amber-50 rounded-md transition-all disabled:opacity-50"
                                                 >
@@ -867,10 +1041,10 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
                                             )}
                                             <button
                                                 onClick={confirmAndFinishTask}
-                                                disabled={finishWorkMutation.isPending}
+                                                disabled={finishWorkMutation.isPending || (finishFlow.isOpen && finishFlow.phase === 'running')}
                                                 className="px-4 py-1.5 text-sm font-semibold text-blue-700 hover:bg-blue-50 rounded-md transition-all disabled:opacity-50"
                                             >
-                                                {finishWorkMutation.isPending ? 'Finishing...' : 'Finish'}
+                                                {finishWorkMutation.isPending || (finishFlow.isOpen && finishFlow.phase === 'running') ? 'Finishing...' : 'Finish'}
                                             </button>
                                         </>
                                     ) : !activeWorker ? (
@@ -884,7 +1058,7 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
                                             </span>
                                         ) : (
                                         <button
-                                            onClick={() => startWorkMutation.mutate()}
+                                            onClick={runStartWork}
                                             disabled={startWorkMutation.isPending}
                                             className="px-4 py-1.5 text-sm font-semibold text-green-700 hover:bg-green-50 rounded-md transition-all disabled:opacity-50"
                                         >
@@ -952,12 +1126,199 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
                             <button
                                 onClick={() => {
                                     setIsFinishConfirmOpen(false);
-                                    finishWorkMutation.mutate();
+                                    runFinishFlow();
                                 }}
                                 disabled={finishWorkMutation.isPending}
                                 className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
                             >
                                 {finishWorkMutation.isPending ? 'Finishing...' : 'Yes, Finish Task'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {finishFlow.isOpen && (
+                <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-xl w-full max-w-2xl p-6 shadow-xl border border-gray-100">
+                        <div className="flex items-start justify-between gap-4">
+                            <div>
+                                <h3 className="text-lg font-bold text-gray-900">
+                                    {finishFlow.phase === 'running' && 'Finishing Task'}
+                                    {finishFlow.phase === 'success' && 'Task Finished Successfully'}
+                                    {finishFlow.phase === 'conflict' && 'Merge Conflict Detected'}
+                                    {finishFlow.phase === 'error' && 'Finish Task Failed'}
+                                </h3>
+                                <p className="text-sm text-gray-600 mt-1">
+                                    {finishFlow.phase === 'running' && 'System is validating branch state, syncing code, and preparing verification assignment.'}
+                                    {finishFlow.phase === 'success' && 'Task moved to verification and verifier assignment is complete.'}
+                                    {finishFlow.phase === 'conflict' && 'Resolve conflicts in GitHub, then confirm below to retry finish.'}
+                                    {finishFlow.phase === 'error' && 'System could not complete finish flow. Review technical details below.'}
+                                </p>
+                            </div>
+                            {finishFlow.phase === 'running' ? (
+                                <Loader2 className="w-6 h-6 text-blue-600 animate-spin" />
+                            ) : finishFlow.phase === 'success' ? (
+                                <CheckCircle2 className="w-6 h-6 text-green-600" />
+                            ) : (
+                                <AlertCircle className="w-6 h-6 text-red-600" />
+                            )}
+                        </div>
+
+                        <div className="mt-5 space-y-2">
+                            {FINISH_PROGRESS_STEPS.map((step, idx) => {
+                                const isDone = finishFlow.phase === 'success' || idx < finishFlow.progressStep;
+                                const isCurrent = idx === finishFlow.progressStep && finishFlow.phase === 'running';
+                                return (
+                                    <div key={step} className="flex items-center gap-3 px-3 py-2 rounded-lg border border-gray-100 bg-gray-50">
+                                        <div className="w-5 h-5 flex items-center justify-center">
+                                            {isDone ? (
+                                                <Check className="w-4 h-4 text-green-600" />
+                                            ) : isCurrent ? (
+                                                <Loader2 className="w-4 h-4 text-blue-600 animate-spin" />
+                                            ) : (
+                                                <div className="w-2 h-2 rounded-full bg-gray-300" />
+                                            )}
+                                        </div>
+                                        <span className={clsx('text-sm', isDone ? 'text-green-700 font-medium' : isCurrent ? 'text-blue-700 font-medium' : 'text-gray-600')}>
+                                            {step}
+                                        </span>
+                                    </div>
+                                );
+                            })}
+                        </div>
+
+                        {(finishFlow.phase === 'conflict' || finishFlow.phase === 'error') && finishFlow.error && (
+                            <div className="mt-5 rounded-lg border border-red-200 bg-red-50 p-4 space-y-2">
+                                <p className="text-sm font-semibold text-red-800">{finishFlow.error.message}</p>
+                                {finishFlow.error.mergeStep && <p className="text-xs text-red-700">Step: {finishFlow.error.mergeStep}</p>}
+                                {finishFlow.error.code && <p className="text-xs text-red-700">Code: {finishFlow.error.code}</p>}
+                                {finishFlow.error.branch && <p className="text-xs text-red-700">Branch: {finishFlow.error.branch}</p>}
+                                {finishFlow.error.details && <p className="text-xs text-red-700 break-words">Details: {finishFlow.error.details}</p>}
+                            </div>
+                        )}
+
+                        <div className="mt-6 flex items-center justify-end gap-2">
+                            {finishFlow.phase === 'conflict' && finishFlow.error?.conflictUrl && (
+                                <>
+                                    <button
+                                        onClick={() => {
+                                            window.open(finishFlow.error?.conflictUrl, '_blank', 'noopener,noreferrer');
+                                            setFinishFlow((prev) => ({ ...prev, hasOpenedResolveUrl: true }));
+                                        }}
+                                        className="px-4 py-2 text-sm border border-indigo-200 text-indigo-700 rounded-lg hover:bg-indigo-50"
+                                    >
+                                        Open Resolve URL
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setFinishFlow((prev) => ({
+                                                ...prev,
+                                                phase: 'running',
+                                                progressStep: prev.error?.mergeStep === 'task_to_dev' ? 2 : 1,
+                                                error: null,
+                                            }));
+                                            finishWorkMutation.mutate();
+                                        }}
+                                        disabled={!finishFlow.hasOpenedResolveUrl || finishWorkMutation.isPending}
+                                        className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                                    >
+                                        I Resolved Conflict, Retry
+                                    </button>
+                                </>
+                            )}
+                            {finishFlow.phase === 'running' ? (
+                                <button
+                                    disabled
+                                    className="px-4 py-2 text-sm border border-gray-200 text-gray-400 rounded-lg cursor-not-allowed"
+                                >
+                                    Processing...
+                                </button>
+                            ) : (
+                                <button
+                                    onClick={() => setFinishFlow((prev) => ({ ...prev, isOpen: false }))}
+                                    className="px-4 py-2 text-sm border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50"
+                                >
+                                    Close
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {taskActionModal.isOpen && (
+                <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-xl w-full max-w-lg p-6 shadow-xl border border-gray-100">
+                        <div className="flex items-start gap-3">
+                            {taskActionModal.phase === 'running' ? (
+                                <Loader2 className="w-5 h-5 text-blue-600 animate-spin mt-0.5" />
+                            ) : taskActionModal.phase === 'success' ? (
+                                <CheckCircle2 className="w-5 h-5 text-green-600 mt-0.5" />
+                            ) : (
+                                <AlertCircle className="w-5 h-5 text-red-600 mt-0.5" />
+                            )}
+                            <div className="flex-1">
+                                <h3 className="text-lg font-bold text-gray-900">{taskActionModal.title}</h3>
+                                <p className="text-sm text-gray-700 mt-1">{taskActionModal.message}</p>
+                                {taskActionModal.details && (
+                                    <p className="text-xs text-gray-500 mt-2 break-words">{taskActionModal.details}</p>
+                                )}
+                            </div>
+                        </div>
+                        <div className="mt-6 flex justify-end">
+                            {taskActionModal.phase === 'running' ? (
+                                <button
+                                    disabled
+                                    className="px-4 py-2 text-sm border border-gray-200 text-gray-400 rounded-lg cursor-not-allowed"
+                                >
+                                    Processing...
+                                </button>
+                            ) : (
+                                <button
+                                    onClick={() => setTaskActionModal((prev) => ({ ...prev, isOpen: false }))}
+                                    className="px-4 py-2 text-sm border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50"
+                                >
+                                    Close
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {verificationDecision.isOpen && (
+                <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-xl w-full max-w-lg p-6 shadow-xl border border-gray-100">
+                        <h3 className="text-lg font-bold text-gray-900">
+                            {verificationDecision.type === 'approve' ? 'Approve Verification' : 'Reject Verification'}
+                        </h3>
+                        <p className="text-sm text-gray-600 mt-1">
+                            {verificationDecision.type === 'approve'
+                                ? 'Optional note for approval.'
+                                : 'Optional reason for rejection.'}
+                        </p>
+                        <textarea
+                            value={verificationDecision.comment}
+                            onChange={(e) => setVerificationDecision((prev) => ({ ...prev, comment: e.target.value }))}
+                            placeholder={verificationDecision.type === 'approve' ? 'Approval note (optional)' : 'Rejection reason (optional)'}
+                            className="mt-4 w-full min-h-[120px] rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+                        />
+                        <div className="mt-5 flex justify-end gap-2">
+                            <button
+                                onClick={() => setVerificationDecision({ isOpen: false, type: null, comment: '' })}
+                                className="px-4 py-2 text-sm border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={submitVerificationDecision}
+                                className={clsx(
+                                    'px-4 py-2 text-sm text-white rounded-lg',
+                                    verificationDecision.type === 'approve' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'
+                                )}
+                            >
+                                {verificationDecision.type === 'approve' ? 'Approve' : 'Reject'}
                             </button>
                         </div>
                     </div>
