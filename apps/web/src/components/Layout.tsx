@@ -16,6 +16,7 @@ import {
     Zap,
     Settings,
     Github,
+    Rocket,
     Briefcase,
     FileText,
     MessageCircle,
@@ -206,6 +207,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                 {user?.role === 'admin' && <RailItem icon={Users} label="Team" active={location.pathname === '/team'} onClick={() => navigate('/team')} />}
                 <RailItem icon={Star} label="Projects" active={location.pathname.startsWith('/projects')} onClick={() => navigate('/projects')} />
                 {user?.role === 'admin' && <RailItem icon={Github} label="GitHub" active={location.pathname === '/github'} onClick={() => navigate('/github')} />}
+                {user?.role === 'admin' && <RailItem icon={Rocket} label="Dockploy" active={location.pathname === '/dockploy'} onClick={() => navigate('/dockploy')} />}
 
                 <div className="mt-auto flex flex-col items-center gap-2">
                     <RailItem icon={LogOut} label="Logout" onClick={logout} />

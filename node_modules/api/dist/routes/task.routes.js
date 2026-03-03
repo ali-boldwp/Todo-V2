@@ -15,6 +15,7 @@ router.post('/:id/stop', task_controller_1.stopTaskWork);
 router.post('/:id/pause', task_controller_1.pauseTaskWork);
 router.post('/:id/resume', task_controller_1.resumeTaskWork);
 router.post('/:id/finish', task_controller_1.finishTaskWork);
+router.post('/:id/fix-branch', task_controller_1.fixTaskBranch);
 router.post('/:id/verify/approve', task_controller_1.approveTaskVerification);
 router.post('/:id/verify/reject', task_controller_1.rejectTaskVerification);
 router.delete('/:id', task_controller_1.deleteTask);

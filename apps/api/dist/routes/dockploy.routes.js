@@ -1,0 +1,12 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const dockploy_controller_1 = require("../controllers/dockploy.controller");
+const auth_1 = require("../middleware/auth");
+const router = (0, express_1.Router)();
+router.use(auth_1.authenticate);
+router.use(auth_1.requireProfileImageSetup);
+router.get('/config', (0, auth_1.authorize)(['admin']), dockploy_controller_1.getDockployConfig);
+router.post('/config', (0, auth_1.authorize)(['admin']), dockploy_controller_1.saveDockployConfig);
+router.get('/status', (0, auth_1.authorize)(['admin']), dockploy_controller_1.getDockployConnectionStatus);
+exports.default = router;

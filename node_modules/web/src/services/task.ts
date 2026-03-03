@@ -46,6 +46,11 @@ export const finishTaskWork = async (id: string) => {
     return response.data;
 };
 
+export const fixTaskBranch = async (id: string) => {
+    const response = await api.post(`/tasks/${id}/fix-branch`);
+    return response.data;
+};
+
 export const approveTaskVerification = async (id: string, comment?: string) => {
     const response = await api.post(`/tasks/${id}/verify/approve`, { comment });
     return response.data;

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { updateProject, getClients, deleteProject } from '../services/core';
+import { updateProject, getClients, deleteProject, fixProjectRepo, getProjectRepoStatus, getProjectDockployStatus, triggerProjectDockployDeploy } from '../services/core';
 import { getGithubConfig, getGithubRepos } from '../services/github';
 import { addProjectMember, removeProjectMember, getTeamMembers } from '../services/team';
 import { useAuth } from '../context/AuthContext';
@@ -40,6 +40,8 @@ const ProjectSettings: React.FC<{ project: any }> = ({ project }) => {
     );
     const [selectedRepoOwner, setSelectedRepoOwner] = useState(project.githubRepoOwner || '');
     const [selectedRepoName, setSelectedRepoName] = useState(project.githubRepoName || '');
+    const [dockployAppId, setDockployAppId] = useState(project.dockployAppId || '');
+    const [dockployAutoDeploy, setDockployAutoDeploy] = useState(Boolean(project.dockployAutoDeploy));
 
     const updateMutation = useMutation({
         mutationFn: (data: any) => updateProject(project._id, data),
@@ -67,6 +69,30 @@ const ProjectSettings: React.FC<{ project: any }> = ({ project }) => {
             setSaved(true);
             setTimeout(() => setSaved(false), 2000);
         },
+    });
+    const dockployMutation = useMutation({
+        mutationFn: (data: any) => updateProject(project._id, data),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['project', project._id] });
+            queryClient.invalidateQueries({ queryKey: ['project-dockploy-status', project._id] });
+            setSaved(true);
+            setTimeout(() => setSaved(false), 2000);
+        },
+        onError: (error: any) => {
+            alert(error?.response?.data?.message || 'Failed to save Dockploy settings');
+        }
+    });
+    const fixRepoMutation = useMutation({
+        mutationFn: () => fixProjectRepo(project._id),
+        onSuccess: (result: any) => {
+            queryClient.invalidateQueries({ queryKey: ['project', project._id] });
+            queryClient.invalidateQueries({ queryKey: ['project-repo-status', project._id] });
+            alert(result?.message || 'Repository fixed successfully.');
+        },
+        onError: (error: any) => {
+            const msg = error?.response?.data?.message || 'Failed to fix repository configuration';
+            alert(msg);
+        }
     });
 
     const addMemberMutation = useMutation({
@@ -106,6 +132,26 @@ const ProjectSettings: React.FC<{ project: any }> = ({ project }) => {
         queryKey: ['github-repos'],
         queryFn: getGithubRepos,
         enabled: user?.role === 'admin' && !!githubConfig?.personalAccessToken,
+    });
+    const { data: repoStatus, isLoading: repoStatusLoading } = useQuery({
+        queryKey: ['project-repo-status', project._id],
+        queryFn: () => getProjectRepoStatus(project._id),
+        enabled: user?.role === 'admin' && !!githubConfig?.personalAccessToken && !!project.githubRepoOwner && !!project.githubRepoName,
+    });
+    const { data: dockployStatus, isLoading: dockployStatusLoading } = useQuery({
+        queryKey: ['project-dockploy-status', project._id],
+        queryFn: () => getProjectDockployStatus(project._id),
+        enabled: user?.role === 'admin' && !!dockployAppId,
+    });
+    const dockployDeployMutation = useMutation({
+        mutationFn: () => triggerProjectDockployDeploy(project._id),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ['project-dockploy-status', project._id] });
+            alert('Deploy triggered in Dockploy');
+        },
+        onError: (error: any) => {
+            alert(error?.response?.data?.message || 'Failed to trigger Dockploy deploy');
+        }
     });
 
     const clientMutation = useMutation({
@@ -361,18 +407,111 @@ const ProjectSettings: React.FC<{ project: any }> = ({ project }) => {
                             </div>
 
                             {project.githubRepoOwner && project.githubRepoName && (
-                                <p className="text-xs text-gray-500">
-                                    Current link: {project.githubRepoOwner}/{project.githubRepoName}
-                                </p>
+                                <div className="space-y-1">
+                                    <p className="text-xs text-gray-500">
+                                        Current link: {project.githubRepoOwner}/{project.githubRepoName}
+                                    </p>
+                                    <p className="text-xs text-gray-500">
+                                        Dev branch status:{' '}
+                                        {repoStatusLoading ? (
+                                            <span className="font-semibold text-gray-600">Checking...</span>
+                                        ) : repoStatus?.devBranchReady ? (
+                                            <span className="font-semibold text-emerald-700">Ready</span>
+                                        ) : (
+                                            <span className="font-semibold text-red-700">Needs Fix</span>
+                                        )}
+                                    </p>
+                                </div>
                             )}
 
                             <div className="flex justify-end">
+                                <div className="flex items-center gap-2">
+                                    {project.githubRepoOwner && project.githubRepoName && (!repoStatus || !repoStatus.devBranchReady) && (
+                                        <button
+                                            onClick={() => fixRepoMutation.mutate()}
+                                            disabled={fixRepoMutation.isPending || !githubConfig?.personalAccessToken}
+                                            className="px-4 py-2 bg-amber-100 text-amber-800 text-sm font-semibold rounded-lg hover:bg-amber-200 disabled:opacity-50"
+                                        >
+                                            {fixRepoMutation.isPending ? 'Fixing...' : 'Fix Repo'}
+                                        </button>
+                                    )}
+                                    <button
+                                        onClick={handleSaveGithubSettings}
+                                        disabled={githubMutation.isPending || !githubConfig?.personalAccessToken}
+                                        className="px-4 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 disabled:opacity-50"
+                                    >
+                                        {githubMutation.isPending ? 'Saving...' : 'Save GitHub Settings'}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Dockploy Settings (admin only) */}
+                {user?.role === 'admin' && (
+                    <div className="bg-white border border-gray-100 rounded-xl shadow-sm overflow-hidden">
+                        <div className="px-6 py-4 border-b border-gray-50 bg-gray-50/50 flex items-center">
+                            <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wider">Dockploy Settings</h2>
+                        </div>
+                        <div className="p-6 space-y-4">
+                            <p className="text-xs text-gray-500">
+                                Link this project to a Dockploy app id so deploys can be triggered from this application.
+                            </p>
+
+                            <div>
+                                <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">Dockploy App ID</label>
+                                <input
+                                    value={dockployAppId}
+                                    onChange={(e) => setDockployAppId(e.target.value)}
+                                    className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                                    placeholder="e.g. app_123456"
+                                />
+                            </div>
+
+                            <div className="flex items-center justify-between border border-gray-100 rounded-lg px-3 py-2">
+                                <div>
+                                    <p className="text-sm font-medium text-gray-800">Auto Deploy (future use)</p>
+                                    <p className="text-xs text-gray-500">Enable auto deploy hooks for this project.</p>
+                                </div>
+                                <Switch checked={dockployAutoDeploy} onChange={setDockployAutoDeploy} label={dockployAutoDeploy ? 'On' : 'Off'} />
+                            </div>
+
+                            {dockployAppId && (
+                                <div className="text-xs text-gray-600 space-y-1">
+                                    <p>
+                                        Connection status:{' '}
+                                        {dockployStatusLoading ? (
+                                            <span className="font-semibold text-gray-600">Checking...</span>
+                                        ) : dockployStatus?.connected ? (
+                                            <span className="font-semibold text-emerald-700">Connected</span>
+                                        ) : (
+                                            <span className="font-semibold text-red-700">Not reachable</span>
+                                        )}
+                                    </p>
+                                    {dockployStatus?.lastDeployStatus && (
+                                        <p>
+                                            Last deploy: <span className="font-semibold">{dockployStatus.lastDeployStatus}</span>
+                                            {dockployStatus?.lastDeployAt ? ` at ${new Date(dockployStatus.lastDeployAt).toLocaleString()}` : ''}
+                                        </p>
+                                    )}
+                                </div>
+                            )}
+
+                            <div className="flex justify-end gap-2">
                                 <button
-                                    onClick={handleSaveGithubSettings}
-                                    disabled={githubMutation.isPending || !githubConfig?.personalAccessToken}
+                                    onClick={() => dockployMutation.mutate({ dockployAppId: dockployAppId.trim(), dockployAutoDeploy })}
+                                    disabled={dockployMutation.isPending}
                                     className="px-4 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 disabled:opacity-50"
                                 >
-                                    {githubMutation.isPending ? 'Saving...' : 'Save GitHub Settings'}
+                                    {dockployMutation.isPending ? 'Saving...' : 'Save Dockploy Settings'}
+                                </button>
+                                <button
+                                    onClick={() => dockployDeployMutation.mutate()}
+                                    disabled={!dockployAppId.trim() || dockployDeployMutation.isPending}
+                                    className="px-4 py-2 bg-emerald-600 text-white text-sm font-semibold rounded-lg hover:bg-emerald-700 disabled:opacity-50"
+                                >
+                                    {dockployDeployMutation.isPending ? 'Deploying...' : 'Deploy Now'}
                                 </button>
                             </div>
                         </div>

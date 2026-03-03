@@ -12,6 +12,11 @@ export interface IProject extends Document {
     members: mongoose.Types.ObjectId[];
     githubRepoOwner?: string;
     githubRepoName?: string;
+    dockployAppId?: string;
+    dockployAutoDeploy?: boolean;
+    dockployLastDeployStatus?: 'idle' | 'success' | 'failed';
+    dockployLastDeployAt?: Date;
+    dockployLastDeployMessage?: string;
     projectUrl?: string;
     devWebsiteUrl?: string;
     accessAccounts: {
@@ -44,6 +49,11 @@ const ProjectSchema: Schema = new Schema({
     members: [{ type: Schema.Types.ObjectId, ref: 'User', index: true }],
     githubRepoOwner: { type: String },
     githubRepoName: { type: String },
+    dockployAppId: { type: String },
+    dockployAutoDeploy: { type: Boolean, default: false },
+    dockployLastDeployStatus: { type: String, enum: ['idle', 'success', 'failed'], default: 'idle' },
+    dockployLastDeployAt: { type: Date },
+    dockployLastDeployMessage: { type: String },
     projectUrl: { type: String },
     devWebsiteUrl: { type: String },
     accessAccounts: [{

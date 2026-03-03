@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.rejectTaskVerification = exports.approveTaskVerification = exports.stopTaskWork = exports.finishTaskWork = exports.resumeTaskWork = exports.pauseTaskWork = exports.startTaskWork = exports.downloadAttachment = exports.deleteAttachment = exports.uploadAttachment = exports.deleteTask = exports.updateTask = exports.createTask = exports.getTasks = void 0;
+exports.rejectTaskVerification = exports.approveTaskVerification = exports.stopTaskWork = exports.fixTaskBranch = exports.finishTaskWork = exports.resumeTaskWork = exports.pauseTaskWork = exports.startTaskWork = exports.downloadAttachment = exports.deleteAttachment = exports.uploadAttachment = exports.deleteTask = exports.updateTask = exports.createTask = exports.getTasks = void 0;
 const Task_1 = __importDefault(require("../models/Task"));
 const Project_1 = __importDefault(require("../models/Project"));
 const GithubConfig_1 = __importDefault(require("../models/GithubConfig"));
@@ -19,9 +19,9 @@ const isClarificationRequestPayload = (body) => {
         (Object.prototype.hasOwnProperty.call(body || {}, 'clarificationText') &&
             !!body?.clarificationText));
 };
-async function createGithubBranch(token, owner, repo, branchName) {
+async function createGithubBranch(token, owner, repo, branchName, baseBranch = 'dev') {
     try {
-        // 1. Get the default branch SHA
+        // Ensure requested base branch exists. If missing, create it from default branch.
         const repoRes = await fetch(`https://api.github.com/repos/${owner}/${repo}`, {
             headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github.v3+json' }
         });
@@ -29,17 +29,46 @@ async function createGithubBranch(token, owner, repo, branchName) {
             return null;
         const repoData = await repoRes.json();
         const defaultBranch = repoData.default_branch || 'main';
-        // 2. Get the SHA of the default branch tip
-        const refRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/refs/heads/${defaultBranch}`, {
+        const baseRefRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/refs/heads/${encodeURIComponent(baseBranch)}`, {
             headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github.v3+json' }
         });
-        if (!refRes.ok)
+        let sha = null;
+        if (baseRefRes.ok) {
+            const baseRefData = await baseRefRes.json();
+            sha = baseRefData.object?.sha || null;
+        }
+        else if (baseRefRes.status === 404) {
+            const defaultRefRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/refs/heads/${encodeURIComponent(defaultBranch)}`, {
+                headers: { Authorization: `Bearer ${token}`, Accept: 'application/vnd.github.v3+json' }
+            });
+            if (!defaultRefRes.ok)
+                return null;
+            const defaultRefData = await defaultRefRes.json();
+            const defaultSha = defaultRefData.object?.sha;
+            if (!defaultSha)
+                return null;
+            const createBaseRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/refs`, {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    Accept: 'application/vnd.github.v3+json',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ ref: `refs/heads/${baseBranch}`, sha: defaultSha })
+            });
+            if (!createBaseRes.ok) {
+                const createBaseErr = await createBaseRes.text();
+                console.error('Failed to create base branch:', createBaseErr);
+                return null;
+            }
+            sha = defaultSha;
+        }
+        else {
             return null;
-        const refData = await refRes.json();
-        const sha = refData.object?.sha;
+        }
         if (!sha)
             return null;
-        // 3. Create the new branch
+        // Create task branch from base branch (dev)
         const createRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/refs`, {
             method: 'POST',
             headers: {
@@ -161,6 +190,28 @@ const pickRandom = (arr) => {
     const index = Math.floor(Math.random() * arr.length);
     return arr[index];
 };
+const isTaskBranchFixed = (branch, taskId) => {
+    if (!branch || !taskId)
+        return false;
+    const escapedTaskId = taskId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const pattern = new RegExp(`^tasks\\/[^/]+\\/(inprogress|done)\\/${escapedTaskId}$`);
+    return pattern.test(branch);
+};
+const extractUsernameFromLegacyBranch = (branch) => {
+    if (!branch)
+        return null;
+    const tasksMatch = branch.match(/^tasks\/([^/]+)\//);
+    if (tasksMatch?.[1])
+        return tasksMatch[1];
+    // Legacy pattern example: task/7d43a7-activity-log-zubair209
+    if (branch.startsWith('task/')) {
+        const tail = branch.split('/').pop() || '';
+        const chunks = tail.split('-').filter(Boolean);
+        if (chunks.length > 0)
+            return chunks[chunks.length - 1];
+    }
+    return null;
+};
 async function restrictBranchToUser(token, owner, repo, branch, githubUsername) {
     try {
         const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/branches/${encodeURIComponent(branch)}/protection`, {
@@ -218,6 +269,90 @@ async function deleteGithubBranch(token, owner, repo, branch) {
     catch (error) {
         console.warn(`GitHub branch delete request failed for ${branch}:`, error?.message || error);
         return false;
+    }
+}
+async function getGithubBranchSha(token, owner, repo, branch) {
+    try {
+        const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/refs/heads/${encodeURIComponent(branch)}`, {
+            headers: {
+                Authorization: `Bearer ${token}`,
+                Accept: 'application/vnd.github+json',
+                'X-GitHub-Api-Version': '2022-11-28'
+            }
+        });
+        if (response.status === 404)
+            return null;
+        if (!response.ok)
+            return null;
+        const data = await response.json();
+        return data?.object?.sha || null;
+    }
+    catch {
+        return null;
+    }
+}
+async function moveGithubBranch(token, owner, repo, fromBranch, toBranch) {
+    try {
+        if (!fromBranch || !toBranch || fromBranch === toBranch)
+            return { ok: true };
+        const fromSha = await getGithubBranchSha(token, owner, repo, fromBranch);
+        if (!fromSha) {
+            return { ok: false, message: `Source branch ${fromBranch} does not exist` };
+        }
+        const targetSha = await getGithubBranchSha(token, owner, repo, toBranch);
+        if (!targetSha) {
+            const createRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/git/refs`, {
+                method: 'POST',
+                headers: {
+                    Authorization: `Bearer ${token}`,
+                    Accept: 'application/vnd.github.v3+json',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ ref: `refs/heads/${toBranch}`, sha: fromSha })
+            });
+            if (!createRes.ok) {
+                const text = await createRes.text();
+                return { ok: false, message: `Failed to create target branch ${toBranch}: ${text}` };
+            }
+        }
+        const deleted = await deleteGithubBranch(token, owner, repo, fromBranch);
+        if (!deleted) {
+            return { ok: false, message: `Target branch created but failed to delete source branch ${fromBranch}` };
+        }
+        return { ok: true };
+    }
+    catch (error) {
+        return { ok: false, message: error?.message || 'Failed to move branch' };
+    }
+}
+async function mergeGithubBranches(token, owner, repo, base, head) {
+    try {
+        const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/merges`, {
+            method: 'POST',
+            headers: {
+                Authorization: `Bearer ${token}`,
+                Accept: 'application/vnd.github+json',
+                'Content-Type': 'application/json',
+                'X-GitHub-Api-Version': '2022-11-28'
+            },
+            body: JSON.stringify({
+                base,
+                head,
+                commit_message: `chore: merge ${head} into ${base}`
+            })
+        });
+        if (response.status === 201 || response.status === 204) {
+            return { ok: true, status: response.status, message: `Merged ${head} into ${base}` };
+        }
+        const text = await response.text();
+        const message = text || `Failed to merge ${head} into ${base}`;
+        if (response.status === 409) {
+            return { ok: false, conflict: true, status: 409, message };
+        }
+        return { ok: false, status: response.status, message };
+    }
+    catch (error) {
+        return { ok: false, status: 500, message: error?.message || 'Merge request failed' };
     }
 }
 const getTasks = async (req, res) => {
@@ -498,8 +633,9 @@ const startTaskWork = async (req, res) => {
                 if (!user?.githubUsername) {
                     return res.status(400).json({ message: 'Your GitHub account is not set up. Cannot start task.' });
                 }
-                const branchName = `task/${task._id.toString().slice(-6)}-${slugify(task.title)}-${slugify(user.githubUsername)}`;
-                const createdBranch = await createGithubBranch(config.personalAccessToken, project.githubRepoOwner, project.githubRepoName, branchName);
+                const taskId = task._id.toString();
+                const branchName = `tasks/${slugify(user.githubUsername)}/inprogress/${taskId}`;
+                const createdBranch = await createGithubBranch(config.personalAccessToken, project.githubRepoOwner, project.githubRepoName, branchName, 'dev');
                 if (!createdBranch) {
                     return res.status(400).json({ message: 'Failed to create GitHub branch. Task was not started.' });
                 }
@@ -629,7 +765,46 @@ const finishTaskWork = async (req, res) => {
         }
         const elapsed = task.isWorkPaused ? 0 : getElapsedSeconds(task.lastWorkStartedAt);
         const workLogs = mergeWorkLog(task.workLogs, currentWorkerId, elapsed);
-        const project = await Project_1.default.findById(task.projectId).select('members');
+        const project = await Project_1.default.findById(task.projectId).select('members githubRepoOwner githubRepoName');
+        if (task.githubBranch && project?.githubRepoOwner && project?.githubRepoName) {
+            const config = await GithubConfig_1.default.findOne().select('personalAccessToken');
+            if (!config?.personalAccessToken) {
+                return res.status(400).json({ message: 'GitHub integration is not connected. Cannot complete task merge flow.' });
+            }
+            const taskBranch = task.githubBranch;
+            const mergeDevToTask = await mergeGithubBranches(config.personalAccessToken, project.githubRepoOwner, project.githubRepoName, taskBranch, 'dev');
+            if (!mergeDevToTask.ok) {
+                if (mergeDevToTask.conflict) {
+                    return res.status(409).json({
+                        code: 'merge_conflict_dev_to_task',
+                        message: `Merge conflict detected while updating ${taskBranch} from dev. Please resolve conflicts in your branch, push, and finish task again.`,
+                        details: mergeDevToTask.message,
+                        branch: taskBranch
+                    });
+                }
+                return res.status(400).json({
+                    code: 'merge_failed_dev_to_task',
+                    message: `Failed to update ${taskBranch} from dev before verification.`,
+                    details: mergeDevToTask.message
+                });
+            }
+            const mergeTaskToDev = await mergeGithubBranches(config.personalAccessToken, project.githubRepoOwner, project.githubRepoName, 'dev', taskBranch);
+            if (!mergeTaskToDev.ok) {
+                if (mergeTaskToDev.conflict) {
+                    return res.status(409).json({
+                        code: 'merge_conflict_task_to_dev',
+                        message: `Merge conflict detected while merging ${taskBranch} into dev. Please resolve conflicts and finish task again.`,
+                        details: mergeTaskToDev.message,
+                        branch: taskBranch
+                    });
+                }
+                return res.status(400).json({
+                    code: 'merge_failed_task_to_dev',
+                    message: `Failed to merge ${taskBranch} into dev before verification.`,
+                    details: mergeTaskToDev.message
+                });
+            }
+        }
         const eligibleQuery = {
             role: { $in: ['manager', 'member'] },
             isActive: true,
@@ -680,6 +855,65 @@ const finishTaskWork = async (req, res) => {
     }
 };
 exports.finishTaskWork = finishTaskWork;
+const fixTaskBranch = async (req, res) => {
+    try {
+        if (!INTERNAL_ROLES.includes(req.user.role)) {
+            return res.status(403).json({ message: 'Only admin and team members can fix task branches' });
+        }
+        const task = await Task_1.default.findById(req.params.id)
+            .populate('assigneeId', 'firstName lastName email')
+            .populate('activeWorkerId', 'firstName lastName email role')
+            .populate('verifierId', 'firstName lastName email role')
+            .populate('workLogs.userId', 'firstName lastName email role');
+        if (!task)
+            return res.status(404).json({ message: 'Task not found' });
+        if (!task.githubBranch) {
+            return res.status(400).json({ message: 'No branch to fix for this task' });
+        }
+        const hasStarted = Boolean(task.activeWorkerId ||
+            task.workStartedAt ||
+            task.lastWorkStartedAt ||
+            Number(task.totalWorkedSeconds || 0) > 0);
+        if (hasStarted) {
+            return res.status(400).json({ message: 'Branch can only be fixed before task work starts' });
+        }
+        const taskId = task._id.toString();
+        if (isTaskBranchFixed(task.githubBranch, taskId)) {
+            return res.json(toTaskResponse(task, req.user));
+        }
+        const project = await Project_1.default.findById(task.projectId).select('githubRepoOwner githubRepoName');
+        if (!project?.githubRepoOwner || !project?.githubRepoName) {
+            return res.status(400).json({ message: 'Project repository is not linked' });
+        }
+        const config = await GithubConfig_1.default.findOne().select('personalAccessToken');
+        if (!config?.personalAccessToken) {
+            return res.status(400).json({ message: 'GitHub integration is not connected' });
+        }
+        const actor = await User_1.default.findById(req.user.userId).select('githubUsername');
+        const branchUsername = extractUsernameFromLegacyBranch(task.githubBranch)
+            || (actor?.githubUsername ? slugify(actor.githubUsername) : '');
+        if (!branchUsername) {
+            return res.status(400).json({ message: 'Unable to detect branch username for this task' });
+        }
+        const targetBranch = `tasks/${branchUsername}/inprogress/${taskId}`;
+        const moved = await moveGithubBranch(config.personalAccessToken, project.githubRepoOwner, project.githubRepoName, task.githubBranch, targetBranch);
+        if (!moved.ok) {
+            return res.status(400).json({ message: moved.message || 'Failed to fix branch' });
+        }
+        task.githubBranch = targetBranch;
+        await task.save();
+        await task.populate('assigneeId', 'firstName lastName email');
+        await task.populate('activeWorkerId', 'firstName lastName email role');
+        await task.populate('verifierId', 'firstName lastName email role');
+        await task.populate('workLogs.userId', 'firstName lastName email role');
+        res.json(toTaskResponse(task, req.user));
+        emitTaskEvent('task:updated', task);
+    }
+    catch (error) {
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+exports.fixTaskBranch = fixTaskBranch;
 exports.stopTaskWork = exports.pauseTaskWork;
 const approveTaskVerification = async (req, res) => {
     try {
@@ -697,11 +931,31 @@ const approveTaskVerification = async (req, res) => {
         if (!canVerify) {
             return res.status(403).json({ message: 'Only assigned verifier can approve this task' });
         }
+        let nextGithubBranch = task.githubBranch;
+        if (task.githubBranch) {
+            const project = await Project_1.default.findById(task.projectId).select('githubRepoOwner githubRepoName');
+            const config = await GithubConfig_1.default.findOne().select('personalAccessToken');
+            if (project?.githubRepoOwner && project?.githubRepoName && config?.personalAccessToken) {
+                const parts = task.githubBranch.split('/');
+                const branchUsername = parts.length >= 2 && parts[0] === 'tasks' ? parts[1] : null;
+                if (branchUsername) {
+                    const targetDoneBranch = `tasks/${branchUsername}/done/${task._id.toString()}`;
+                    const moved = await moveGithubBranch(config.personalAccessToken, project.githubRepoOwner, project.githubRepoName, task.githubBranch, targetDoneBranch);
+                    if (!moved.ok) {
+                        return res.status(400).json({
+                            message: `Task verified but branch move failed. ${moved.message || 'Unknown error'}`,
+                        });
+                    }
+                    nextGithubBranch = targetDoneBranch;
+                }
+            }
+        }
         const updated = await Task_1.default.findByIdAndUpdate(req.params.id, {
             status: 'done',
             verificationStatus: 'approved',
             verificationComment: req.body?.comment || null,
             verificationDecidedAt: new Date(),
+            githubBranch: nextGithubBranch,
         }, { new: true })
             .populate('assigneeId', 'firstName lastName email')
             .populate('activeWorkerId', 'firstName lastName email role')

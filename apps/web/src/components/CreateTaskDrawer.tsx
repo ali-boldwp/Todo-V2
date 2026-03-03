@@ -6,7 +6,7 @@ import TaskDetailsDrawer from './TaskDetailsDrawer';
 import TaskComments from './TaskComments';
 import clsx from 'clsx';
 import { getProjects } from '../services/core';
-import { createTask, updateTask, uploadAttachment, deleteAttachment, downloadAttachment, startTaskWork, pauseTaskWork, resumeTaskWork, finishTaskWork, approveTaskVerification, rejectTaskVerification } from '../services/task';
+import { createTask, updateTask, uploadAttachment, deleteAttachment, downloadAttachment, startTaskWork, pauseTaskWork, resumeTaskWork, finishTaskWork, approveTaskVerification, rejectTaskVerification, fixTaskBranch } from '../services/task';
 import { useAuth } from '../context/AuthContext';
 import {
     Flag,
@@ -90,6 +90,13 @@ const VERIFICATION_BADGE_STYLES: Record<string, string> = {
     pending: 'bg-amber-50 text-amber-700 border-amber-100',
     approved: 'bg-green-50 text-green-700 border-green-100',
     rejected: 'bg-red-50 text-red-700 border-red-100',
+};
+
+const isBranchFixedForTask = (branch: string, taskId: string) => {
+    if (!branch || !taskId) return false;
+    const escapedTaskId = taskId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const pattern = new RegExp(`^tasks\\/[^/]+\\/(inprogress|done)\\/${escapedTaskId}$`);
+    return pattern.test(branch);
 };
 
 const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, task, initialProjectId }) => {
@@ -353,6 +360,20 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
         },
     });
 
+    const fixBranchMutation = useMutation({
+        mutationFn: () => {
+            if (!task?._id) return Promise.reject(new Error('No task selected'));
+            return fixTaskBranch(task._id);
+        },
+        onSuccess: (updatedTask) => {
+            queryClient.invalidateQueries({ queryKey: ['tasks'] });
+            applyWorkState(updatedTask);
+        },
+        onError: (error: any) => {
+            alert(error?.response?.data?.message || 'Failed to fix task branch');
+        },
+    });
+
     const confirmAndFinishTask = () => setIsFinishConfirmOpen(true);
 
     const approveVerificationMutation = useMutation({
@@ -394,6 +415,14 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
         !!task &&
         verificationStatus === 'pending' &&
         (verifierId === user?.id || ['admin', 'manager'].includes(user?.role || ''));
+    const hasTaskStarted = Boolean(
+        activeWorker ||
+        task?.workStartedAt ||
+        lastWorkStartedAt ||
+        Number(baseWorkedSeconds || 0) > 0
+    );
+    const isCurrentBranchFixed = Boolean(task?._id && isBranchFixedForTask(githubBranch, task._id.toString()));
+    const canShowFixBranchButton = Boolean(task && githubBranch && !hasTaskStarted && !isCurrentBranchFixed);
     const formatDuration = (seconds: number) => {
         const h = Math.floor(seconds / 3600).toString().padStart(2, '0');
         const m = Math.floor((seconds % 3600) / 60).toString().padStart(2, '0');
@@ -594,6 +623,20 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
                                     >
                                         {githubBranch}
                                     </code>
+                                </div>
+                            )}
+                            {canShowFixBranchButton && (
+                                <div className="flex items-center min-h-[28px] px-1">
+                                    <button
+                                        onClick={() => fixBranchMutation.mutate()}
+                                        disabled={fixBranchMutation.isPending}
+                                        className="px-3 py-1 text-xs font-semibold rounded-md bg-amber-100 text-amber-800 hover:bg-amber-200 disabled:opacity-50"
+                                    >
+                                        {fixBranchMutation.isPending ? 'Fixing...' : 'Fix Branch'}
+                                    </button>
+                                    <span className="ml-2 text-[11px] text-gray-500">
+                                        Required for the new merge flow.
+                                    </span>
                                 </div>
                             )}
 

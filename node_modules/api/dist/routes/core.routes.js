@@ -15,6 +15,10 @@ router.post('/projects', auth_1.requireAdmin, project_controller_1.createProject
 router.put('/projects/:id', project_controller_1.updateProject);
 router.get('/projects/:id', project_controller_1.getProject);
 router.delete('/projects/:id', auth_1.requireAdmin, project_controller_1.deleteProject);
+router.post('/projects/:id/fix-repo', auth_1.requireAdmin, project_controller_1.fixProjectRepo);
+router.get('/projects/:id/repo-status', auth_1.requireAdmin, project_controller_1.getProjectRepoStatus);
+router.get('/projects/:id/dockploy-status', auth_1.requireAdmin, project_controller_1.getProjectDockployStatus);
+router.post('/projects/:id/dockploy-deploy', auth_1.requireAdmin, project_controller_1.triggerProjectDockployDeploy);
 // Documents
 router.post('/projects/:id/documents', project_controller_1.uploadProjectDocument);
 router.delete('/projects/:id/documents/:docId', project_controller_1.deleteProjectDocument);

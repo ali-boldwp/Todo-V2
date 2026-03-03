@@ -8,6 +8,7 @@ import Time from './pages/Time';
 import Attendance from './pages/Attendance';
 import Payroll from './pages/Payroll';
 import GithubIntegration from './pages/GithubIntegration';
+import DockployIntegration from './pages/DockployIntegration';
 import Clients from './pages/Clients';
 import Team from './pages/Team';
 import GithubMemberSetup from './pages/GithubMemberSetup';
@@ -590,6 +591,14 @@ const AppRoutes = () => {
                 element={
                     <AdminRoute>
                         <GithubIntegration />
+                    </AdminRoute>
+                }
+            />
+            <Route
+                path="/dockploy"
+                element={
+                    <AdminRoute>
+                        <DockployIntegration />
                     </AdminRoute>
                 }
             />

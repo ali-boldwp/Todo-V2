@@ -20,6 +20,7 @@ import timeRoutes from './routes/time.routes';
 import attendanceRoutes from './routes/attendance.routes';
 import payrollRoutes from './routes/payroll.routes';
 import githubRoutes from './routes/github.routes';
+import dockployRoutes from './routes/dockploy.routes';
 import clientRoutes from './routes/client.routes';
 import chatRoutes from './routes/chat.routes';
 
@@ -56,6 +57,7 @@ app.use('/api/time', timeRoutes);
 app.use('/api/attendance', attendanceRoutes);
 app.use('/api/payroll', payrollRoutes);
 app.use('/api/github', githubRoutes);
+app.use('/api/dockploy', dockployRoutes);
 app.use('/api/clients', clientRoutes);
 app.use('/api/chat', chatRoutes);
 

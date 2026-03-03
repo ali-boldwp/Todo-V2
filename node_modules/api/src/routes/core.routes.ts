@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { createClient, getClients } from '../controllers/client.controller';
-import { createProject, getProject, getProjects, updateProject, deleteProject, addProjectMember, removeProjectMember, uploadProjectDocument, deleteProjectDocument, downloadProjectDocument } from '../controllers/project.controller';
+import { createProject, getProject, getProjects, updateProject, deleteProject, addProjectMember, removeProjectMember, uploadProjectDocument, deleteProjectDocument, downloadProjectDocument, fixProjectRepo, getProjectRepoStatus, getProjectDockployStatus, triggerProjectDockployDeploy } from '../controllers/project.controller';
 import { authenticate, requireAdmin, requireGithubSetupForTeamMembers, requireProfileImageSetup } from '../middleware/auth';
 
 const router = Router();
@@ -17,6 +17,10 @@ router.post('/projects', requireAdmin, createProject); // Note: Should clients b
 router.put('/projects/:id', updateProject);
 router.get('/projects/:id', getProject);
 router.delete('/projects/:id', requireAdmin, deleteProject);
+router.post('/projects/:id/fix-repo', requireAdmin, fixProjectRepo);
+router.get('/projects/:id/repo-status', requireAdmin, getProjectRepoStatus);
+router.get('/projects/:id/dockploy-status', requireAdmin, getProjectDockployStatus);
+router.post('/projects/:id/dockploy-deploy', requireAdmin, triggerProjectDockployDeploy);
 
 // Documents
 router.post('/projects/:id/documents', uploadProjectDocument);
