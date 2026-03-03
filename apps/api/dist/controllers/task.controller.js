@@ -190,11 +190,16 @@ const pickRandom = (arr) => {
     const index = Math.floor(Math.random() * arr.length);
     return arr[index];
 };
-const isTaskBranchFixed = (branch, taskId) => {
-    if (!branch || !taskId)
+const getTaskTitleBranchSegment = (task) => {
+    const raw = String(task?.title || '').trim();
+    const slug = slugify(raw);
+    return slug || `task-${task?._id?.toString?.().slice(-6) || 'untitled'}`;
+};
+const isTaskBranchFixed = (branch, taskTitleSegment) => {
+    if (!branch || !taskTitleSegment)
         return false;
-    const escapedTaskId = taskId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const pattern = new RegExp(`^tasks\\/[^/]+\\/(inprogress|done)\\/${escapedTaskId}$`);
+    const escapedTitle = taskTitleSegment.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const pattern = new RegExp(`^tasks\\/[^/]+\\/(inprogress|done)\\/${escapedTitle}$`);
     return pattern.test(branch);
 };
 const extractUsernameFromLegacyBranch = (branch) => {
@@ -633,8 +638,8 @@ const startTaskWork = async (req, res) => {
                 if (!user?.githubUsername) {
                     return res.status(400).json({ message: 'Your GitHub account is not set up. Cannot start task.' });
                 }
-                const taskId = task._id.toString();
-                const branchName = `tasks/${slugify(user.githubUsername)}/inprogress/${taskId}`;
+                const taskTitleSegment = getTaskTitleBranchSegment(task);
+                const branchName = `tasks/${slugify(user.githubUsername)}/inprogress/${taskTitleSegment}`;
                 const createdBranch = await createGithubBranch(config.personalAccessToken, project.githubRepoOwner, project.githubRepoName, branchName, 'dev');
                 if (!createdBranch) {
                     return res.status(400).json({ message: 'Failed to create GitHub branch. Task was not started.' });
@@ -877,8 +882,8 @@ const fixTaskBranch = async (req, res) => {
         if (hasStarted) {
             return res.status(400).json({ message: 'Branch can only be fixed before task work starts' });
         }
-        const taskId = task._id.toString();
-        if (isTaskBranchFixed(task.githubBranch, taskId)) {
+        const taskTitleSegment = getTaskTitleBranchSegment(task);
+        if (isTaskBranchFixed(task.githubBranch, taskTitleSegment)) {
             return res.json(toTaskResponse(task, req.user));
         }
         const project = await Project_1.default.findById(task.projectId).select('githubRepoOwner githubRepoName');
@@ -895,7 +900,7 @@ const fixTaskBranch = async (req, res) => {
         if (!branchUsername) {
             return res.status(400).json({ message: 'Unable to detect branch username for this task' });
         }
-        const targetBranch = `tasks/${branchUsername}/inprogress/${taskId}`;
+        const targetBranch = `tasks/${branchUsername}/inprogress/${taskTitleSegment}`;
         const moved = await moveGithubBranch(config.personalAccessToken, project.githubRepoOwner, project.githubRepoName, task.githubBranch, targetBranch);
         if (!moved.ok) {
             return res.status(400).json({ message: moved.message || 'Failed to fix branch' });
@@ -939,7 +944,8 @@ const approveTaskVerification = async (req, res) => {
                 const parts = task.githubBranch.split('/');
                 const branchUsername = parts.length >= 2 && parts[0] === 'tasks' ? parts[1] : null;
                 if (branchUsername) {
-                    const targetDoneBranch = `tasks/${branchUsername}/done/${task._id.toString()}`;
+                    const taskTitleSegment = getTaskTitleBranchSegment(task);
+                    const targetDoneBranch = `tasks/${branchUsername}/done/${taskTitleSegment}`;
                     const moved = await moveGithubBranch(config.personalAccessToken, project.githubRepoOwner, project.githubRepoName, task.githubBranch, targetDoneBranch);
                     if (!moved.ok) {
                         return res.status(400).json({

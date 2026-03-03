@@ -92,10 +92,18 @@ const VERIFICATION_BADGE_STYLES: Record<string, string> = {
     rejected: 'bg-red-50 text-red-700 border-red-100',
 };
 
-const isBranchFixedForTask = (branch: string, taskId: string) => {
-    if (!branch || !taskId) return false;
-    const escapedTaskId = taskId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const pattern = new RegExp(`^tasks\\/[^/]+\\/(inprogress|done)\\/${escapedTaskId}$`);
+const slugifyBranchSegment = (value: string) =>
+    value
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-|-$/g, '')
+        .substring(0, 30);
+
+const isBranchFixedForTask = (branch: string, taskTitle: string) => {
+    if (!branch || !taskTitle) return false;
+    const segment = slugifyBranchSegment(taskTitle.trim()) || 'untitled';
+    const escapedTitle = segment.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const pattern = new RegExp(`^tasks\\/[^/]+\\/(inprogress|done)\\/${escapedTitle}$`);
     return pattern.test(branch);
 };
 
@@ -421,7 +429,7 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
         lastWorkStartedAt ||
         Number(baseWorkedSeconds || 0) > 0
     );
-    const isCurrentBranchFixed = Boolean(task?._id && isBranchFixedForTask(githubBranch, task._id.toString()));
+    const isCurrentBranchFixed = Boolean(task?.title && isBranchFixedForTask(githubBranch, task.title));
     const canShowFixBranchButton = Boolean(task && githubBranch && !hasTaskStarted && !isCurrentBranchFixed);
     const formatDuration = (seconds: number) => {
         const h = Math.floor(seconds / 3600).toString().padStart(2, '0');

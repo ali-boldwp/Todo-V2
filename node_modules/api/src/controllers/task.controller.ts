@@ -202,10 +202,16 @@ const pickRandom = <T>(arr: T[]): T | null => {
     return arr[index];
 };
 
-const isTaskBranchFixed = (branch: string | undefined, taskId: string) => {
-    if (!branch || !taskId) return false;
-    const escapedTaskId = taskId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const pattern = new RegExp(`^tasks\\/[^/]+\\/(inprogress|done)\\/${escapedTaskId}$`);
+const getTaskTitleBranchSegment = (task: any) => {
+    const raw = String(task?.title || '').trim();
+    const slug = slugify(raw);
+    return slug || `task-${task?._id?.toString?.().slice(-6) || 'untitled'}`;
+};
+
+const isTaskBranchFixed = (branch: string | undefined, taskTitleSegment: string) => {
+    if (!branch || !taskTitleSegment) return false;
+    const escapedTitle = taskTitleSegment.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const pattern = new RegExp(`^tasks\\/[^/]+\\/(inprogress|done)\\/${escapedTitle}$`);
     return pattern.test(branch);
 };
 
@@ -716,8 +722,8 @@ export const startTaskWork = async (req: AuthRequest, res: Response) => {
                     return res.status(400).json({ message: 'Your GitHub account is not set up. Cannot start task.' });
                 }
 
-                const taskId = task._id.toString();
-                const branchName = `tasks/${slugify(user.githubUsername)}/inprogress/${taskId}`;
+                const taskTitleSegment = getTaskTitleBranchSegment(task);
+                const branchName = `tasks/${slugify(user.githubUsername)}/inprogress/${taskTitleSegment}`;
                 const createdBranch = await createGithubBranch(
                     config.personalAccessToken,
                     project.githubRepoOwner,
@@ -1016,8 +1022,8 @@ export const fixTaskBranch = async (req: AuthRequest, res: Response) => {
             return res.status(400).json({ message: 'Branch can only be fixed before task work starts' });
         }
 
-        const taskId = task._id.toString();
-        if (isTaskBranchFixed(task.githubBranch, taskId)) {
+        const taskTitleSegment = getTaskTitleBranchSegment(task);
+        if (isTaskBranchFixed(task.githubBranch, taskTitleSegment)) {
             return res.json(toTaskResponse(task, req.user!));
         }
 
@@ -1038,7 +1044,7 @@ export const fixTaskBranch = async (req: AuthRequest, res: Response) => {
             return res.status(400).json({ message: 'Unable to detect branch username for this task' });
         }
 
-        const targetBranch = `tasks/${branchUsername}/inprogress/${taskId}`;
+        const targetBranch = `tasks/${branchUsername}/inprogress/${taskTitleSegment}`;
         const moved = await moveGithubBranch(
             config.personalAccessToken,
             project.githubRepoOwner,
@@ -1092,7 +1098,8 @@ export const approveTaskVerification = async (req: AuthRequest, res: Response) =
                 const parts = task.githubBranch.split('/');
                 const branchUsername = parts.length >= 2 && parts[0] === 'tasks' ? parts[1] : null;
                 if (branchUsername) {
-                    const targetDoneBranch = `tasks/${branchUsername}/done/${task._id.toString()}`;
+                    const taskTitleSegment = getTaskTitleBranchSegment(task);
+                    const targetDoneBranch = `tasks/${branchUsername}/done/${taskTitleSegment}`;
                     const moved = await moveGithubBranch(
                         config.personalAccessToken,
                         project.githubRepoOwner,
