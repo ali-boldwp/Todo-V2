@@ -12,6 +12,20 @@ const formatDuration = (seconds: number) => {
     return `${h}:${m}:${s}`;
 };
 
+const formatDateTime = (value?: string | Date) => {
+    if (!value) return 'Unknown time';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'Unknown time';
+    return date.toLocaleString();
+};
+
+const getUserLabel = (value: any) => {
+    if (!value) return 'Not assigned';
+    if (typeof value === 'string') return value;
+    const fullName = [value.firstName, value.lastName].filter(Boolean).join(' ').trim();
+    return fullName || value.email || 'Unknown user';
+};
+
 const ProjectVerifications: React.FC = () => {
     const { id: projectId } = useParams<{ id: string }>();
     const { user } = useAuth();
@@ -25,30 +39,55 @@ const ProjectVerifications: React.FC = () => {
     });
 
     if (isLoading) return <div className="p-6 text-sm text-gray-500">Loading verifications...</div>;
-    if (!['admin', 'manager', 'member'].includes(user?.role || '')) {
-        return <div className="p-6 text-sm text-gray-500">Only team members can access verifications.</div>;
+    if (!['admin', 'manager', 'member', 'client'].includes(user?.role || '')) {
+        return <div className="p-6 text-sm text-gray-500">You do not have access to verifications.</div>;
     }
 
-    const pending = tasks.filter((t: any) => {
-        const verifierId = t.verifierId?._id || t.verifierId;
-        return t.verificationStatus === 'pending' && verifierId === user?.id;
+    const getId = (value: any) => value?._id?.toString?.() || value?.toString?.() || '';
+    const myId = user?.id?.toString?.() || '';
+    const canSeeAll = user?.role === 'admin' || user?.role === 'client';
+    const isRelatedToMe = (task: any) => {
+        if (canSeeAll) return true;
+
+        const verifierId = getId(task?.verifierId);
+        const assigneeId = getId(task?.assigneeId);
+        const activeWorkerId = getId(task?.activeWorkerId);
+        const workedByMe = Array.isArray(task?.workLogs)
+            && task.workLogs.some((log: any) => getId(log?.userId) === myId);
+        return verifierId === myId || assigneeId === myId || activeWorkerId === myId || workedByMe;
+    };
+
+    const pending = tasks.filter((task: any) => {
+        const isVerificationTask = task?.verificationStatus === 'pending' || task?.status === 'under_verification';
+        return isVerificationTask && isRelatedToMe(task);
     });
+    const latestApproved = tasks
+        .filter((task: any) => task?.verificationStatus === 'approved' && isRelatedToMe(task))
+        .sort((a: any, b: any) => {
+            const aTime = new Date(a?.verificationDecidedAt || a?.updatedAt || 0).getTime();
+            const bTime = new Date(b?.verificationDecidedAt || b?.updatedAt || 0).getTime();
+            return bTime - aTime;
+        })
+        .slice(0, 12);
 
     return (
         <div className="p-6">
             <h2 className="text-lg font-semibold text-gray-900 mb-4">Verifications</h2>
             {pending.length === 0 ? (
-                <div className="text-sm text-gray-500">No tasks pending your verification.</div>
+                <div className="text-sm text-gray-500">
+                    {canSeeAll ? 'No verification tasks found in this project.' : 'No verification tasks related to you in this project.'}
+                </div>
             ) : (
-                <div className="space-y-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
                     {pending.map((task: any) => (
-                        <div key={task._id} className="border border-gray-200 rounded-lg p-4 bg-white">
-                            <div className="flex items-start justify-between gap-3">
-                                <div>
-                                    <h3 className="text-sm font-semibold text-gray-900">{task.title}</h3>
-                                    <p className="text-xs text-gray-500 mt-1">
-                                        Total worked: {formatDuration(Number(task.totalWorkedSecondsComputed || task.totalWorkedSeconds || 0))}
-                                    </p>
+                        <div key={task._id} className="border border-gray-200 rounded-lg p-4 bg-white h-full">
+                            <div className="flex items-start justify-between gap-3 h-full">
+                                    <div className="min-w-0">
+                                        <h3 className="text-sm font-semibold text-gray-900">{task.title}</h3>
+                                        <p className="text-xs text-gray-500 mt-1">Testing by: {getUserLabel(task?.verifierId)}</p>
+                                        <p className="text-xs text-gray-500 mt-1">
+                                            Total worked: {formatDuration(Number(task.totalWorkedSecondsComputed || task.totalWorkedSeconds || 0))}
+                                        </p>
                                     {Array.isArray(task.workLogs) && task.workLogs.length > 0 && (
                                         <div className="mt-2 space-y-1">
                                             {task.workLogs.map((log: any, idx: number) => {
@@ -87,6 +126,23 @@ const ProjectVerifications: React.FC = () => {
                 task={selectedTask}
                 initialProjectId={projectId}
             />
+
+            <div className="mt-8">
+                <h2 className="text-lg font-semibold text-gray-900 mb-4">Latest Verified Tasks by Team</h2>
+                {latestApproved.length === 0 ? (
+                    <div className="text-sm text-gray-500">No approved verifications yet in this project.</div>
+                ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                        {latestApproved.map((task: any) => (
+                            <div key={`approved-${task._id}`} className="border border-gray-200 rounded-lg p-4 bg-white h-full">
+                                <h3 className="text-sm font-semibold text-gray-900">{task.title}</h3>
+                                <p className="text-xs text-gray-500 mt-1">Verified by: {getUserLabel(task?.verifierId)}</p>
+                                <p className="text-xs text-gray-500 mt-1">Verified at: {formatDateTime(task?.verificationDecidedAt || task?.updatedAt)}</p>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
         </div>
     );
 };

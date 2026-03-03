@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useQuery } from '@tanstack/react-query';
 import { getProjects } from '../services/core';
+import { getTasks } from '../services/task';
 import {
     LayoutDashboard,
     FolderKanban,
@@ -38,7 +39,7 @@ const RailItem = ({ icon: Icon, label, active, onClick }: { icon: any; label: st
     </button>
 );
 
-const SidebarItem = ({ to, icon: Icon, label, exact }: { to: string; icon: any; label: string; exact?: boolean }) => {
+const SidebarItem = ({ to, icon: Icon, label, exact, alert }: { to: string; icon: any; label: string; exact?: boolean; alert?: boolean }) => {
     const location = useLocation();
     const isActive = exact ? location.pathname === to : location.pathname === to || (to !== '/' && location.pathname.startsWith(`${to}/`));
 
@@ -47,8 +48,9 @@ const SidebarItem = ({ to, icon: Icon, label, exact }: { to: string; icon: any; 
             to={to}
             className={`flex items-center gap-2.5 px-4 py-1.5 text-[13px] transition-colors ${isActive ? 'bg-gray-100 text-gray-900 font-medium' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'}`}
         >
-            <Icon size={15} className={isActive ? 'text-gray-600' : 'text-gray-400'} strokeWidth={1.9} />
-            <span className="truncate">{label}</span>
+            <Icon size={15} className={alert ? 'text-red-500' : (isActive ? 'text-gray-600' : 'text-gray-400')} strokeWidth={1.9} />
+            <span className={`truncate ${alert ? 'text-red-600 font-semibold' : ''}`}>{label}</span>
+            {alert && <span className="ml-auto inline-block w-2 h-2 rounded-full bg-red-500" />}
         </Link>
     );
 };
@@ -71,7 +73,7 @@ const SectionLabel = ({ label, onAdd }: { label: string; onAdd?: () => void }) =
 const PROJECT_SUB_ITEMS = [
     { label: 'Overview', path: 'overview', icon: LayoutGrid },
     { label: 'Tasks', path: 'tasks', icon: ListTodo },
-    { label: 'Verifications', path: 'verifications', icon: CheckSquare, staffOnly: true },
+    { label: 'Verifications', path: 'verifications', icon: CheckSquare },
     { label: 'Documents', path: 'documents', icon: FileText, adminOnly: false },
     { label: 'Access', path: 'access', icon: KeyRound, adminOnly: true },
     { label: 'Sprints', path: 'sprints', icon: Zap, adminOnly: false },
@@ -81,8 +83,19 @@ const PROJECT_SUB_ITEMS = [
 const ProjectItem = ({ project, isOpen, onToggle }: { project: any; isOpen: boolean; onToggle: () => void }) => {
     const location = useLocation();
     const { user } = useAuth();
+    const { data: tasks = [] } = useQuery({
+        queryKey: ['project-sidebar-verification-tasks', project._id],
+        queryFn: () => getTasks(project._id),
+        enabled: Boolean(project?._id),
+    });
     const basePath = `/projects/${project._id}`;
     const isParentActive = location.pathname.startsWith(basePath);
+    const myId = user?.id?.toString?.() || '';
+    const projectPendingForMe = tasks.filter((task: any) => {
+        const verifierId = task?.verifierId?._id?.toString?.() || task?.verifierId?.toString?.() || '';
+        const isPendingVerification = task?.verificationStatus === 'pending' || task?.status === 'under_verification';
+        return isPendingVerification && verifierId === myId;
+    }).length;
 
     const visibleItems = PROJECT_SUB_ITEMS.filter((item: any) => {
         if (item.adminOnly && user?.role !== 'admin') return false;
@@ -112,8 +125,13 @@ const ProjectItem = ({ project, isOpen, onToggle }: { project: any; isOpen: bool
                                 to={to}
                                 className={`flex items-center gap-2 px-2 py-1 text-[12.5px] transition-colors ${isActive ? 'text-[#4f6ef7] font-medium' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-50'}`}
                             >
-                                <item.icon size={13} strokeWidth={2} />
-                                <span>{item.label}</span>
+                                <item.icon size={13} strokeWidth={2} className={item.path === 'verifications' && projectPendingForMe > 0 ? 'text-red-500' : ''} />
+                                <span className={item.path === 'verifications' && projectPendingForMe > 0 ? 'text-red-600 font-semibold' : ''}>{item.label}</span>
+                                {item.path === 'verifications' && projectPendingForMe > 0 && (
+                                    <span className="ml-auto inline-block min-w-[18px] px-1.5 py-0.5 rounded-full bg-red-100 text-red-700 text-[10px] font-bold text-center">
+                                        {projectPendingForMe}
+                                    </span>
+                                )}
                             </Link>
                         );
                     })}
@@ -152,6 +170,16 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const location = useLocation();
 
     const { data: projects = [] } = useQuery({ queryKey: ['projects'], queryFn: getProjects });
+    const { data: verificationTasks = [] } = useQuery({
+        queryKey: ['sidebar-global-verification-tasks'],
+        queryFn: () => getTasks(''),
+        enabled: Boolean(user?.id),
+    });
+    const myPendingVerifications = verificationTasks.filter((task: any) => {
+        const verifierId = task?.verifierId?._id?.toString?.() || task?.verifierId?.toString?.() || '';
+        const isPendingVerification = task?.verificationStatus === 'pending' || task?.status === 'under_verification';
+        return isPendingVerification && verifierId === user?.id;
+    }).length;
 
     const activeProjectId = useMemo(() => {
         const match = location.pathname.match(/^\/projects\/([^/]+)/);
@@ -200,7 +228,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                     </div>
 
                     <SidebarItem to="/" icon={LayoutDashboard} label="Home" exact />
-                    <SidebarItem to="/tasks" icon={CheckSquare} label="Your work" />
+                    <SidebarItem to="/verifications" icon={CheckSquare} label="Verifications" alert={myPendingVerifications > 0} />
                     {user?.role !== 'client' && <SidebarItem to="/chat" icon={MessageCircle} label="Chat" />}
 
                     <SectionLabel label="Projects" onAdd={() => navigate('/projects?action=create')} />

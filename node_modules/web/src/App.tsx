@@ -13,8 +13,10 @@ import Team from './pages/Team';
 import GithubMemberSetup from './pages/GithubMemberSetup';
 import Chat from './pages/Chat';
 import ProfileSetup from './pages/ProfileSetup';
+import Verifications from './pages/Verifications';
 import Layout from './components/Layout';
 import LoadingScreen from './components/LoadingScreen';
+import CreateTaskDrawer from './components/CreateTaskDrawer';
 import { useState, useEffect } from 'react';
 import { getProjects } from './services/core';
 import { getTasks } from './services/task';
@@ -42,17 +44,21 @@ const Dashboard = () => {
     const { user } = useAuth();
     const { joinProject, leaveProject } = useSocket();
     const [clockTick, setClockTick] = useState(0);
+    const [isTaskDrawerOpen, setIsTaskDrawerOpen] = useState(false);
+    const [selectedTask, setSelectedTask] = useState<any>(null);
 
     const isAdmin = user?.role === 'admin';
+    const isClient = user?.role === 'client';
+    const canSeeClarificationTasks = isAdmin || isClient;
     const { data: projects = [] } = useQuery({
         queryKey: ['dashboard-projects'],
         queryFn: getProjects,
-        enabled: isAdmin,
+        enabled: canSeeClarificationTasks,
     });
     const { data: tasks = [] } = useQuery({
         queryKey: ['dashboard-tasks'],
         queryFn: () => getTasks(''),
-        enabled: isAdmin,
+        enabled: canSeeClarificationTasks,
     });
     const { data: teamMembers = [] } = useQuery({
         queryKey: ['dashboard-team-members'],
@@ -132,6 +138,9 @@ const Dashboard = () => {
                     totalWorkedSeconds: Number(task.totalWorkedSecondsComputed || task.totalWorkedSeconds || 0),
                 };
             });
+        const clarificationRequiredTasks = tasks.filter(
+            (task: any) => task.status === 'clarification' || task.needsClarification === true
+        );
         void clockTick;
 
         return (
@@ -139,6 +148,38 @@ const Dashboard = () => {
                 <div>
                     <h1 className="text-2xl font-bold text-slate-900">Admin Dashboard</h1>
                     <p className="text-sm text-slate-500 mt-1">Full application stats overview</p>
+                </div>
+
+                <div className="rounded-xl border border-amber-200 bg-amber-50/40 p-4">
+                    <h2 className="text-sm font-bold uppercase tracking-wide text-amber-700">Clarification Required Tasks</h2>
+                    {clarificationRequiredTasks.length === 0 ? (
+                        <p className="text-sm text-slate-500 mt-3">No tasks currently require clarification.</p>
+                    ) : (
+                        <div className="mt-3 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                            {clarificationRequiredTasks.map((task: any) => {
+                                const projectId = task?.projectId?._id?.toString?.() || task?.projectId?.toString?.() || '';
+                                const projectName = projectNameById.get(projectId) || 'Unknown Project';
+                                return (
+                                    <div key={`clarification-${task._id}`} className="rounded-lg border border-amber-200 bg-white p-3">
+                                        <p className="text-sm font-semibold text-slate-900">{String(task.title || 'Untitled task')}</p>
+                                        <p className="text-xs text-slate-600 mt-1">Project: {String(projectName)}</p>
+                                        <p className="text-xs text-amber-700 mt-1">Status: Clarification needed</p>
+                                        <div className="mt-3">
+                                            <button
+                                                onClick={() => {
+                                                    setSelectedTask(task);
+                                                    setIsTaskDrawerOpen(true);
+                                                }}
+                                                className="px-3 py-1.5 text-xs font-semibold text-indigo-700 bg-indigo-50 rounded hover:bg-indigo-100"
+                                            >
+                                                Preview
+                                            </button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
@@ -254,6 +295,76 @@ const Dashboard = () => {
                         </div>
                     )}
                 </div>
+
+                <CreateTaskDrawer
+                    isOpen={isTaskDrawerOpen}
+                    onClose={() => {
+                        setIsTaskDrawerOpen(false);
+                        setSelectedTask(null);
+                    }}
+                    task={selectedTask}
+                    initialProjectId={selectedTask?.projectId?._id?.toString?.() || selectedTask?.projectId?.toString?.()}
+                />
+            </div>
+        );
+    }
+
+    if (isClient) {
+        const projectNameById = new Map(
+            projects.map((project: any) => [project._id?.toString?.() || project._id, project.name || 'Untitled Project'])
+        );
+        const clarificationRequiredTasks = tasks.filter(
+            (task: any) => task.status === 'clarification' || task.needsClarification === true
+        );
+
+        return (
+            <div className="p-6 bg-gradient-to-b from-slate-50 to-white min-h-full space-y-6">
+                <div>
+                    <h1 className="text-2xl font-bold text-slate-900">Client Dashboard</h1>
+                    <p className="text-sm text-slate-500 mt-1">Tasks requiring your clarification</p>
+                </div>
+
+                <div className="rounded-xl border border-amber-200 bg-amber-50/40 p-4">
+                    <h2 className="text-sm font-bold uppercase tracking-wide text-amber-700">Clarification Required Tasks</h2>
+                    {clarificationRequiredTasks.length === 0 ? (
+                        <p className="text-sm text-slate-500 mt-3">No tasks currently require clarification.</p>
+                    ) : (
+                        <div className="mt-3 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                            {clarificationRequiredTasks.map((task: any) => {
+                                const projectId = task?.projectId?._id?.toString?.() || task?.projectId?.toString?.() || '';
+                                const projectName = projectNameById.get(projectId) || 'Unknown Project';
+                                return (
+                                    <div key={`clarification-client-${task._id}`} className="rounded-lg border border-amber-200 bg-white p-3">
+                                        <p className="text-sm font-semibold text-slate-900">{String(task.title || 'Untitled task')}</p>
+                                        <p className="text-xs text-slate-600 mt-1">Project: {String(projectName)}</p>
+                                        <p className="text-xs text-amber-700 mt-1">Status: Clarification needed</p>
+                                        <div className="mt-3">
+                                            <button
+                                                onClick={() => {
+                                                    setSelectedTask(task);
+                                                    setIsTaskDrawerOpen(true);
+                                                }}
+                                                className="px-3 py-1.5 text-xs font-semibold text-indigo-700 bg-indigo-50 rounded hover:bg-indigo-100"
+                                            >
+                                                Preview
+                                            </button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+
+                <CreateTaskDrawer
+                    isOpen={isTaskDrawerOpen}
+                    onClose={() => {
+                        setIsTaskDrawerOpen(false);
+                        setSelectedTask(null);
+                    }}
+                    task={selectedTask}
+                    initialProjectId={selectedTask?.projectId?._id?.toString?.() || selectedTask?.projectId?.toString?.()}
+                />
             </div>
         );
     }
@@ -435,6 +546,18 @@ const AppRoutes = () => {
                 element={
                     <ProtectedRoute>
                         <Time />
+                    </ProtectedRoute>
+                }
+            />
+            <Route
+                path="/tasks"
+                element={<Navigate to="/verifications" replace />}
+            />
+            <Route
+                path="/verifications"
+                element={
+                    <ProtectedRoute>
+                        <Verifications />
                     </ProtectedRoute>
                 }
             />
