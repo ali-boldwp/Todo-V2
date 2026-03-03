@@ -364,7 +364,15 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
             }
         },
         onError: (error: any) => {
-            alert(error?.response?.data?.message || 'Failed to finish task');
+            const data = error?.response?.data || {};
+            const pieces = [
+                data?.message || 'Failed to finish task',
+                data?.mergeStep ? `Step: ${data.mergeStep}` : '',
+                data?.code ? `Code: ${data.code}` : '',
+                data?.branch ? `Branch: ${data.branch}` : '',
+                data?.details ? `Details: ${data.details}` : '',
+            ].filter(Boolean);
+            alert(pieces.join('\n'));
         },
     });
 

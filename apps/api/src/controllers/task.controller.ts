@@ -202,6 +202,73 @@ const pickRandom = <T>(arr: T[]): T | null => {
     return arr[index];
 };
 
+const pickVerifierByPendingPreference = async (pool: any[], currentTaskId?: string) => {
+    if (!pool.length) return null;
+    const verifierIds = pool
+        .map((user: any) => user?._id)
+        .filter(Boolean);
+    if (!verifierIds.length) return pickRandom(pool);
+
+    const pendingLoads = await Task.aggregate([
+        {
+            $match: {
+                _id: currentTaskId ? { $ne: currentTaskId as any } : { $exists: true },
+                verifierId: { $in: verifierIds },
+                verificationStatus: 'pending',
+                status: 'under_verification',
+            }
+        },
+        {
+            $group: {
+                _id: '$verifierId',
+                count: { $sum: 1 }
+            }
+        }
+    ]);
+
+    const loadByVerifierId = new Map<string, number>();
+    for (const row of pendingLoads) {
+        const id = row?._id?.toString?.();
+        if (id) loadByVerifierId.set(id, Number(row?.count || 0));
+    }
+
+    const withLoad = pool.map((user: any) => {
+        const id = user?._id?.toString?.();
+        const load = id ? (loadByVerifierId.get(id) || 0) : 0;
+        return { user, load };
+    });
+
+    const allZero = withLoad.every((entry: any) => entry.load === 0);
+    if (allZero) {
+        // Everyone is free: random assignment.
+        return pickRandom(pool);
+    }
+
+    // Prefer users who already have pending verifications.
+    const alreadyPending = withLoad
+        .filter((entry: any) => entry.load > 0)
+        .map((entry: any) => entry.user);
+    if (alreadyPending.length > 0) {
+        return pickRandom(alreadyPending);
+    }
+
+    let minLoad = Number.POSITIVE_INFINITY;
+    const candidates: any[] = [];
+    for (const entry of withLoad) {
+        const load = entry.load;
+        const user = entry.user;
+        if (load < minLoad) {
+            minLoad = load;
+            candidates.length = 0;
+            candidates.push(user);
+        } else if (load === minLoad) {
+            candidates.push(user);
+        }
+    }
+
+    return pickRandom(candidates.length ? candidates : pool);
+};
+
 const getTaskTitleBranchSegment = (task: any) => {
     const raw = String(task?.title || '').trim();
     const slug = slugify(raw);
@@ -383,6 +450,7 @@ type MergeBranchResult = {
     conflict?: boolean;
     status: number;
     message: string;
+    responseText?: string;
 };
 
 async function mergeGithubBranches(
@@ -418,10 +486,10 @@ async function mergeGithubBranches(
         const text = await response.text();
         const message = text || `Failed to merge ${head} into ${base}`;
         if (response.status === 409) {
-            return { ok: false, conflict: true, status: 409, message };
+            return { ok: false, conflict: true, status: 409, message, responseText: text };
         }
 
-        return { ok: false, status: response.status, message };
+        return { ok: false, status: response.status, message, responseText: text };
     } catch (error: any) {
         return { ok: false, status: 500, message: error?.message || 'Merge request failed' };
     }
@@ -883,6 +951,12 @@ export const finishTaskWork = async (req: AuthRequest, res: Response) => {
 
         const elapsed = task.isWorkPaused ? 0 : getElapsedSeconds(task.lastWorkStartedAt);
         const workLogs = mergeWorkLog(task.workLogs as any[], currentWorkerId, elapsed);
+        const finishContext = {
+            taskId: task._id?.toString?.(),
+            projectId: task.projectId?.toString?.(),
+            actorUserId: req.user!.userId,
+            branch: task.githubBranch || null,
+        };
 
         const project = await Project.findById(task.projectId).select('members githubRepoOwner githubRepoName');
         if (task.githubBranch && project?.githubRepoOwner && project?.githubRepoName) {
@@ -900,9 +974,18 @@ export const finishTaskWork = async (req: AuthRequest, res: Response) => {
                 'dev'
             );
             if (!mergeDevToTask.ok) {
+                console.error('finishTaskWork merge failed (dev->task)', {
+                    ...finishContext,
+                    mergeStep: 'dev_to_task',
+                    status: mergeDevToTask.status,
+                    conflict: !!mergeDevToTask.conflict,
+                    details: mergeDevToTask.message,
+                    responseText: mergeDevToTask.responseText || null,
+                });
                 if (mergeDevToTask.conflict) {
                     return res.status(409).json({
                         code: 'merge_conflict_dev_to_task',
+                        mergeStep: 'dev_to_task',
                         message: `Merge conflict detected while updating ${taskBranch} from dev. Please resolve conflicts in your branch, push, and finish task again.`,
                         details: mergeDevToTask.message,
                         branch: taskBranch
@@ -910,6 +993,7 @@ export const finishTaskWork = async (req: AuthRequest, res: Response) => {
                 }
                 return res.status(400).json({
                     code: 'merge_failed_dev_to_task',
+                    mergeStep: 'dev_to_task',
                     message: `Failed to update ${taskBranch} from dev before verification.`,
                     details: mergeDevToTask.message
                 });
@@ -923,9 +1007,18 @@ export const finishTaskWork = async (req: AuthRequest, res: Response) => {
                 taskBranch
             );
             if (!mergeTaskToDev.ok) {
+                console.error('finishTaskWork merge failed (task->dev)', {
+                    ...finishContext,
+                    mergeStep: 'task_to_dev',
+                    status: mergeTaskToDev.status,
+                    conflict: !!mergeTaskToDev.conflict,
+                    details: mergeTaskToDev.message,
+                    responseText: mergeTaskToDev.responseText || null,
+                });
                 if (mergeTaskToDev.conflict) {
                     return res.status(409).json({
                         code: 'merge_conflict_task_to_dev',
+                        mergeStep: 'task_to_dev',
                         message: `Merge conflict detected while merging ${taskBranch} into dev. Please resolve conflicts and finish task again.`,
                         details: mergeTaskToDev.message,
                         branch: taskBranch
@@ -933,6 +1026,7 @@ export const finishTaskWork = async (req: AuthRequest, res: Response) => {
                 }
                 return res.status(400).json({
                     code: 'merge_failed_task_to_dev',
+                    mergeStep: 'task_to_dev',
                     message: `Failed to merge ${taskBranch} into dev before verification.`,
                     details: mergeTaskToDev.message
                 });
@@ -961,7 +1055,7 @@ export const finishTaskWork = async (req: AuthRequest, res: Response) => {
             return res.status(400).json({ message: 'No eligible tester available besides the user who finished the task' });
         }
 
-        const selectedVerifier: any = pickRandom(pool);
+        const selectedVerifier: any = await pickVerifierByPendingPreference(pool, task._id?.toString?.());
         if (!selectedVerifier?._id) {
             return res.status(400).json({ message: 'Failed to assign verifier' });
         }
@@ -992,6 +1086,11 @@ export const finishTaskWork = async (req: AuthRequest, res: Response) => {
         res.json(toTaskResponse(updated, req.user!));
         emitTaskEvent('task:updated', updated);
     } catch (error) {
+        console.error('finishTaskWork server error', {
+            taskId: req.params.id,
+            actorUserId: req.user?.userId,
+            error: (error as any)?.message || error,
+        });
         res.status(500).json({ message: 'Server error' });
     }
 };
