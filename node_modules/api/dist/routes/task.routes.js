@@ -8,6 +8,7 @@ router.use(auth_1.authenticate);
 router.use(auth_1.requireProfileImageSetup);
 router.use(auth_1.requireGithubSetupForTeamMembers);
 router.get('/', task_controller_1.getTasks);
+router.get('/:id/logs', task_controller_1.getTaskActivityLogs);
 router.post('/', task_controller_1.createTask);
 router.patch('/:id', task_controller_1.updateTask);
 router.post('/:id/start', task_controller_1.startTaskWork);

@@ -1,12 +1,15 @@
 import React from 'react';
+import { useQuery } from '@tanstack/react-query';
 import Drawer from './Drawer';
 import RichTextEditor from './RichTextEditor';
 import TaskComments from './TaskComments';
+import { getTaskActivityLogs } from '../services/task';
 import {
     Flag,
     CheckCircle2,
     Info,
     GitBranch,
+    History,
 } from 'lucide-react';
 
 interface TaskDetailsDrawerProps {
@@ -33,6 +36,13 @@ const STATUS_STYLES: any = {
 };
 
 const TaskDetailsDrawer: React.FC<TaskDetailsDrawerProps> = ({ isOpen, onClose, task }) => {
+    const taskId = task?._id;
+    const { data: logsData, isLoading: isLogsLoading } = useQuery({
+        queryKey: ['task-activity-logs', taskId],
+        queryFn: () => getTaskActivityLogs(String(taskId)),
+        enabled: isOpen && !!taskId,
+    });
+    const logs = Array.isArray(logsData?.logs) ? logsData.logs : [];
     if (!task) return null;
 
     return (
@@ -124,6 +134,42 @@ const TaskDetailsDrawer: React.FC<TaskDetailsDrawerProps> = ({ isOpen, onClose, 
                             submitLabel="Send Message"
                             placeholder="Write clarification message..."
                         />
+                    </div>
+
+                    <div className="mt-10">
+                        <div className="flex items-center space-x-2 text-indigo-600 mb-3">
+                            <History className="w-4 h-4" />
+                            <h4 className="text-sm font-bold">Task Activity Logs</h4>
+                        </div>
+                        {isLogsLoading ? (
+                            <div className="text-xs text-gray-500">Loading logs...</div>
+                        ) : logs.length === 0 ? (
+                            <div className="text-xs text-gray-500">No activity logs yet.</div>
+                        ) : (
+                            <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                                {logs.map((log: any, idx: number) => {
+                                    const actor = log?.actorId
+                                        ? `${log.actorId.firstName || ''} ${log.actorId.lastName || ''}`.trim() || log.actorId.email || 'Unknown user'
+                                        : 'System';
+                                    return (
+                                        <div key={`${log?.createdAt || idx}-${idx}`} className="border border-gray-100 rounded-lg p-3 bg-gray-50">
+                                            <div className="flex items-center justify-between gap-2">
+                                                <p className="text-xs font-semibold text-gray-800">{log?.message || log?.action}</p>
+                                                <span className="text-[10px] text-gray-500">{new Date(log?.createdAt || Date.now()).toLocaleString()}</span>
+                                            </div>
+                                            <p className="text-[11px] text-gray-500 mt-1">
+                                                By: {actor}{log?.actorRole ? ` (${log.actorRole})` : ''}
+                                            </p>
+                                            {log?.metadata && (
+                                                <pre className="mt-2 p-2 rounded bg-white border border-gray-100 text-[10px] text-gray-600 overflow-x-auto whitespace-pre-wrap break-words">
+                                                    {JSON.stringify(log.metadata, null, 2)}
+                                                </pre>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>

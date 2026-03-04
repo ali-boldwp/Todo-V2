@@ -68,5 +68,13 @@ const TaskSchema = new mongoose_1.Schema({
             data: { type: String, required: true },
             uploadedAt: { type: Date, default: Date.now },
         }],
+    activityLogs: [{
+            action: { type: String, required: true },
+            message: { type: String, required: true },
+            actorId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'User' },
+            actorRole: { type: String },
+            metadata: { type: mongoose_1.Schema.Types.Mixed },
+            createdAt: { type: Date, default: Date.now }
+        }],
 }, { timestamps: true });
 exports.default = mongoose_1.default.model('Task', TaskSchema);
