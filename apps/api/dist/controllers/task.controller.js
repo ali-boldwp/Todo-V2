@@ -254,10 +254,17 @@ const pickVerifierByPendingPreference = async (pool, currentTaskId) => {
     }
     return pickRandom(candidates.length ? candidates : pool);
 };
+const getTaskIdBranchSuffix = (task) => {
+    const id = task?._id?.toString?.();
+    if (!id)
+        return 'untitled';
+    return id.slice(-6).toLowerCase().replace(/[^a-z0-9]/g, '') || 'untitled';
+};
 const getTaskTitleBranchSegment = (task) => {
     const raw = String(task?.title || '').trim();
     const slug = slugify(raw);
-    return slug || `task-${task?._id?.toString?.().slice(-6) || 'untitled'}`;
+    const suffix = getTaskIdBranchSuffix(task);
+    return slug ? `${slug}-${suffix}` : `task-${suffix}`;
 };
 const isTaskBranchFixed = (branch, taskTitleSegment) => {
     if (!branch || !taskTitleSegment)

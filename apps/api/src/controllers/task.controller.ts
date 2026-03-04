@@ -270,10 +270,17 @@ const pickVerifierByPendingPreference = async (pool: any[], currentTaskId?: stri
     return pickRandom(candidates.length ? candidates : pool);
 };
 
+const getTaskIdBranchSuffix = (task: any) => {
+    const id = task?._id?.toString?.();
+    if (!id) return 'untitled';
+    return id.slice(-6).toLowerCase().replace(/[^a-z0-9]/g, '') || 'untitled';
+};
+
 const getTaskTitleBranchSegment = (task: any) => {
     const raw = String(task?.title || '').trim();
     const slug = slugify(raw);
-    return slug || `task-${task?._id?.toString?.().slice(-6) || 'untitled'}`;
+    const suffix = getTaskIdBranchSuffix(task);
+    return slug ? `${slug}-${suffix}` : `task-${suffix}`;
 };
 
 const isTaskBranchFixed = (branch: string | undefined, taskTitleSegment: string) => {

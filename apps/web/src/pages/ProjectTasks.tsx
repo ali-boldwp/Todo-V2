@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { getTasks, deleteTask } from '../services/task';
 import CreateTaskDrawer from '../components/CreateTaskDrawer';
@@ -32,6 +32,7 @@ const ProjectTasks: React.FC = () => {
     const { user } = useAuth();
     const canDeleteTask = ['admin', 'manager', 'member'].includes(user?.role || '');
     const { id: projectId } = useParams<{ id: string }>();
+    const [searchParams, setSearchParams] = useSearchParams();
     const queryClient = useQueryClient();
 
     const { data: tasks = [], isLoading } = useQuery({
@@ -43,6 +44,7 @@ const ProjectTasks: React.FC = () => {
     const [selectedTask, setSelectedTask] = useState<any>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+    const taskIdFromQuery = searchParams.get('taskId');
 
     const deleteMutation = useMutation({
         mutationFn: (id: string) => deleteTask(id),
@@ -53,6 +55,17 @@ const ProjectTasks: React.FC = () => {
         () => tasks.filter((task: any) => task.title.toLowerCase().includes(searchTerm.toLowerCase())),
         [tasks, searchTerm]
     );
+
+    useEffect(() => {
+        if (!taskIdFromQuery || !tasks.length) return;
+        const matchedTask = tasks.find((task: any) => String(task?._id) === taskIdFromQuery);
+        if (!matchedTask) return;
+        setSelectedTask(matchedTask);
+        setIsCreateDrawerOpen(true);
+        const nextParams = new URLSearchParams(searchParams);
+        nextParams.delete('taskId');
+        setSearchParams(nextParams, { replace: true });
+    }, [taskIdFromQuery, tasks, searchParams, setSearchParams]);
 
     const sections = useMemo(() => {
         const grouped: Record<string, any[]> = {};
