@@ -1,0 +1,14 @@
+<ivy-module version="2.0">
+  <info organisation="bundledPlugin" module="org.intellij.plugins.markdown" revision="WS-242.20224.342"/>
+  <configurations>
+    <conf name="default" visibility="public"/>
+  </configurations>
+  <publications>
+    <artifact name="markdown" ext="jar" conf="default" url="plugins/markdown/lib"/>
+  </publications>
+  <dependencies>
+    <dependency org="bundledPlugin" name="org.intellij.intelliLang" rev="WS-242.20224.342"/>
+    <dependency org="bundledPlugin" name="org.jetbrains.plugins.yaml" rev="WS-242.20224.342"/>
+    <dependency org="bundledPlugin" name="com.intellij.platform.images" rev="WS-242.20224.342"/>
+  </dependencies>
+</ivy-module>

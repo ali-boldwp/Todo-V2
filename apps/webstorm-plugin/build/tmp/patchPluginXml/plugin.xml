@@ -1,0 +1,14 @@
+<idea-plugin>
+  <idea-version since-build="242" until-build="253.*" />
+  <version>0.1.1</version>
+  <id>com.devmanager.webstorm.plugin</id>
+  <name>DevManager Workflow</name>
+  <vendor email="support@devmanager.local">DevManager</vendor>
+  <description>Task workflow integration for WebStorm.</description>
+  <depends>com.intellij.modules.platform</depends>
+  <depends>Git4Idea</depends>
+  <extensions defaultExtensionNs="com.intellij">
+    <notificationGroup id="DevManager Notifications" displayType="BALLOON" isLogByDefault="true" />
+    <toolWindow id="DevManager" anchor="right" factoryClass="com.devmanager.plugin.DevManagerToolWindowFactory" icon="/icons/devmanagerToolWindow.svg" />
+  </extensions>
+</idea-plugin>
