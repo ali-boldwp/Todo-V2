@@ -965,7 +965,6 @@ const finishTaskWork = async (req, res) => {
             actorUserId: req.user.userId,
             branch: task.githubBranch || null,
         };
-        const forceNoChangesFinish = req.body?.forceNoChangesFinish === true;
         const project = await Project_1.default.findById(task.projectId).select('members githubRepoOwner githubRepoName');
         if (task.githubBranch && project?.githubRepoOwner && project?.githubRepoName) {
             const config = await GithubConfig_1.default.findOne().select('personalAccessToken');
@@ -1013,13 +1012,13 @@ const finishTaskWork = async (req, res) => {
                     details: changesComparedToDev.message
                 });
             }
-            if (!forceNoChangesFinish && changesComparedToDev.aheadBy === 0) {
+            if (changesComparedToDev.aheadBy === 0) {
                 const compareUrl = buildGithubCompareUrl(project.githubRepoOwner, project.githubRepoName, 'dev', taskBranch);
-                return res.status(409).json({
-                    code: 'no_changes_confirmation_required',
+                return res.status(400).json({
+                    code: 'no_changes_not_allowed',
                     mergeStep: 'task_to_dev',
-                    message: `No code changes were found in ${taskBranch} compared to dev. Are you sure you want to finish this task?`,
-                    details: 'Branch has no commits ahead of dev after sync.',
+                    message: `Cannot finish task because no code changes were found in ${taskBranch} compared to dev.`,
+                    details: 'Push code changes to the task branch, then finish again.',
                     branch: taskBranch,
                     compareUrl
                 });

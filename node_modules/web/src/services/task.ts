@@ -41,10 +41,8 @@ export const resumeTaskWork = async (id: string) => {
     return response.data;
 };
 
-export const finishTaskWork = async (id: string, options?: { forceNoChangesFinish?: boolean }) => {
-    const response = await api.post(`/tasks/${id}/finish`, {
-        forceNoChangesFinish: !!options?.forceNoChangesFinish
-    });
+export const finishTaskWork = async (id: string) => {
+    const response = await api.post(`/tasks/${id}/finish`);
     return response.data;
 };
 
