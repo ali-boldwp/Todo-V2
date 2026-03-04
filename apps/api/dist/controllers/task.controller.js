@@ -457,6 +457,46 @@ async function mergeGithubBranches(token, owner, repo, base, head) {
         return { ok: false, status: 500, message: error?.message || 'Merge request failed' };
     }
 }
+async function compareGithubBranches(token, owner, repo, base, head) {
+    try {
+        const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/compare/${encodeURIComponent(base)}...${encodeURIComponent(head)}`, {
+            headers: {
+                Authorization: `Bearer ${token}`,
+                Accept: 'application/vnd.github+json',
+                'X-GitHub-Api-Version': '2022-11-28'
+            }
+        });
+        if (!response.ok) {
+            const text = await response.text();
+            return {
+                ok: false,
+                status: response.status,
+                aheadBy: 0,
+                behindBy: 0,
+                totalCommits: 0,
+                message: text || `Failed to compare ${head} with ${base}`
+            };
+        }
+        const data = await response.json();
+        return {
+            ok: true,
+            status: response.status,
+            aheadBy: Number(data?.ahead_by || 0),
+            behindBy: Number(data?.behind_by || 0),
+            totalCommits: Number(data?.total_commits || 0),
+        };
+    }
+    catch (error) {
+        return {
+            ok: false,
+            status: 500,
+            aheadBy: 0,
+            behindBy: 0,
+            totalCommits: 0,
+            message: error?.message || 'Compare request failed'
+        };
+    }
+}
 const buildGithubCompareUrl = (owner, repo, base, head) => {
     const encodedBase = encodeURIComponent(base);
     const encodedHead = encodeURIComponent(head);
@@ -925,6 +965,7 @@ const finishTaskWork = async (req, res) => {
             actorUserId: req.user.userId,
             branch: task.githubBranch || null,
         };
+        const forceNoChangesFinish = req.body?.forceNoChangesFinish === true;
         const project = await Project_1.default.findById(task.projectId).select('members githubRepoOwner githubRepoName');
         if (task.githubBranch && project?.githubRepoOwner && project?.githubRepoName) {
             const config = await GithubConfig_1.default.findOne().select('personalAccessToken');
@@ -961,6 +1002,26 @@ const finishTaskWork = async (req, res) => {
                     mergeStep: 'dev_to_task',
                     message: `Failed to update ${taskBranch} from dev before verification.`,
                     details: mergeDevToTask.message
+                });
+            }
+            const changesComparedToDev = await compareGithubBranches(config.personalAccessToken, project.githubRepoOwner, project.githubRepoName, 'dev', taskBranch);
+            if (!changesComparedToDev.ok) {
+                return res.status(400).json({
+                    code: 'compare_failed_task_to_dev',
+                    mergeStep: 'task_to_dev',
+                    message: `Failed to verify code changes for ${taskBranch} before finish.`,
+                    details: changesComparedToDev.message
+                });
+            }
+            if (!forceNoChangesFinish && changesComparedToDev.aheadBy === 0) {
+                const compareUrl = buildGithubCompareUrl(project.githubRepoOwner, project.githubRepoName, 'dev', taskBranch);
+                return res.status(409).json({
+                    code: 'no_changes_confirmation_required',
+                    mergeStep: 'task_to_dev',
+                    message: `No code changes were found in ${taskBranch} compared to dev. Are you sure you want to finish this task?`,
+                    details: 'Branch has no commits ahead of dev after sync.',
+                    branch: taskBranch,
+                    compareUrl
                 });
             }
             const mergeTaskToDev = await mergeGithubBranches(config.personalAccessToken, project.githubRepoOwner, project.githubRepoName, 'dev', taskBranch);

@@ -47,6 +47,14 @@ interface FinishFlowErrorDetail {
     conflictUrl?: string;
 }
 
+interface NoChangesConfirmState {
+    isOpen: boolean;
+    message: string;
+    details?: string;
+    branch?: string;
+    compareUrl?: string;
+}
+
 interface FinishFlowState {
     isOpen: boolean;
     phase: FinishFlowPhase;
@@ -178,6 +186,10 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
     const [baseWorkedSeconds, setBaseWorkedSeconds] = useState<number>(Number(task?.totalWorkedSeconds || 0));
     const [, setTick] = useState(0);
     const [isFinishConfirmOpen, setIsFinishConfirmOpen] = useState(false);
+    const [noChangesConfirm, setNoChangesConfirm] = useState<NoChangesConfirmState>({
+        isOpen: false,
+        message: '',
+    });
     const [verificationNotify, setVerificationNotify] = useState<{ name: string; email?: string } | null>(null);
     const [verificationDecision, setVerificationDecision] = useState<{ isOpen: boolean; type: 'approve' | 'reject' | null; comment: string }>({
         isOpen: false,
@@ -255,6 +267,10 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
         setSaveStatus('idle');
         setUploadError(null);
         setIsFinishConfirmOpen(false);
+        setNoChangesConfirm({
+            isOpen: false,
+            message: '',
+        });
         setVerificationDecision({ isOpen: false, type: null, comment: '' });
         setTaskActionModal({
             isOpen: false,
@@ -474,9 +490,9 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
     });
 
     const finishWorkMutation = useMutation({
-        mutationFn: () => {
+        mutationFn: (options?: { forceNoChangesFinish?: boolean }) => {
             if (!task?._id) return Promise.reject(new Error('No task selected'));
-            return finishTaskWork(task._id);
+            return finishTaskWork(task._id, options);
         },
         onSuccess: (updatedTask) => {
             queryClient.invalidateQueries({ queryKey: ['tasks'] });
@@ -501,6 +517,23 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
         },
         onError: (error: any) => {
             const data = error?.response?.data || {};
+            if (data?.code === 'no_changes_confirmation_required') {
+                setFinishFlow({
+                    isOpen: false,
+                    phase: 'running',
+                    progressStep: 0,
+                    error: null,
+                    hasOpenedResolveUrl: false,
+                });
+                setNoChangesConfirm({
+                    isOpen: true,
+                    message: data?.message || 'No code changes detected for this task branch. Are you sure you want to finish?',
+                    details: data?.details,
+                    branch: data?.branch,
+                    compareUrl: data?.compareUrl,
+                });
+                return;
+            }
             const conflictUrl = data?.pullRequestUrl || data?.compareUrl || data?.resolveUrl;
             const mergeStep = String(data?.mergeStep || '');
             const stepIndex = mergeStep === 'dev_to_task' ? 1 : mergeStep === 'task_to_dev' ? 2 : 0;
@@ -536,7 +569,11 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
         },
     });
 
-    const runFinishFlow = () => {
+    const runFinishFlow = (forceNoChangesFinish = false) => {
+        setNoChangesConfirm({
+            isOpen: false,
+            message: '',
+        });
         setFinishFlow({
             isOpen: true,
             phase: 'running',
@@ -544,7 +581,7 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
             error: null,
             hasOpenedResolveUrl: false,
         });
-        finishWorkMutation.mutate();
+        finishWorkMutation.mutate({ forceNoChangesFinish });
     };
 
     const runStartWork = () => {
@@ -1162,6 +1199,48 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
                 </div>
             )}
 
+            {noChangesConfirm.isOpen && (
+                <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-xl w-full max-w-lg p-6 shadow-xl border border-amber-200">
+                        <h3 className="text-lg font-bold text-gray-900">No Code Changes Detected</h3>
+                        <p className="text-sm text-gray-700 mt-2">
+                            {noChangesConfirm.message}
+                        </p>
+                        {noChangesConfirm.branch && (
+                            <div className="mt-3 px-3 py-2 rounded-md bg-amber-50 border border-amber-100 text-xs text-amber-800 font-medium">
+                                Branch: <span className="font-mono">{noChangesConfirm.branch}</span>
+                            </div>
+                        )}
+                        {noChangesConfirm.details && (
+                            <p className="mt-2 text-xs text-gray-500">{noChangesConfirm.details}</p>
+                        )}
+                        <div className="mt-5 flex gap-2 justify-end">
+                            {noChangesConfirm.compareUrl && (
+                                <button
+                                    onClick={() => window.open(noChangesConfirm.compareUrl, '_blank', 'noopener,noreferrer')}
+                                    className="px-4 py-2 text-sm border border-indigo-200 text-indigo-700 rounded-lg hover:bg-indigo-50"
+                                >
+                                    View Compare
+                                </button>
+                            )}
+                            <button
+                                onClick={() => setNoChangesConfirm({ isOpen: false, message: '' })}
+                                className="px-4 py-2 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={() => runFinishFlow(true)}
+                                disabled={finishWorkMutation.isPending}
+                                className="px-4 py-2 text-sm bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50"
+                            >
+                                {finishWorkMutation.isPending ? 'Finishing...' : 'Yes, Finish Anyway'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {finishFlow.isOpen && (
                 <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
                     <div className="bg-white rounded-xl w-full max-w-2xl p-6 shadow-xl border border-gray-100">
@@ -1242,7 +1321,7 @@ const CreateTaskDrawer: React.FC<CreateTaskDrawerProps> = ({ isOpen, onClose, ta
                                                 progressStep: prev.error?.mergeStep === 'task_to_dev' ? 2 : 1,
                                                 error: null,
                                             }));
-                                            finishWorkMutation.mutate();
+                                            finishWorkMutation.mutate({ forceNoChangesFinish: false });
                                         }}
                                         disabled={!finishFlow.hasOpenedResolveUrl || finishWorkMutation.isPending}
                                         className="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
