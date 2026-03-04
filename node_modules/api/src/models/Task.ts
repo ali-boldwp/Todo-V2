@@ -34,6 +34,14 @@ export interface ITask extends Document {
         data: string; // base64
         uploadedAt: Date;
     }>;
+    activityLogs?: Array<{
+        action: string;
+        message: string;
+        actorId?: mongoose.Types.ObjectId;
+        actorRole?: string;
+        metadata?: any;
+        createdAt: Date;
+    }>;
 }
 
 const TaskSchema: Schema = new Schema({
@@ -69,6 +77,14 @@ const TaskSchema: Schema = new Schema({
         size: { type: Number, required: true },
         data: { type: String, required: true },
         uploadedAt: { type: Date, default: Date.now },
+    }],
+    activityLogs: [{
+        action: { type: String, required: true },
+        message: { type: String, required: true },
+        actorId: { type: Schema.Types.ObjectId, ref: 'User' },
+        actorRole: { type: String },
+        metadata: { type: Schema.Types.Mixed },
+        createdAt: { type: Date, default: Date.now }
     }],
 }, { timestamps: true });
 

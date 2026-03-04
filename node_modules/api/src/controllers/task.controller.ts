@@ -134,6 +134,40 @@ const toAttachmentMeta = (attachment: any) => ({
     uploadedAt: attachment?.uploadedAt,
 });
 
+type TaskActivityInput = {
+    action: string;
+    message: string;
+    actor?: { userId?: string; role?: string };
+    metadata?: any;
+};
+
+const appendTaskActivity = async (taskId: any, input: TaskActivityInput) => {
+    if (!taskId || !input?.action || !input?.message) return;
+    try {
+        await Task.updateOne(
+            { _id: taskId },
+            {
+                $push: {
+                    activityLogs: {
+                        action: input.action,
+                        message: input.message,
+                        actorId: input.actor?.userId || undefined,
+                        actorRole: input.actor?.role || undefined,
+                        metadata: input.metadata || undefined,
+                        createdAt: new Date(),
+                    }
+                }
+            }
+        );
+    } catch (error: any) {
+        console.warn('appendTaskActivity failed', {
+            taskId: taskId?.toString?.() || taskId,
+            action: input?.action,
+            error: error?.message || error,
+        });
+    }
+};
+
 const hasTaskAccess = async (task: any, user?: { userId: string; role: string; clientId?: string }) => {
     if (!task || !user) return false;
     if (user.role === 'admin') return true;
@@ -669,6 +703,17 @@ export const createTask = async (req: AuthRequest, res: Response) => {
 
         // Create task. Branch is created when someone starts work.
         const task = await Task.create({ ...validated });
+        await appendTaskActivity(task._id, {
+            action: 'task_created',
+            message: `Task "${task.title}" created.`,
+            actor: req.user,
+            metadata: {
+                status: task.status,
+                priority: task.priority,
+                type: task.type,
+                assigneeId: task.assigneeId || null,
+            }
+        });
 
         res.status(201).json(toTaskResponse(task, req.user!));
         await notifyTaskAudience({
@@ -733,6 +778,18 @@ export const updateTask = async (req: AuthRequest, res: Response) => {
             .populate('workLogs.userId', 'firstName lastName email role');
 
         if (!task) return res.status(404).json({ message: 'Task not found' });
+        await appendTaskActivity(task._id, {
+            action: clarificationRequest ? 'task_clarification_requested' : 'task_updated',
+            message: clarificationRequest
+                ? `Clarification requested for "${task.title}".`
+                : `Task "${task.title}" updated.`,
+            actor: req.user,
+            metadata: {
+                updatedFields: Object.keys(patch || {}),
+                previousStatus: existingTask.status,
+                nextStatus: task.status,
+            }
+        });
         res.json(toTaskResponse(task, req.user!));
 
         if (clarificationRequest) {
@@ -783,6 +840,14 @@ export const deleteTask = async (req: AuthRequest, res: Response) => {
             }
         }
 
+        await appendTaskActivity(task._id, {
+            action: 'task_deleted',
+            message: `Task "${task.title}" deleted.`,
+            actor: req.user,
+            metadata: {
+                githubBranch: task.githubBranch || null,
+            }
+        });
         await Task.findByIdAndDelete(req.params.id);
 
         res.json({ message: 'Task deleted' });
@@ -824,6 +889,12 @@ export const uploadAttachment = async (req: AuthRequest, res: Response) => {
             .populate('verifierId', 'firstName lastName email role')
             .populate('workLogs.userId', 'firstName lastName email role');
         if (!task) return res.status(404).json({ message: 'Task not found' });
+        await appendTaskActivity(task._id, {
+            action: 'attachment_uploaded',
+            message: `Attachment "${name}" uploaded.`,
+            actor: req.user,
+            metadata: { name, mimeType, size }
+        });
         res.json(toTaskResponse(task, req.user!));
         emitTaskEvent('task:updated', task);
     } catch (error) {
@@ -841,6 +912,7 @@ export const deleteAttachment = async (req: AuthRequest, res: Response) => {
         if (isNaN(idx) || !task.attachments || idx < 0 || idx >= task.attachments.length) {
             return res.status(400).json({ message: 'Invalid attachment index' });
         }
+        const removed = task.attachments[idx];
 
         task.attachments.splice(idx, 1);
         await task.save();
@@ -848,8 +920,46 @@ export const deleteAttachment = async (req: AuthRequest, res: Response) => {
         await task.populate('activeWorkerId', 'firstName lastName email role');
         await task.populate('verifierId', 'firstName lastName email role');
         await task.populate('workLogs.userId', 'firstName lastName email role');
+        await appendTaskActivity(task._id, {
+            action: 'attachment_deleted',
+            message: `Attachment "${removed?.name || 'file'}" removed.`,
+            actor: req.user,
+            metadata: {
+                index: idx,
+                name: removed?.name,
+                mimeType: removed?.mimeType,
+                size: removed?.size,
+            }
+        });
         res.json(toTaskResponse(task, req.user!));
         emitTaskEvent('task:updated', task);
+    } catch (error) {
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+export const getTaskActivityLogs = async (req: AuthRequest, res: Response) => {
+    try {
+        const task = await Task.findById(req.params.id).select('_id projectId activityLogs');
+        if (!task) return res.status(404).json({ message: 'Task not found' });
+
+        const allowed = await hasTaskAccess(task, req.user as any);
+        if (!allowed) return res.status(403).json({ message: 'Not authorized' });
+
+        const hydrated = await Task.findById(req.params.id)
+            .select('activityLogs')
+            .populate('activityLogs.actorId', 'firstName lastName email role')
+            .lean();
+
+        const logs = Array.isArray((hydrated as any)?.activityLogs)
+            ? [...(hydrated as any).activityLogs].sort((a: any, b: any) => {
+                const at = new Date(a?.createdAt || 0).getTime();
+                const bt = new Date(b?.createdAt || 0).getTime();
+                return bt - at;
+            })
+            : [];
+
+        res.json({ logs });
     } catch (error) {
         res.status(500).json({ message: 'Server error' });
     }
@@ -967,6 +1077,15 @@ export const startTaskWork = async (req: AuthRequest, res: Response) => {
             .populate('workLogs.userId', 'firstName lastName email role');
 
         if (!updated) return res.status(404).json({ message: 'Task not found' });
+        await appendTaskActivity(updated._id, {
+            action: 'work_started',
+            message: `${req.user?.firstName || 'Team member'} started task work.`,
+            actor: req.user,
+            metadata: {
+                githubBranch: updated.githubBranch || null,
+                activeWorkerId: updated.activeWorkerId?._id?.toString?.() || updated.activeWorkerId?.toString?.(),
+            }
+        });
         res.json(toTaskResponse(updated, req.user!));
         await notifyTaskAudience({
             task: updated,
@@ -1023,6 +1142,15 @@ export const pauseTaskWork = async (req: AuthRequest, res: Response) => {
             .populate('workLogs.userId', 'firstName lastName email role');
 
         if (!updated) return res.status(404).json({ message: 'Task not found' });
+        await appendTaskActivity(updated._id, {
+            action: 'work_paused',
+            message: `${req.user?.firstName || 'Team member'} paused task work.`,
+            actor: req.user,
+            metadata: {
+                elapsedSeconds: elapsed,
+                totalWorkedSeconds: updated.totalWorkedSeconds || 0,
+            }
+        });
         res.json(toTaskResponse(updated, req.user!));
         await notifyTaskAudience({
             task: updated,
@@ -1077,6 +1205,14 @@ export const resumeTaskWork = async (req: AuthRequest, res: Response) => {
             .populate('workLogs.userId', 'firstName lastName email role');
 
         if (!updated) return res.status(404).json({ message: 'Task not found' });
+        await appendTaskActivity(updated._id, {
+            action: 'work_resumed',
+            message: `${req.user?.firstName || 'Team member'} resumed task work.`,
+            actor: req.user,
+            metadata: {
+                activeWorkerId: updated.activeWorkerId?._id?.toString?.() || updated.activeWorkerId?.toString?.(),
+            }
+        });
         res.json(toTaskResponse(updated, req.user!));
         await notifyTaskAudience({
             task: updated,
@@ -1127,6 +1263,50 @@ export const finishTaskWork = async (req: AuthRequest, res: Response) => {
             }
 
             const taskBranch = task.githubBranch;
+            const changesComparedToDev = await compareGithubBranches(
+                config.personalAccessToken,
+                project.githubRepoOwner,
+                project.githubRepoName,
+                'dev',
+                taskBranch
+            );
+            if (!changesComparedToDev.ok) {
+                await appendTaskActivity(task._id, {
+                    action: 'finish_compare_failed',
+                    message: `Finish blocked: failed to compare ${taskBranch} with dev.`,
+                    actor: req.user,
+                    metadata: { details: changesComparedToDev.message }
+                });
+                return res.status(400).json({
+                    code: 'compare_failed_task_to_dev',
+                    mergeStep: 'task_to_dev',
+                    message: `Failed to verify code changes for ${taskBranch} before finish.`,
+                    details: changesComparedToDev.message
+                });
+            }
+            if (changesComparedToDev.aheadBy === 0) {
+                const compareUrl = buildGithubCompareUrl(
+                    project.githubRepoOwner,
+                    project.githubRepoName,
+                    'dev',
+                    taskBranch
+                );
+                await appendTaskActivity(task._id, {
+                    action: 'finish_blocked_no_changes',
+                    message: `Finish blocked: no code changes found in ${taskBranch}.`,
+                    actor: req.user,
+                    metadata: { compareUrl, branch: taskBranch }
+                });
+                return res.status(400).json({
+                    code: 'no_changes_not_allowed',
+                    mergeStep: 'task_to_dev',
+                    message: `Cannot finish task because no code changes were found in ${taskBranch} compared to dev.`,
+                    details: 'Push code changes to the task branch, then finish again.',
+                    branch: taskBranch,
+                    compareUrl
+                });
+            }
+
             const mergeDevToTask = await mergeGithubBranches(
                 config.personalAccessToken,
                 project.githubRepoOwner,
@@ -1135,6 +1315,17 @@ export const finishTaskWork = async (req: AuthRequest, res: Response) => {
                 'dev'
             );
             if (!mergeDevToTask.ok) {
+                await appendTaskActivity(task._id, {
+                    action: mergeDevToTask.conflict ? 'merge_conflict_dev_to_task' : 'merge_failed_dev_to_task',
+                    message: mergeDevToTask.conflict
+                        ? `Merge conflict while updating ${taskBranch} from dev.`
+                        : `Failed to update ${taskBranch} from dev.`,
+                    actor: req.user,
+                    metadata: {
+                        status: mergeDevToTask.status,
+                        details: mergeDevToTask.message,
+                    }
+                });
                 console.error('finishTaskWork merge failed (dev->task)', {
                     ...finishContext,
                     mergeStep: 'dev_to_task',
@@ -1175,38 +1366,6 @@ export const finishTaskWork = async (req: AuthRequest, res: Response) => {
                 });
             }
 
-            const changesComparedToDev = await compareGithubBranches(
-                config.personalAccessToken,
-                project.githubRepoOwner,
-                project.githubRepoName,
-                'dev',
-                taskBranch
-            );
-            if (!changesComparedToDev.ok) {
-                return res.status(400).json({
-                    code: 'compare_failed_task_to_dev',
-                    mergeStep: 'task_to_dev',
-                    message: `Failed to verify code changes for ${taskBranch} before finish.`,
-                    details: changesComparedToDev.message
-                });
-            }
-            if (changesComparedToDev.aheadBy === 0) {
-                const compareUrl = buildGithubCompareUrl(
-                    project.githubRepoOwner,
-                    project.githubRepoName,
-                    'dev',
-                    taskBranch
-                );
-                return res.status(400).json({
-                    code: 'no_changes_not_allowed',
-                    mergeStep: 'task_to_dev',
-                    message: `Cannot finish task because no code changes were found in ${taskBranch} compared to dev.`,
-                    details: 'Push code changes to the task branch, then finish again.',
-                    branch: taskBranch,
-                    compareUrl
-                });
-            }
-
             const mergeTaskToDev = await mergeGithubBranches(
                 config.personalAccessToken,
                 project.githubRepoOwner,
@@ -1215,6 +1374,17 @@ export const finishTaskWork = async (req: AuthRequest, res: Response) => {
                 taskBranch
             );
             if (!mergeTaskToDev.ok) {
+                await appendTaskActivity(task._id, {
+                    action: mergeTaskToDev.conflict ? 'merge_conflict_task_to_dev' : 'merge_failed_task_to_dev',
+                    message: mergeTaskToDev.conflict
+                        ? `Merge conflict while merging ${taskBranch} into dev.`
+                        : `Failed to merge ${taskBranch} into dev.`,
+                    actor: req.user,
+                    metadata: {
+                        status: mergeTaskToDev.status,
+                        details: mergeTaskToDev.message,
+                    }
+                });
                 console.error('finishTaskWork merge failed (task->dev)', {
                     ...finishContext,
                     mergeStep: 'task_to_dev',
@@ -1307,6 +1477,16 @@ export const finishTaskWork = async (req: AuthRequest, res: Response) => {
             .populate('workLogs.userId', 'firstName lastName email role');
 
         if (!updated) return res.status(404).json({ message: 'Task not found' });
+        await appendTaskActivity(updated._id, {
+            action: 'task_sent_for_verification',
+            message: `Task moved to verification.`,
+            actor: req.user,
+            metadata: {
+                verifierId: selectedVerifier._id?.toString?.() || String(selectedVerifier._id),
+                isMergedToDev: true,
+                elapsedSeconds: elapsed,
+            }
+        });
         res.json(toTaskResponse(updated, req.user!));
         await notifyTaskAudience({
             task: updated,
@@ -1393,6 +1573,14 @@ export const fixTaskBranch = async (req: AuthRequest, res: Response) => {
         await task.populate('activeWorkerId', 'firstName lastName email role');
         await task.populate('verifierId', 'firstName lastName email role');
         await task.populate('workLogs.userId', 'firstName lastName email role');
+        await appendTaskActivity(task._id, {
+            action: 'task_branch_fixed',
+            message: `Task branch renamed.`,
+            actor: req.user,
+            metadata: {
+                branch: targetBranch,
+            }
+        });
 
         res.json(toTaskResponse(task, req.user!));
         emitTaskEvent('task:updated', task);
@@ -1465,6 +1653,15 @@ export const approveTaskVerification = async (req: AuthRequest, res: Response) =
             .populate('workLogs.userId', 'firstName lastName email role');
 
         if (!updated) return res.status(404).json({ message: 'Task not found' });
+        await appendTaskActivity(updated._id, {
+            action: 'task_verification_approved',
+            message: `Task verification approved.`,
+            actor: req.user,
+            metadata: {
+                comment: req.body?.comment || null,
+                githubBranch: nextGithubBranch || null,
+            }
+        });
         res.json(toTaskResponse(updated, req.user!));
         await notifyTaskAudience({
             task: updated,
@@ -1515,6 +1712,15 @@ export const rejectTaskVerification = async (req: AuthRequest, res: Response) =>
             .populate('workLogs.userId', 'firstName lastName email role');
 
         if (!updated) return res.status(404).json({ message: 'Task not found' });
+        await appendTaskActivity(updated._id, {
+            action: 'task_verification_rejected',
+            message: `Task verification rejected and moved back to review.`,
+            actor: req.user,
+            metadata: {
+                comment: req.body?.comment || null,
+                status: updated.status,
+            }
+        });
         res.json(toTaskResponse(updated, req.user!));
         await notifyTaskAudience({
             task: updated,
