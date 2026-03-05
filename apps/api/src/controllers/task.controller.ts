@@ -1037,36 +1037,41 @@ export const startTaskWork = async (req: AuthRequest, res: Response) => {
                     return res.status(400).json({ message: 'GitHub integration is not connected. Cannot start task.' });
                 }
                 if (!user?.githubUsername) {
-                    return res.status(400).json({ message: 'Your GitHub account is not set up. Cannot start task.' });
+                    if (req.user!.role !== 'admin') {
+                        return res.status(400).json({ message: 'Your GitHub account is not set up. Cannot start task.' });
+                    }
+                    console.warn(`Admin ${req.user!.userId} started task ${task._id} without githubUsername; skipping branch creation.`);
                 }
 
-                const taskTitleSegment = getTaskTitleBranchSegment(task);
-                const branchName = `tasks/${slugify(user.githubUsername)}/inprogress/${taskTitleSegment}`;
-                const createdBranch = await createGithubBranch(
-                    config.personalAccessToken,
-                    project.githubRepoOwner,
-                    project.githubRepoName,
-                    branchName,
-                    'dev'
-                );
+                if (user?.githubUsername) {
+                    const taskTitleSegment = getTaskTitleBranchSegment(task);
+                    const branchName = `tasks/${slugify(user.githubUsername)}/inprogress/${taskTitleSegment}`;
+                    const createdBranch = await createGithubBranch(
+                        config.personalAccessToken,
+                        project.githubRepoOwner,
+                        project.githubRepoName,
+                        branchName,
+                        'dev'
+                    );
 
-                if (!createdBranch) {
-                    return res.status(400).json({ message: 'Failed to create GitHub branch. Task was not started.' });
+                    if (!createdBranch) {
+                        return res.status(400).json({ message: 'Failed to create GitHub branch. Task was not started.' });
+                    }
+
+                    const restricted = await restrictBranchToUser(
+                        config.personalAccessToken,
+                        project.githubRepoOwner,
+                        project.githubRepoName,
+                        createdBranch,
+                        user.githubUsername
+                    );
+                    if (!restricted) {
+                        // Best effort only: do not block task start if branch restriction cannot be enforced.
+                        console.warn(`Proceeding without branch restriction for ${createdBranch}`);
+                    }
+
+                    patch.githubBranch = createdBranch;
                 }
-
-                const restricted = await restrictBranchToUser(
-                    config.personalAccessToken,
-                    project.githubRepoOwner,
-                    project.githubRepoName,
-                    createdBranch,
-                    user.githubUsername
-                );
-                if (!restricted) {
-                    // Best effort only: do not block task start if branch restriction cannot be enforced.
-                    console.warn(`Proceeding without branch restriction for ${createdBranch}`);
-                }
-
-                patch.githubBranch = createdBranch;
             }
         }
 
