@@ -184,7 +184,8 @@ export const uploadIdePluginPackage = async (req: AuthRequest, res: Response) =>
             });
         }
 
-        const uploadDir = path.resolve(__dirname, '../uploads/ide');
+        // Keep upload storage aligned with app.ts static "/downloads" root: apps/api/uploads
+        const uploadDir = path.resolve(__dirname, '../../uploads/ide');
         ensureUploadDir(uploadDir);
 
         const filePath = path.join(uploadDir, finalName);
