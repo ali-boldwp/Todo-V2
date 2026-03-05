@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { useQuery } from '@tanstack/react-query';
 import Login from './pages/Login';
@@ -39,6 +39,40 @@ const formatDuration = (seconds: number) => {
     if (h > 0) return `${h}h ${m}m`;
     if (m > 0) return `${m}m ${s}s`;
     return `${s}s`;
+};
+
+const isValidIdeRedirectUrl = (redirectUri: string | null): boolean => {
+    if (!redirectUri) return false;
+    try {
+        const url = new URL(redirectUri);
+        const isHttp = url.protocol === 'http:';
+        const isLocalhost = url.hostname === '127.0.0.1' || url.hostname === 'localhost';
+        return isHttp && isLocalhost;
+    } catch {
+        return false;
+    }
+};
+
+const IdeAuthCallbackBridge = ({ token, redirectUri, state }: { token: string; redirectUri: string; state: string | null }) => {
+    useEffect(() => {
+        try {
+            const callbackUrl = new URL(redirectUri);
+            callbackUrl.searchParams.set('token', token);
+            if (state) callbackUrl.searchParams.set('state', state);
+            window.location.replace(callbackUrl.toString());
+        } catch {
+            // Ignore and fall back to normal app rendering.
+        }
+    }, [token, redirectUri, state]);
+
+    return (
+        <div className="flex h-screen items-center justify-center bg-gray-100">
+            <div className="w-full max-w-md bg-white p-8 rounded-lg shadow-md">
+                <h2 className="text-lg font-semibold text-gray-900">Finishing IDE login...</h2>
+                <p className="text-sm text-gray-600 mt-2">Redirecting back to WebStorm callback.</p>
+            </div>
+        </div>
+    );
 };
 
 const Dashboard = () => {
@@ -379,9 +413,23 @@ const Dashboard = () => {
 };
 
 const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
-    const { isAuthenticated, user } = useAuth();
+    const { isAuthenticated, user, token } = useAuth();
+    const location = useLocation();
+    const params = new URLSearchParams(location.search);
+    const ide = params.get('ide');
+    const redirectUri = params.get('redirect_uri');
+    const state = params.get('state');
+    const isIdeWebstorm = ide === 'webstorm';
+    const hasValidIdeRedirect = isIdeWebstorm && isValidIdeRedirectUrl(redirectUri);
+
     if (!isAuthenticated) {
-        return <Navigate to="/login" />;
+        const loginPath = hasValidIdeRedirect
+            ? `/login?${params.toString()}`
+            : '/login';
+        return <Navigate to={loginPath} replace />;
+    }
+    if (hasValidIdeRedirect) {
+        return <IdeAuthCallbackBridge token={token || ''} redirectUri={redirectUri!} state={state} />;
     }
     if (requiresProfileSetup(user)) {
         return <Navigate to="/profile/setup" replace />;

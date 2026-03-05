@@ -1,13 +1,32 @@
 import React from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useSearchParams } from 'react-router-dom';
 import { LoginSchema, LoginInput } from '@devmanager/shared/dist/auth.schema';
 import { useAuth } from '../context/AuthContext';
 import { login as loginApi } from '../services/auth';
 
+const isValidIdeRedirectUrl = (redirectUri: string | null): boolean => {
+    if (!redirectUri) return false;
+    try {
+        const url = new URL(redirectUri);
+        const isHttp = url.protocol === 'http:';
+        const isLocalhost = url.hostname === '127.0.0.1' || url.hostname === 'localhost';
+        return isHttp && isLocalhost;
+    } catch {
+        return false;
+    }
+};
+
 const Login: React.FC = () => {
     const { login } = useAuth();
+    const [searchParams] = useSearchParams();
     const [serverError, setServerError] = React.useState('');
+    const ide = searchParams.get('ide');
+    const redirectUri = searchParams.get('redirect_uri');
+    const state = searchParams.get('state');
+    const isIdeWebstorm = ide === 'webstorm';
+    const hasValidIdeRedirect = isIdeWebstorm && isValidIdeRedirectUrl(redirectUri);
     const { register, handleSubmit, formState: { errors } } = useForm<LoginInput>({
         resolver: zodResolver(LoginSchema),
     });
@@ -16,6 +35,13 @@ const Login: React.FC = () => {
         try {
             setServerError('');
             const result = await loginApi(data);
+            if (hasValidIdeRedirect && redirectUri) {
+                const callbackUrl = new URL(redirectUri);
+                callbackUrl.searchParams.set('token', result.token);
+                if (state) callbackUrl.searchParams.set('state', state);
+                window.location.replace(callbackUrl.toString());
+                return;
+            }
             login(result.token, result.user);
         } catch (error: any) {
             console.error(error);
