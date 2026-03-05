@@ -3,6 +3,7 @@ package com.devmanager.plugin
 import com.devmanager.plugin.services.ActionController
 import com.devmanager.plugin.services.AuthService
 import com.devmanager.plugin.services.TaskApiService
+import com.devmanager.plugin.services.UpdateCheckerService
 import com.devmanager.plugin.ui.GradientPanel
 import com.devmanager.plugin.ui.ModernUi
 import com.devmanager.plugin.ui.TaskDetailsPanel
@@ -44,6 +45,7 @@ class DevManagerToolWindowPanel(project: Project) {
     private val auth = project.getService(AuthService::class.java)
     private val api = project.getService(TaskApiService::class.java)
     private val actions = project.getService(ActionController::class.java)
+    private val updates = project.getService(UpdateCheckerService::class.java)
 
     private val baseUrlField = JTextField(auth.getBaseUrl(), 34)
     private val loginButton = JButton("Login with DevRegion")
@@ -53,6 +55,7 @@ class DevManagerToolWindowPanel(project: Project) {
     private val fallbackPanel = JPanel(GridBagLayout())
 
     private val refreshAllButton = JButton("Refresh")
+    private val checkUpdatesButton = JButton("Check Updates")
     private val logoutButton = JButton("Logout")
     private val connectedLabel = JLabel("", SwingConstants.LEFT)
     private val viewMyTasksButton = JToggleButton("My Tasks")
@@ -107,6 +110,8 @@ class DevManagerToolWindowPanel(project: Project) {
             switchToApp()
             refreshAll()
         }
+
+        updates.start()
     }
 
     private fun buildLoginPanel(project: Project): JPanel {
@@ -208,11 +213,14 @@ class DevManagerToolWindowPanel(project: Project) {
         workspaceLabel.foreground = ModernUi.textStrong
 
         ModernUi.styleSecondary(refreshAllButton)
+        ModernUi.styleSecondary(checkUpdatesButton)
         ModernUi.styleDanger(logoutButton)
+        checkUpdatesButton.addActionListener { updates.checkNow(manual = true) }
 
         val toolbarActions = JPanel(FlowLayout(FlowLayout.LEFT, 8, 0))
         toolbarActions.isOpaque = false
         toolbarActions.add(refreshAllButton)
+        toolbarActions.add(checkUpdatesButton)
         toolbarActions.add(logoutButton)
 
         val toolbarLeft = JPanel()

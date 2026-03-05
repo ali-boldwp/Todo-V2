@@ -24,6 +24,7 @@ import dockployRoutes from './routes/dockploy.routes';
 import clientRoutes from './routes/client.routes';
 import chatRoutes from './routes/chat.routes';
 import notificationRoutes from './routes/notification.routes';
+import ideRoutes from './routes/ide.routes';
 
 app.use(helmet());
 
@@ -62,6 +63,7 @@ app.use('/api/dockploy', dockployRoutes);
 app.use('/api/clients', clientRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/ide', ideRoutes);
 
 app.get('/health', (_req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
