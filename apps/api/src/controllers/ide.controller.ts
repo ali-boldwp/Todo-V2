@@ -170,6 +170,19 @@ export const uploadIdePluginPackage = async (req: AuthRequest, res: Response) =>
         const timestamp = Date.now();
         const finalName = `${timestamp}-${safeFileName}`;
         const inferredVersion = extractVersionFromFileName(safeFileName);
+        if (!inferredVersion) {
+            return res.status(400).json({
+                message: 'Version not found in filename. Use a name like devmanager-webstorm-plugin-0.1.2.zip',
+            });
+        }
+
+        const existingConfig = await IdeUpdateConfig.findOne().select('latestVersion').lean();
+        const previousVersion = String(existingConfig?.latestVersion || '').trim();
+        if (previousVersion && !isVersionGreater(inferredVersion, previousVersion)) {
+            return res.status(400).json({
+                message: `Uploaded version (${inferredVersion}) must be higher than current latest version (${previousVersion}).`,
+            });
+        }
 
         const uploadDir = path.resolve(__dirname, '../uploads/ide');
         ensureUploadDir(uploadDir);
@@ -188,6 +201,7 @@ export const uploadIdePluginPackage = async (req: AuthRequest, res: Response) =>
             downloadUrl,
             installUrl: downloadUrl,
             inferredVersion,
+            previousVersion: previousVersion || null,
             uploadedAt: new Date().toISOString(),
         });
     } catch (error: any) {
