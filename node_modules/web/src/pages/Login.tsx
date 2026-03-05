@@ -57,6 +57,14 @@ const Login: React.FC = () => {
         <div className="flex h-screen items-center justify-center bg-gray-100">
             <div className="w-full max-w-md bg-white p-8 rounded-lg shadow-md">
                 <h2 className="text-2xl font-bold mb-6 text-center">Login to DevManager</h2>
+                {hasValidIdeRedirect && (
+                    <div className="mb-4 rounded-md border border-indigo-200 bg-indigo-50 p-3">
+                        <p className="text-sm font-semibold text-indigo-800">Authorizing WebStorm</p>
+                        <p className="mt-1 text-xs text-indigo-700">
+                            Sign in to continue and return to your IDE.
+                        </p>
+                    </div>
+                )}
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                     <div>
                         <label className="block text-sm font-medium text-gray-700">Email</label>
