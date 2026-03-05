@@ -1,6 +1,6 @@
 <idea-plugin>
   <idea-version since-build="242" until-build="253.*" />
-  <version>0.1.1</version>
+  <version>0.1.2</version>
   <id>com.devmanager.webstorm.plugin</id>
   <name>DevManager Workflow</name>
   <vendor email="support@devmanager.local">DevManager</vendor>

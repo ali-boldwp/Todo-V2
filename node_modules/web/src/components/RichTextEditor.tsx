@@ -4,6 +4,7 @@ import EditorJS, { OutputData } from '@editorjs/editorjs';
 import Header from '@editorjs/header';
 // @ts-ignore
 import List from '@editorjs/list';
+import { useAuth } from '../context/AuthContext';
 import './RichTextEditor.css';
 
 interface RichTextEditorProps {
@@ -25,6 +26,8 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(({
     holder = 'editorjs',
     placeholder = 'Add description...'
 }, ref) => {
+    const { isAuthenticated } = useAuth();
+    const isEditorReadOnly = readOnly || !isAuthenticated;
     const editorRef = useRef<EditorJS | null>(null);
     const isReady = useRef(false);
 
@@ -41,7 +44,7 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(({
         if (!editorRef.current) {
             const editor = new EditorJS({
                 holder: holder,
-                readOnly: readOnly,
+                readOnly: isEditorReadOnly,
                 data: data,
                 placeholder: placeholder,
                 defaultBlock: 'paragraph',
@@ -67,7 +70,7 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(({
                     isReady.current = true;
                 },
                 onChange: async () => {
-                    if (!isReady.current || readOnly) return;
+                    if (!isReady.current || isEditorReadOnly) return;
                     const content = await editor.save();
                     // Avoid triggering onChange with empty data if it was already empty
                     if (content.blocks.length === 0 && (!data || data.blocks?.length === 0)) {
@@ -86,14 +89,14 @@ const RichTextEditor = forwardRef<RichTextEditorRef, RichTextEditorProps>(({
                 isReady.current = false;
             }
         };
-    }, [holder]);
+    }, [holder, isEditorReadOnly]);
 
     // Handle readOnly property updates
     useEffect(() => {
         if (editorRef.current && isReady.current) {
-            editorRef.current.readOnly.toggle(readOnly);
+            editorRef.current.readOnly.toggle(isEditorReadOnly);
         }
-    }, [readOnly]);
+    }, [isEditorReadOnly]);
 
     // Handle external data updates
     useEffect(() => {

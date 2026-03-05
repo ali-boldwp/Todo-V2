@@ -8,6 +8,8 @@ const express_1 = __importDefault(require("express"));
 const cors_1 = __importDefault(require("cors"));
 const helmet_1 = __importDefault(require("helmet"));
 const pino_1 = __importDefault(require("pino"));
+const fs_1 = __importDefault(require("fs"));
+const path_1 = __importDefault(require("path"));
 exports.logger = (0, pino_1.default)({
     transport: {
         target: 'pino-pretty',
@@ -27,6 +29,7 @@ const dockploy_routes_1 = __importDefault(require("./routes/dockploy.routes"));
 const client_routes_1 = __importDefault(require("./routes/client.routes"));
 const chat_routes_1 = __importDefault(require("./routes/chat.routes"));
 const notification_routes_1 = __importDefault(require("./routes/notification.routes"));
+const ide_routes_1 = __importDefault(require("./routes/ide.routes"));
 app.use((0, helmet_1.default)());
 exports.allowedOrigins = [
     'http://localhost:3000',
@@ -62,16 +65,21 @@ app.use('/api/dockploy', dockploy_routes_1.default);
 app.use('/api/clients', client_routes_1.default);
 app.use('/api/chat', chat_routes_1.default);
 app.use('/api/notifications', notification_routes_1.default);
+app.use('/api/ide', ide_routes_1.default);
+const downloadsRoot = path_1.default.resolve(__dirname, '../uploads');
+if (!fs_1.default.existsSync(downloadsRoot)) {
+    fs_1.default.mkdirSync(downloadsRoot, { recursive: true });
+}
+app.use('/downloads', express_1.default.static(downloadsRoot));
 app.get('/health', (_req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 // Serve static files in production
 if (process.env.NODE_ENV === 'production') {
-    const path = require('path');
-    const buildPath = path.join(__dirname, '../../web/dist');
+    const buildPath = path_1.default.join(__dirname, '../../web/dist');
     app.use(express_1.default.static(buildPath));
     app.get('*', (_req, res) => {
-        res.sendFile(path.join(buildPath, 'index.html'));
+        res.sendFile(path_1.default.join(buildPath, 'index.html'));
     });
 }
 exports.default = app;
