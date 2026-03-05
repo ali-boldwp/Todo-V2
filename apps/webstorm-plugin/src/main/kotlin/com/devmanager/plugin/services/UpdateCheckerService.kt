@@ -77,6 +77,7 @@ class UpdateCheckerService(private val project: Project) {
                 val payload = JsonParser.parseString(response.body()).asJsonObject
                 val latestVersion = payload.getAsStringOrEmpty("latestVersion")
                 val downloadUrl = payload.getAsStringOrEmpty("downloadUrl")
+                val installUrl = payload.getAsStringOrEmpty("installUrl")
                 val releaseNotesUrl = payload.getAsStringOrEmpty("releaseNotesUrl")
                 val serverMessage = payload.getAsStringOrEmpty("message")
 
@@ -94,6 +95,7 @@ class UpdateCheckerService(private val project: Project) {
                     latestVersion = latestVersion,
                     currentVersion = currentVersion,
                     downloadUrl = downloadUrl,
+                    installUrl = installUrl,
                     releaseNotesUrl = releaseNotesUrl,
                     serverMessage = serverMessage
                 )
@@ -116,6 +118,7 @@ class UpdateCheckerService(private val project: Project) {
         latestVersion: String,
         currentVersion: String,
         downloadUrl: String,
+        installUrl: String,
         releaseNotesUrl: String,
         serverMessage: String
     ) {
@@ -134,11 +137,9 @@ class UpdateCheckerService(private val project: Project) {
             .getNotificationGroup("DevManager Notifications")
             .createNotification("DevManager plugin update available", content, NotificationType.WARNING)
 
-        notification.addAction(
-            NotificationAction.createSimpleExpiring("Download Update") {
-                BrowserUtil.browse(downloadUrl)
-            }
-        )
+        val primaryUrl = if (installUrl.isNotBlank()) installUrl else downloadUrl
+        val primaryLabel = if (installUrl.isNotBlank()) "Install from URL" else "Download Update"
+        notification.addAction(NotificationAction.createSimpleExpiring(primaryLabel) { BrowserUtil.browse(primaryUrl) })
 
         if (releaseNotesUrl.isNotBlank()) {
             notification.addAction(

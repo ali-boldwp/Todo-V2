@@ -1,4 +1,6 @@
 import { Request, Response } from 'express';
+import { AuthRequest } from '../middleware/auth';
+import IdeUpdateConfig from '../models/IdeUpdateConfig';
 
 const parseVersionParts = (version: string): number[] =>
     version
@@ -21,24 +23,115 @@ const isVersionGreater = (candidate: string, current: string): boolean => {
     return false;
 };
 
-export const getPluginUpdateChannel = (_req: Request, res: Response) => {
-    const latestVersion = (process.env.DEVREGION_WEBSTORM_PLUGIN_VERSION || '0.1.1').trim();
-    const downloadUrl = (process.env.DEVREGION_WEBSTORM_PLUGIN_DOWNLOAD_URL || 'https://beta.devregion.com/downloads/devmanager-webstorm-plugin.zip').trim();
-    const releaseNotesUrl = (process.env.DEVREGION_WEBSTORM_PLUGIN_RELEASE_NOTES_URL || '').trim();
-    const message = (process.env.DEVREGION_WEBSTORM_PLUGIN_UPDATE_MESSAGE || 'A newer DevManager plugin update is available.').trim();
-    const minSupportedVersion = (process.env.DEVREGION_WEBSTORM_PLUGIN_MIN_SUPPORTED_VERSION || '').trim();
-    const mandatory = /^true$/i.test((process.env.DEVREGION_WEBSTORM_PLUGIN_MANDATORY || '').trim());
-    const currentVersion = String(_req.query.currentVersion || '').trim();
+const normalizeUrlOrEmpty = (value: unknown): string => {
+    const raw = String(value || '').trim();
+    if (!raw) return '';
+    if (/^https?:\/\//i.test(raw)) return raw;
+    throw new Error('URLs must start with http:// or https://');
+};
 
-    res.json({
-        pluginId: 'com.devmanager.webstorm.plugin',
-        latestVersion,
-        downloadUrl,
-        releaseNotesUrl: releaseNotesUrl || null,
-        message,
-        minSupportedVersion: minSupportedVersion || null,
-        mandatory,
-        updateAvailable: currentVersion ? isVersionGreater(latestVersion, currentVersion) : null,
-        checkedAt: new Date().toISOString(),
-    });
+const buildEnvFallback = () => ({
+    latestVersion: (process.env.DEVREGION_WEBSTORM_PLUGIN_VERSION || '0.1.1').trim(),
+    downloadUrl: (process.env.DEVREGION_WEBSTORM_PLUGIN_DOWNLOAD_URL || 'https://beta.devregion.com/downloads/devmanager-webstorm-plugin.zip').trim(),
+    installUrl: (process.env.DEVREGION_WEBSTORM_PLUGIN_INSTALL_URL || '').trim(),
+    releaseNotesUrl: (process.env.DEVREGION_WEBSTORM_PLUGIN_RELEASE_NOTES_URL || '').trim(),
+    message: (process.env.DEVREGION_WEBSTORM_PLUGIN_UPDATE_MESSAGE || 'A newer DevManager plugin update is available.').trim(),
+    minSupportedVersion: (process.env.DEVREGION_WEBSTORM_PLUGIN_MIN_SUPPORTED_VERSION || '').trim(),
+    mandatory: /^true$/i.test((process.env.DEVREGION_WEBSTORM_PLUGIN_MANDATORY || '').trim()),
+});
+
+const loadEffectiveConfig = async () => {
+    const dbConfig = await IdeUpdateConfig.findOne().lean();
+    if (dbConfig) {
+        return {
+            source: 'database' as const,
+            latestVersion: String(dbConfig.latestVersion || '').trim(),
+            downloadUrl: String(dbConfig.downloadUrl || '').trim(),
+            installUrl: String(dbConfig.installUrl || '').trim(),
+            releaseNotesUrl: String(dbConfig.releaseNotesUrl || '').trim(),
+            message: String(dbConfig.message || '').trim(),
+            minSupportedVersion: String(dbConfig.minSupportedVersion || '').trim(),
+            mandatory: Boolean(dbConfig.mandatory),
+        };
+    }
+    return { source: 'env' as const, ...buildEnvFallback() };
+};
+
+export const getPluginUpdateChannel = async (req: Request, res: Response) => {
+    try {
+        const config = await loadEffectiveConfig();
+        const currentVersion = String(req.query.currentVersion || '').trim();
+
+        res.json({
+            pluginId: 'com.devmanager.webstorm.plugin',
+            latestVersion: config.latestVersion,
+            downloadUrl: config.downloadUrl,
+            installUrl: config.installUrl || null,
+            releaseNotesUrl: config.releaseNotesUrl || null,
+            message: config.message,
+            minSupportedVersion: config.minSupportedVersion || null,
+            mandatory: config.mandatory,
+            updateAvailable: currentVersion ? isVersionGreater(config.latestVersion, currentVersion) : null,
+            checkedAt: new Date().toISOString(),
+            source: config.source,
+        });
+    } catch (error: any) {
+        res.status(500).json({ message: error?.message || 'Server error' });
+    }
+};
+
+export const getIdeUpdateConfig = async (_req: AuthRequest, res: Response) => {
+    try {
+        const config = await loadEffectiveConfig();
+        res.json({
+            ...config,
+            installUrl: config.installUrl || '',
+            releaseNotesUrl: config.releaseNotesUrl || '',
+            minSupportedVersion: config.minSupportedVersion || '',
+        });
+    } catch (error: any) {
+        res.status(500).json({ message: error?.message || 'Server error' });
+    }
+};
+
+export const saveIdeUpdateConfig = async (req: AuthRequest, res: Response) => {
+    try {
+        const latestVersion = String(req.body?.latestVersion || '').trim();
+        const downloadUrl = normalizeUrlOrEmpty(req.body?.downloadUrl);
+        const installUrl = normalizeUrlOrEmpty(req.body?.installUrl);
+        const releaseNotesUrl = normalizeUrlOrEmpty(req.body?.releaseNotesUrl);
+        const message = String(req.body?.message || '').trim();
+        const minSupportedVersion = String(req.body?.minSupportedVersion || '').trim();
+        const mandatory = Boolean(req.body?.mandatory);
+
+        if (!latestVersion) return res.status(400).json({ message: 'latestVersion is required' });
+        if (!downloadUrl) return res.status(400).json({ message: 'downloadUrl is required' });
+
+        const updated = await IdeUpdateConfig.findOneAndUpdate(
+            {},
+            {
+                latestVersion,
+                downloadUrl,
+                installUrl: installUrl || undefined,
+                releaseNotesUrl: releaseNotesUrl || undefined,
+                message: message || undefined,
+                minSupportedVersion: minSupportedVersion || undefined,
+                mandatory,
+            },
+            { new: true, upsert: true }
+        );
+
+        res.json({
+            source: 'database',
+            latestVersion: updated.latestVersion,
+            downloadUrl: updated.downloadUrl,
+            installUrl: updated.installUrl || '',
+            releaseNotesUrl: updated.releaseNotesUrl || '',
+            message: updated.message || '',
+            minSupportedVersion: updated.minSupportedVersion || '',
+            mandatory: Boolean(updated.mandatory),
+        });
+    } catch (error: any) {
+        res.status(400).json({ message: error?.message || 'Invalid payload' });
+    }
 };

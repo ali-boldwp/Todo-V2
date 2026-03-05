@@ -26,6 +26,7 @@ import {
     Mail,
     Star,
     KeyRound,
+    Download,
 } from 'lucide-react';
 import Header from './Header';
 import UserAvatar from './UserAvatar';
@@ -208,6 +209,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                 <RailItem icon={Star} label="Projects" active={location.pathname.startsWith('/projects')} onClick={() => navigate('/projects')} />
                 {user?.role === 'admin' && <RailItem icon={Github} label="GitHub" active={location.pathname === '/github'} onClick={() => navigate('/github')} />}
                 {user?.role === 'admin' && <RailItem icon={Rocket} label="Dockploy" active={location.pathname === '/dockploy'} onClick={() => navigate('/dockploy')} />}
+                {user?.role === 'admin' && <RailItem icon={Download} label="IDE Updates" active={location.pathname === '/ide-updates'} onClick={() => navigate('/ide-updates')} />}
 
                 <div className="mt-auto flex flex-col items-center gap-2">
                     <RailItem icon={LogOut} label="Logout" onClick={logout} />

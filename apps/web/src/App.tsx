@@ -9,6 +9,7 @@ import Attendance from './pages/Attendance';
 import Payroll from './pages/Payroll';
 import GithubIntegration from './pages/GithubIntegration';
 import DockployIntegration from './pages/DockployIntegration';
+import IdeUpdatesIntegration from './pages/IdeUpdatesIntegration';
 import Clients from './pages/Clients';
 import Team from './pages/Team';
 import GithubMemberSetup from './pages/GithubMemberSetup';
@@ -647,6 +648,14 @@ const AppRoutes = () => {
                 element={
                     <AdminRoute>
                         <DockployIntegration />
+                    </AdminRoute>
+                }
+            />
+            <Route
+                path="/ide-updates"
+                element={
+                    <AdminRoute>
+                        <IdeUpdatesIntegration />
                     </AdminRoute>
                 }
             />
