@@ -62,6 +62,11 @@ const loadEffectiveConfig = async () => {
 const sanitizeFileName = (name: string): string =>
     name.replace(/[^a-zA-Z0-9._-]/g, '_');
 
+const extractVersionFromFileName = (fileName: string): string => {
+    const match = fileName.match(/(\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)/);
+    return match?.[1] || '';
+};
+
 const ensureUploadDir = (dirPath: string) => {
     if (!fs.existsSync(dirPath)) {
         fs.mkdirSync(dirPath, { recursive: true });
@@ -164,6 +169,7 @@ export const uploadIdePluginPackage = async (req: AuthRequest, res: Response) =>
         const safeFileName = sanitizeFileName(rawName.endsWith('.zip') ? rawName : `${rawName}.zip`);
         const timestamp = Date.now();
         const finalName = `${timestamp}-${safeFileName}`;
+        const inferredVersion = extractVersionFromFileName(safeFileName);
 
         const uploadDir = path.resolve(__dirname, '../uploads/ide');
         ensureUploadDir(uploadDir);
@@ -181,6 +187,7 @@ export const uploadIdePluginPackage = async (req: AuthRequest, res: Response) =>
             downloadPath,
             downloadUrl,
             installUrl: downloadUrl,
+            inferredVersion,
             uploadedAt: new Date().toISOString(),
         });
     } catch (error: any) {

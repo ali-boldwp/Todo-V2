@@ -50,8 +50,16 @@ const IdeUpdatesIntegration: React.FC = () => {
             if (result?.installUrl) {
                 setInstallUrl(result.installUrl);
             }
+            if (result?.inferredVersion) {
+                setLatestVersion(result.inferredVersion);
+            }
             setPluginFile(null);
-            setFormMessage({ type: 'success', text: 'Plugin package uploaded. URLs have been filled.' });
+            setFormMessage({
+                type: 'success',
+                text: result?.inferredVersion
+                    ? `Plugin uploaded. URLs filled and version auto-detected: ${result.inferredVersion}`
+                    : 'Plugin package uploaded. URLs have been filled.',
+            });
         },
         onError: (err: any) => {
             setFormMessage({ type: 'error', text: err?.response?.data?.message || 'Failed to upload plugin package' });
