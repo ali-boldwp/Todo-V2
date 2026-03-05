@@ -1,6 +1,8 @@
 import { Request, Response } from 'express';
 import { AuthRequest } from '../middleware/auth';
 import IdeUpdateConfig from '../models/IdeUpdateConfig';
+import fs from 'fs';
+import path from 'path';
 
 const parseVersionParts = (version: string): number[] =>
     version
@@ -55,6 +57,21 @@ const loadEffectiveConfig = async () => {
         };
     }
     return { source: 'env' as const, ...buildEnvFallback() };
+};
+
+const sanitizeFileName = (name: string): string =>
+    name.replace(/[^a-zA-Z0-9._-]/g, '_');
+
+const ensureUploadDir = (dirPath: string) => {
+    if (!fs.existsSync(dirPath)) {
+        fs.mkdirSync(dirPath, { recursive: true });
+    }
+};
+
+const getPublicBaseUrl = (req: Request): string => {
+    const configured = String(process.env.FRONTEND_BASE_URL || '').trim();
+    if (configured) return configured.replace(/\/+$/, '');
+    return `${req.protocol}://${req.get('host') || 'localhost:3001'}`;
 };
 
 export const getPluginUpdateChannel = async (req: Request, res: Response) => {
@@ -133,5 +150,40 @@ export const saveIdeUpdateConfig = async (req: AuthRequest, res: Response) => {
         });
     } catch (error: any) {
         res.status(400).json({ message: error?.message || 'Invalid payload' });
+    }
+};
+
+export const uploadIdePluginPackage = async (req: AuthRequest, res: Response) => {
+    try {
+        const body = req.body as Buffer;
+        if (!Buffer.isBuffer(body) || body.length === 0) {
+            return res.status(400).json({ message: 'Upload body is empty. Send plugin ZIP bytes.' });
+        }
+
+        const rawName = String(req.header('x-file-name') || req.query.fileName || 'devmanager-webstorm-plugin.zip').trim();
+        const safeFileName = sanitizeFileName(rawName.endsWith('.zip') ? rawName : `${rawName}.zip`);
+        const timestamp = Date.now();
+        const finalName = `${timestamp}-${safeFileName}`;
+
+        const uploadDir = path.resolve(__dirname, '../uploads/ide');
+        ensureUploadDir(uploadDir);
+
+        const filePath = path.join(uploadDir, finalName);
+        fs.writeFileSync(filePath, body);
+
+        const publicBase = getPublicBaseUrl(req);
+        const downloadPath = `/downloads/ide/${finalName}`;
+        const downloadUrl = `${publicBase}${downloadPath}`;
+
+        return res.json({
+            fileName: finalName,
+            size: body.length,
+            downloadPath,
+            downloadUrl,
+            installUrl: downloadUrl,
+            uploadedAt: new Date().toISOString(),
+        });
+    } catch (error: any) {
+        return res.status(500).json({ message: error?.message || 'Failed to upload plugin package' });
     }
 };

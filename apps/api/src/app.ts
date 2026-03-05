@@ -2,6 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import pino from 'pino';
+import fs from 'fs';
+import path from 'path';
 
 export const logger = pino({
     transport: {
@@ -65,13 +67,18 @@ app.use('/api/chat', chatRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/ide', ideRoutes);
 
+const downloadsRoot = path.resolve(__dirname, '../uploads');
+if (!fs.existsSync(downloadsRoot)) {
+    fs.mkdirSync(downloadsRoot, { recursive: true });
+}
+app.use('/downloads', express.static(downloadsRoot));
+
 app.get('/health', (_req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
 // Serve static files in production
 if (process.env.NODE_ENV === 'production') {
-    const path = require('path');
     const buildPath = path.join(__dirname, '../../web/dist');
     app.use(express.static(buildPath));
 

@@ -19,3 +19,14 @@ export const saveIdeUpdateConfig = async (data: IdeUpdateConfigInput) => {
     const response = await api.post('/ide/config', data);
     return response.data;
 };
+
+export const uploadIdePluginPackage = async (file: File) => {
+    const buffer = await file.arrayBuffer();
+    const response = await api.post('/ide/upload', buffer, {
+        headers: {
+            'Content-Type': 'application/octet-stream',
+            'x-file-name': file.name,
+        },
+    });
+    return response.data;
+};

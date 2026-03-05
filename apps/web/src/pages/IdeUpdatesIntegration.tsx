@@ -1,6 +1,6 @@
 import React from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { getIdeUpdateConfig, saveIdeUpdateConfig } from '../services/ide';
+import { getIdeUpdateConfig, saveIdeUpdateConfig, uploadIdePluginPackage } from '../services/ide';
 
 const IdeUpdatesIntegration: React.FC = () => {
     const queryClient = useQueryClient();
@@ -16,6 +16,7 @@ const IdeUpdatesIntegration: React.FC = () => {
     const [message, setMessage] = React.useState('');
     const [minSupportedVersion, setMinSupportedVersion] = React.useState('');
     const [mandatory, setMandatory] = React.useState(false);
+    const [pluginFile, setPluginFile] = React.useState<File | null>(null);
     const [formMessage, setFormMessage] = React.useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
     React.useEffect(() => {
@@ -37,6 +38,23 @@ const IdeUpdatesIntegration: React.FC = () => {
         },
         onError: (err: any) => {
             setFormMessage({ type: 'error', text: err?.response?.data?.message || 'Failed to save IDE update settings' });
+        },
+    });
+
+    const uploadMutation = useMutation({
+        mutationFn: uploadIdePluginPackage,
+        onSuccess: (result: any) => {
+            if (result?.downloadUrl) {
+                setDownloadUrl(result.downloadUrl);
+            }
+            if (result?.installUrl) {
+                setInstallUrl(result.installUrl);
+            }
+            setPluginFile(null);
+            setFormMessage({ type: 'success', text: 'Plugin package uploaded. URLs have been filled.' });
+        },
+        onError: (err: any) => {
+            setFormMessage({ type: 'error', text: err?.response?.data?.message || 'Failed to upload plugin package' });
         },
     });
 
@@ -65,6 +83,33 @@ const IdeUpdatesIntegration: React.FC = () => {
                 )}
 
                 <div className="space-y-4">
+                    <div className="rounded-lg border border-gray-200 bg-gray-50 p-3">
+                        <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Upload New Plugin ZIP</label>
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                            <input
+                                type="file"
+                                accept=".zip,application/zip"
+                                onChange={(e) => setPluginFile(e.target.files?.[0] || null)}
+                                className="block w-full text-sm"
+                            />
+                            <button
+                                type="button"
+                                disabled={!pluginFile || uploadMutation.isPending}
+                                onClick={() => {
+                                    setFormMessage(null);
+                                    if (!pluginFile) {
+                                        setFormMessage({ type: 'error', text: 'Please choose a ZIP file first.' });
+                                        return;
+                                    }
+                                    uploadMutation.mutate(pluginFile);
+                                }}
+                                className="px-3 py-2 rounded bg-indigo-600 text-white text-sm font-semibold disabled:opacity-60"
+                            >
+                                {uploadMutation.isPending ? 'Uploading...' : 'Upload ZIP'}
+                            </button>
+                        </div>
+                    </div>
+
                     <div>
                         <label className="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">Latest Version</label>
                         <input
