@@ -181,6 +181,16 @@ const uploadIdePluginPackage = async (req, res) => {
         const publicBase = getPublicBaseUrl(req);
         const downloadPath = `/downloads/ide/${finalName}`;
         const downloadUrl = `${publicBase}${downloadPath}`;
+        const previousConfig = await IdeUpdateConfig_1.default.findOne().lean();
+        const updatedConfig = await IdeUpdateConfig_1.default.findOneAndUpdate({}, {
+            latestVersion: inferredVersion,
+            downloadUrl,
+            installUrl: downloadUrl,
+            message: String(previousConfig?.message || buildEnvFallback().message || '').trim() || undefined,
+            releaseNotesUrl: String(previousConfig?.releaseNotesUrl || '').trim() || undefined,
+            minSupportedVersion: String(previousConfig?.minSupportedVersion || '').trim() || undefined,
+            mandatory: Boolean(previousConfig?.mandatory),
+        }, { new: true, upsert: true });
         return res.json({
             fileName: finalName,
             size: body.length,
@@ -189,6 +199,15 @@ const uploadIdePluginPackage = async (req, res) => {
             installUrl: downloadUrl,
             inferredVersion,
             previousVersion: previousVersion || null,
+            effectiveConfig: {
+                latestVersion: updatedConfig.latestVersion,
+                downloadUrl: updatedConfig.downloadUrl,
+                installUrl: updatedConfig.installUrl || '',
+                releaseNotesUrl: updatedConfig.releaseNotesUrl || '',
+                message: updatedConfig.message || '',
+                minSupportedVersion: updatedConfig.minSupportedVersion || '',
+                mandatory: Boolean(updatedConfig.mandatory),
+            },
             uploadedAt: new Date().toISOString(),
         });
     }

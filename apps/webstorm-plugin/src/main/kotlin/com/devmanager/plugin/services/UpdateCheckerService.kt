@@ -56,51 +56,78 @@ class UpdateCheckerService(private val project: Project) {
         }
 
         ApplicationManager.getApplication().executeOnPooledThread {
-            runCatching {
-                val baseUrl = auth.getBaseUrl().trim().trimEnd('/')
-                if (baseUrl.isBlank()) return@runCatching
-
-                val currentVersion = getInstalledVersion()
-                val requestUrl = "$baseUrl/ide/plugin/update-channel?currentVersion=" +
-                    URLEncoder.encode(currentVersion, StandardCharsets.UTF_8)
-
-                val request = HttpRequest.newBuilder()
-                    .uri(URI.create(requestUrl))
-                    .header("Accept", "application/json")
-                    .GET()
-                    .build()
-
-                val response = http.send(request, HttpResponse.BodyHandlers.ofString())
-                if (response.statusCode() !in 200..299) return@runCatching
-
-                props.setValue(LAST_CHECKED_AT_KEY, System.currentTimeMillis().toString())
-                val payload = JsonParser.parseString(response.body()).asJsonObject
-                val latestVersion = payload.getAsStringOrEmpty("latestVersion")
-                val downloadUrl = payload.getAsStringOrEmpty("downloadUrl")
-                val installUrl = payload.getAsStringOrEmpty("installUrl")
-                val releaseNotesUrl = payload.getAsStringOrEmpty("releaseNotesUrl")
-                val serverMessage = payload.getAsStringOrEmpty("message")
-
-                if (latestVersion.isBlank() || downloadUrl.isBlank()) return@runCatching
-                if (!isVersionGreater(latestVersion, currentVersion)) {
-                    if (manual) notifyNoUpdate(currentVersion)
-                    return@runCatching
+            runCatching { checkNowInternal(manual) }
+                .onFailure { error ->
+                    if (manual) {
+                        notifyCheckFailed(error.message ?: "Unable to reach update channel.")
+                    }
                 }
-
-                val lastNotifiedVersion = props.getValue(LAST_NOTIFIED_VERSION_KEY, "")
-                if (!manual && lastNotifiedVersion == latestVersion) return@runCatching
-
-                props.setValue(LAST_NOTIFIED_VERSION_KEY, latestVersion)
-                notifyUpdateAvailable(
-                    latestVersion = latestVersion,
-                    currentVersion = currentVersion,
-                    downloadUrl = downloadUrl,
-                    installUrl = installUrl,
-                    releaseNotesUrl = releaseNotesUrl,
-                    serverMessage = serverMessage
-                )
-            }
         }
+    }
+
+    private fun checkNowInternal(manual: Boolean) {
+        val currentVersion = getInstalledVersion()
+        val payload = fetchUpdatePayload(currentVersion) ?: run {
+            if (manual) notifyCheckFailed("Unable to reach update channel.")
+            return
+        }
+
+        props.setValue(LAST_CHECKED_AT_KEY, System.currentTimeMillis().toString())
+
+        val latestVersion = payload.getAsStringOrEmpty("latestVersion")
+        val downloadUrl = payload.getAsStringOrEmpty("downloadUrl")
+        val installUrl = payload.getAsStringOrEmpty("installUrl")
+        val releaseNotesUrl = payload.getAsStringOrEmpty("releaseNotesUrl")
+        val serverMessage = payload.getAsStringOrEmpty("message")
+
+        if (latestVersion.isBlank() || downloadUrl.isBlank()) {
+            if (manual) notifyCheckFailed("Update channel response is missing version or download URL.")
+            return
+        }
+
+        if (!isVersionGreater(latestVersion, currentVersion)) {
+            if (manual) notifyNoUpdate(currentVersion)
+            return
+        }
+
+        val lastNotifiedVersion = props.getValue(LAST_NOTIFIED_VERSION_KEY, "")
+        if (!manual && lastNotifiedVersion == latestVersion) return
+
+        props.setValue(LAST_NOTIFIED_VERSION_KEY, latestVersion)
+        notifyUpdateAvailable(
+            latestVersion = latestVersion,
+            currentVersion = currentVersion,
+            downloadUrl = downloadUrl,
+            installUrl = installUrl,
+            releaseNotesUrl = releaseNotesUrl,
+            serverMessage = serverMessage
+        )
+    }
+
+    private fun fetchUpdatePayload(currentVersion: String): JsonObject? {
+        val tried = mutableSetOf<String>()
+        val baseUrls = listOf(auth.getBaseUrl().trim().trimEnd('/'), FALLBACK_PUBLIC_API_BASE_URL)
+
+        for (baseUrl in baseUrls) {
+            if (baseUrl.isBlank() || !tried.add(baseUrl)) continue
+
+            val requestUrl = "$baseUrl/ide/plugin/update-channel?currentVersion=" +
+                URLEncoder.encode(currentVersion, StandardCharsets.UTF_8)
+
+            val request = HttpRequest.newBuilder()
+                .uri(URI.create(requestUrl))
+                .header("Accept", "application/json")
+                .GET()
+                .build()
+
+            val response = runCatching { http.send(request, HttpResponse.BodyHandlers.ofString()) }.getOrNull() ?: continue
+            if (response.statusCode() !in 200..299) continue
+
+            val payload = runCatching { JsonParser.parseString(response.body()).asJsonObject }.getOrNull() ?: continue
+            return payload
+        }
+
+        return null
     }
 
     private fun notifyNoUpdate(currentVersion: String) {
@@ -110,6 +137,17 @@ class UpdateCheckerService(private val project: Project) {
                 "Plugin is up to date",
                 "Current version: $currentVersion",
                 NotificationType.INFORMATION
+            )
+            .notify(project)
+    }
+
+    private fun notifyCheckFailed(message: String) {
+        NotificationGroupManager.getInstance()
+            .getNotificationGroup("DevManager Notifications")
+            .createNotification(
+                "DevManager plugin update check failed",
+                message,
+                NotificationType.WARNING
             )
             .notify(project)
     }
@@ -182,6 +220,7 @@ class UpdateCheckerService(private val project: Project) {
 
     companion object {
         private const val PLUGIN_ID = "com.devmanager.webstorm.plugin"
+        private const val FALLBACK_PUBLIC_API_BASE_URL = "https://beta.devregion.com/api"
         private const val LAST_NOTIFIED_VERSION_KEY = "devmanager.plugin.update.lastNotifiedVersion"
         private const val LAST_CHECKED_AT_KEY = "devmanager.plugin.update.lastCheckedAt"
         private val MIN_AUTO_CHECK_INTERVAL_MS = TimeUnit.MINUTES.toMillis(30)

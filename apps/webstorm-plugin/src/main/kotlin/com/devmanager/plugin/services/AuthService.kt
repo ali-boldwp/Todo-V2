@@ -6,6 +6,7 @@ import com.intellij.ide.passwordSafe.PasswordSafe
 import com.intellij.ide.util.PropertiesComponent
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.project.Project
+import com.intellij.util.messages.Topic
 
 @Service(Service.Level.PROJECT)
 class AuthService(private val project: Project) {
@@ -21,12 +22,28 @@ class AuthService(private val project: Project) {
     fun getToken(): String = PasswordSafe.instance.get(attrs)?.getPasswordAsString().orEmpty()
 
     fun setToken(token: String) {
-        PasswordSafe.instance.set(attrs, Credentials("devmanager", token.trim()))
+        val normalized = token.trim()
+        PasswordSafe.instance.set(attrs, Credentials("devmanager", normalized))
+        publishAuthState(normalized.isNotBlank())
     }
 
     fun clear() {
         props.unsetValue("devmanager.baseUrl")
         PasswordSafe.instance.set(attrs, null)
+        publishAuthState(false)
+    }
+
+    private fun publishAuthState(isLoggedIn: Boolean) {
+        if (project.isDisposed) return
+        project.messageBus.syncPublisher(AUTH_STATE_TOPIC).authStateChanged(isLoggedIn)
+    }
+
+    interface AuthStateListener {
+        fun authStateChanged(isLoggedIn: Boolean)
+    }
+
+    companion object {
+        val AUTH_STATE_TOPIC: Topic<AuthStateListener> =
+            Topic.create("DevManager Auth State", AuthStateListener::class.java)
     }
 }
-

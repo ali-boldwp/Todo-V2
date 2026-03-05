@@ -1215,6 +1215,68 @@ const finishTaskWork = async (req, res) => {
                 });
             }
         }
+        if (req.user.role === 'admin') {
+            let nextGithubBranch = task.githubBranch;
+            if (task.githubBranch && project?.githubRepoOwner && project?.githubRepoName) {
+                const config = await GithubConfig_1.default.findOne().select('personalAccessToken');
+                if (config?.personalAccessToken) {
+                    const parts = task.githubBranch.split('/');
+                    const branchUsername = parts.length >= 2 && parts[0] === 'tasks' ? parts[1] : null;
+                    if (branchUsername) {
+                        const taskTitleSegment = getTaskTitleBranchSegment(task);
+                        const targetDoneBranch = `tasks/${branchUsername}/done/${taskTitleSegment}`;
+                        const moved = await moveGithubBranch(config.personalAccessToken, project.githubRepoOwner, project.githubRepoName, task.githubBranch, targetDoneBranch);
+                        if (!moved.ok) {
+                            return res.status(400).json({
+                                message: `Task completed but branch move failed. ${moved.message || 'Unknown error'}`,
+                            });
+                        }
+                        nextGithubBranch = targetDoneBranch;
+                    }
+                }
+            }
+            const updated = await Task_1.default.findByIdAndUpdate(req.params.id, {
+                totalWorkedSeconds: Number(task.totalWorkedSeconds || 0) + elapsed,
+                workLogs,
+                activeWorkerId: null,
+                lastWorkStartedAt: null,
+                isWorkPaused: false,
+                status: 'done',
+                finishedAt: new Date(),
+                verificationStatus: 'approved',
+                isMergedToDev: true,
+                verifierId: null,
+                verificationComment: null,
+                verificationDecidedAt: new Date(),
+                githubBranch: nextGithubBranch,
+            }, { new: true })
+                .populate('assigneeId', 'firstName lastName email')
+                .populate('activeWorkerId', 'firstName lastName email role')
+                .populate('verifierId', 'firstName lastName email role')
+                .populate('workLogs.userId', 'firstName lastName email role');
+            if (!updated)
+                return res.status(404).json({ message: 'Task not found' });
+            await appendTaskActivity(updated._id, {
+                action: 'task_auto_approved',
+                message: `Task completed and auto-approved by admin.`,
+                actor: req.user,
+                metadata: {
+                    githubBranch: nextGithubBranch || null,
+                    isMergedToDev: true,
+                    elapsedSeconds: elapsed,
+                }
+            });
+            res.json(toTaskResponse(updated, req.user));
+            await notifyTaskAudience({
+                task: updated,
+                actorUserId: req.user.userId,
+                type: 'task_verification_approved',
+                title: 'Task Auto-Approved',
+                message: `"${updated.title}" was auto-approved by admin.`,
+            });
+            emitTaskEvent('task:updated', updated);
+            return;
+        }
         const eligibleQuery = {
             role: { $in: ['manager', 'member'] },
             isActive: true,

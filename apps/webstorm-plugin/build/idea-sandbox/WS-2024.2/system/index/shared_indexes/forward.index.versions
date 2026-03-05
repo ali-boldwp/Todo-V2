@@ -57,12 +57,12 @@ shared.index.file.content.hash.forward.index.sih.js.typedef.index2:1
 shared.index.file.content.hash.forward.index.sih.js.test.names:2
 shared.index.file.content.hash.forward.index.sih.angular2.ivy.directive.index:1
 shared.index.file.content.hash.forward.index.sih.js.element.qualifiedName:1
-shared.index.file.content.hash.forward.index.sih.WebComponentsIndex:2
 shared.index.file.content.hash.forward.index.sih.amd.baseUrl.index:1
-shared.index.file.content.hash.forward.index.sih.js.local.namespace.members.index:1
 shared.index.file.content.hash.forward.index.sih.editorconfig.index.name:2
+shared.index.file.content.hash.forward.index.sih.js.local.namespace.members.index:1
+shared.index.file.content.hash.forward.index.sih.WebComponentsIndex:2
 shared.index.file.content.hash.forward.index.sih.XmlTagNames:2
-shared.index.file.content.hash.forward.index.sih.FilenameIndex:1
+shared.index.file.content.hash.forward.index.sih.FilenameIndex:3
 shared.index.file.content.hash.forward.index.sih.vue.url.index:1
 shared.index.file.content.hash.forward.index.sih.IdIndex:2
 shared.index.file.content.hash.forward.index.sih.markdown.header.anchor:1
@@ -82,9 +82,9 @@ shared.index.file.content.hash.forward.index.sih.HtmlScriptSrcIndex:2
 shared.index.file.content.hash.forward.index.sih.Css.ampersand.selector:1
 shared.index.file.content.hash.forward.index.sih.vue.components.index:1
 shared.index.file.content.hash.forward.index.sih.angular2.symbol.index:1
-shared.index.file.content.hash.forward.index.sih.angular2.templateUrl.index:1
-shared.index.file.content.hash.forward.index.sih.http.request.headers.values.index:2
 shared.index.file.content.hash.forward.index.sih.json.file.root.values:2
+shared.index.file.content.hash.forward.index.sih.http.request.headers.values.index:2
+shared.index.file.content.hash.forward.index.sih.angular2.templateUrl.index:1
 shared.index.file.content.hash.forward.index.sih.Css.custom.mixin:1
 shared.index.file.content.hash.forward.index.sih.TypeScriptExternalPathCandidates:2
 shared.index.file.content.hash.forward.index.sih.js.custom.single.entry.index:2

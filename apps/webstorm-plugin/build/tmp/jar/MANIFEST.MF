@@ -1,6 +1,6 @@
 Manifest-Version: 1.0
 Created-By: Gradle 9.4.0
-Version: 0.1.2
+Version: 0.1.3
 Build-JVM: 21.0.8 (JetBrains s.r.o. 21.0.8+9-b1163.69)
 Build-OS: Windows 11 10.0 amd64
 Build-Plugin: IntelliJ Platform Gradle Plugin

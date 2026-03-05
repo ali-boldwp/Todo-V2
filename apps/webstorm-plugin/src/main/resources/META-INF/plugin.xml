@@ -11,6 +11,8 @@
         <notificationGroup id="DevManager Notifications"
                            displayType="BALLOON"
                            isLogByDefault="true"/>
+        <postStartupActivity implementation="com.devmanager.plugin.services.EditorAccessGuardStartupActivity"/>
+        <postStartupActivity implementation="com.devmanager.plugin.services.UpdateCheckerStartupActivity"/>
         <toolWindow id="DevManager"
                     anchor="right"
                     factoryClass="com.devmanager.plugin.DevManagerToolWindowFactory"
