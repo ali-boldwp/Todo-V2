@@ -33,13 +33,17 @@ const normalizeUrlOrEmpty = (value: unknown): string => {
 };
 
 const buildEnvFallback = () => ({
-    latestVersion: (process.env.DEVREGION_WEBSTORM_PLUGIN_VERSION || '0.1.1').trim(),
-    downloadUrl: (process.env.DEVREGION_WEBSTORM_PLUGIN_DOWNLOAD_URL || 'https://beta.devregion.com/downloads/devmanager-webstorm-plugin.zip').trim(),
-    installUrl: (process.env.DEVREGION_WEBSTORM_PLUGIN_INSTALL_URL || '').trim(),
-    releaseNotesUrl: (process.env.DEVREGION_WEBSTORM_PLUGIN_RELEASE_NOTES_URL || '').trim(),
-    message: (process.env.DEVREGION_WEBSTORM_PLUGIN_UPDATE_MESSAGE || 'A newer DevManager plugin update is available.').trim(),
-    minSupportedVersion: (process.env.DEVREGION_WEBSTORM_PLUGIN_MIN_SUPPORTED_VERSION || '').trim(),
-    mandatory: /^true$/i.test((process.env.DEVREGION_WEBSTORM_PLUGIN_MANDATORY || '').trim()),
+    latestVersion: (process.env.DEVREGION_IDE_PLUGIN_VERSION || process.env.DEVREGION_WEBSTORM_PLUGIN_VERSION || '0.1.1').trim(),
+    downloadUrl: (
+        process.env.DEVREGION_IDE_PLUGIN_DOWNLOAD_URL ||
+        process.env.DEVREGION_WEBSTORM_PLUGIN_DOWNLOAD_URL ||
+        'https://beta.devregion.com/downloads/devmanager-ide-plugin.zip'
+    ).trim(),
+    installUrl: (process.env.DEVREGION_IDE_PLUGIN_INSTALL_URL || process.env.DEVREGION_WEBSTORM_PLUGIN_INSTALL_URL || '').trim(),
+    releaseNotesUrl: (process.env.DEVREGION_IDE_PLUGIN_RELEASE_NOTES_URL || process.env.DEVREGION_WEBSTORM_PLUGIN_RELEASE_NOTES_URL || '').trim(),
+    message: (process.env.DEVREGION_IDE_PLUGIN_UPDATE_MESSAGE || process.env.DEVREGION_WEBSTORM_PLUGIN_UPDATE_MESSAGE || 'A newer DevManager IDE plugin update is available.').trim(),
+    minSupportedVersion: (process.env.DEVREGION_IDE_PLUGIN_MIN_SUPPORTED_VERSION || process.env.DEVREGION_WEBSTORM_PLUGIN_MIN_SUPPORTED_VERSION || '').trim(),
+    mandatory: /^true$/i.test((process.env.DEVREGION_IDE_PLUGIN_MANDATORY || process.env.DEVREGION_WEBSTORM_PLUGIN_MANDATORY || '').trim()),
 });
 
 const loadEffectiveConfig = async () => {
@@ -85,7 +89,7 @@ export const getPluginUpdateChannel = async (req: Request, res: Response) => {
         const currentVersion = String(req.query.currentVersion || '').trim();
 
         res.json({
-            pluginId: 'com.devmanager.webstorm.plugin',
+            pluginId: 'com.devmanager.ide.plugin',
             latestVersion: config.latestVersion,
             downloadUrl: config.downloadUrl,
             installUrl: config.installUrl || null,
@@ -165,14 +169,14 @@ export const uploadIdePluginPackage = async (req: AuthRequest, res: Response) =>
             return res.status(400).json({ message: 'Upload body is empty. Send plugin ZIP bytes.' });
         }
 
-        const rawName = String(req.header('x-file-name') || req.query.fileName || 'devmanager-webstorm-plugin.zip').trim();
+        const rawName = String(req.header('x-file-name') || req.query.fileName || 'devmanager-ide-plugin.zip').trim();
         const safeFileName = sanitizeFileName(rawName.endsWith('.zip') ? rawName : `${rawName}.zip`);
         const timestamp = Date.now();
         const finalName = `${timestamp}-${safeFileName}`;
         const inferredVersion = extractVersionFromFileName(safeFileName);
         if (!inferredVersion) {
             return res.status(400).json({
-                message: 'Version not found in filename. Use a name like devmanager-webstorm-plugin-0.1.2.zip',
+                message: 'Version not found in filename. Use a name like devmanager-ide-plugin-0.1.2.zip',
             });
         }
 

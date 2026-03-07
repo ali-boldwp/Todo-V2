@@ -6,28 +6,36 @@ A full-stack application for managing development tasks, projects, and payroll.
 
 This project is a monorepo managed by NPM Workspaces and contains the following packages:
 
--   **`apps/api`**: The backend API built with Express, Mongoose (MongoDB), and TypeScript.
--   **`apps/web`**: The frontend application built with React, Vite, and TypeScript.
--   **`packages/shared`**: Shared TypeScript types and utilities used by both `api` and `web`.
+- **`apps/api`**: The backend API built with Express, Mongoose (MongoDB), and TypeScript.
+- **`apps/web`**: The frontend application built with React, Vite, and TypeScript.
+- **`apps/desktop`**: A dedicated native Windows app built with C# and WPF.
+- **`packages/shared`**: Shared TypeScript types and utilities used by both `api` and `web`.
 
 ## Prerequisites
 
--   Node.js (v20+)
--   Docker & Docker Compose (for containerized deployment)
--   MongoDB & Redis (if running locally without Docker)
+- Node.js (v20+)
+- .NET 8 SDK (for desktop app)
+- Docker & Docker Compose (for containerized deployment)
+- MongoDB & Redis (if running locally without Docker)
 
 ## Local Development
 
-1.  **Install Dependencies**:
-    ```bash
-    npm install
-    ```
+1. **Install Dependencies**
+   ```bash
+   npm install
+   ```
 
-2.  **Start Development Servers**:
-    ```bash
-    npm run dev
-    ```
-    This will concurrently start the API (port 3030) and the Web app.
+2. **Start Development Servers**
+   ```bash
+   npm run dev
+   ```
+   This starts API (port 3030) and Web app.
+
+3. **Start Native Desktop App**
+   ```bash
+   dotnet run --project apps/desktop/DevManager.Desktop.csproj
+   ```
+   This launches the dedicated Windows desktop application.
 
 ## Docker Deployment (Production)
 
@@ -35,15 +43,13 @@ This project is Docker-ready and can be deployed as a single container where the
 
 ### 1. Build & Run with Docker Compose (Recommended)
 
-This command builds the application image and starts MongoDB and Redis containers.
-
 ```bash
 docker-compose up -d --build
 ```
 
--   **App**: `http://localhost:3030` (or configured domain)
--   **MongoDB**: `mongodb://localhost:27017`
--   **Redis**: `redis://localhost:6379`
+- **App**: `http://localhost:3030` (or configured domain)
+- **MongoDB**: `mongodb://localhost:27017`
+- **Redis**: `redis://localhost:6379`
 
 ### 2. Deployment Configuration
 
@@ -62,6 +68,7 @@ Environment variables can be set in `docker-compose.yml` or passed to the `docke
 To create the default admin account (`ali@boldwp.com` / `password123`), run the following command.
 
 ### In Docker (Post-Deployment)
+
 ```bash
 # Get the container ID
 docker ps
@@ -71,20 +78,23 @@ docker exec -it <container_id> sh -c "cd apps/api && npm run seed:admin"
 ```
 
 ### Locally
+
 Ensure your local MongoDB is running, then:
+
 ```bash
 npm run seed:admin --workspace=apps/api
 ```
 
 ## Structure
 
-```
-├── apps
-│   ├── api          # Express Backend
-│   └── web          # React Frontend
-├── packages
-│   └── shared       # Shared Types/Schemas
-├── Dockerfile       # Production Multi-Stage Build
-├── docker-compose.yml # Local/Staging Stack
-└── package.json     # Monorepo Config
+```text
+apps/
+  api/      # Express Backend
+  web/      # React Frontend
+  desktop/  # Native Windows WPF App
+packages/
+  shared/   # Shared Types/Schemas
+Dockerfile
+docker-compose.yml
+package.json
 ```

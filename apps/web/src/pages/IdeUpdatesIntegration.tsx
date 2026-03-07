@@ -73,7 +73,7 @@ const IdeUpdatesIntegration: React.FC = () => {
             <h1 className="text-2xl font-bold mb-6">IDE Updates</h1>
 
             <div className="bg-white p-6 rounded shadow max-w-2xl">
-                <h2 className="text-lg font-semibold mb-2">WebStorm Plugin Update Channel</h2>
+                <h2 className="text-lg font-semibold mb-2">IDE Plugin Update Channel</h2>
                 <p className="mb-4 text-sm text-gray-500">
                     Source: <span className="font-semibold capitalize">{config?.source || 'database'}</span>
                 </p>
@@ -133,7 +133,7 @@ const IdeUpdatesIntegration: React.FC = () => {
                         <input
                             value={downloadUrl}
                             onChange={(e) => setDownloadUrl(e.target.value)}
-                            placeholder="https://beta.devregion.com/downloads/devmanager-webstorm-plugin.zip"
+                            placeholder="https://beta.devregion.com/downloads/devmanager-ide-plugin.zip"
                             className="w-full border border-gray-200 rounded px-3 py-2 text-sm"
                         />
                     </div>
@@ -143,7 +143,7 @@ const IdeUpdatesIntegration: React.FC = () => {
                         <input
                             value={installUrl}
                             onChange={(e) => setInstallUrl(e.target.value)}
-                            placeholder="https://beta.devregion.com/ide/install/devmanager-webstorm-plugin.zip"
+                            placeholder="https://beta.devregion.com/ide/install/devmanager-ide-plugin.zip"
                             className="w-full border border-gray-200 rounded px-3 py-2 text-sm"
                         />
                     </div>
@@ -153,7 +153,7 @@ const IdeUpdatesIntegration: React.FC = () => {
                         <input
                             value={releaseNotesUrl}
                             onChange={(e) => setReleaseNotesUrl(e.target.value)}
-                            placeholder="https://beta.devregion.com/releases/webstorm-plugin"
+                            placeholder="https://beta.devregion.com/releases/ide-plugin"
                             className="w-full border border-gray-200 rounded px-3 py-2 text-sm"
                         />
                     </div>
