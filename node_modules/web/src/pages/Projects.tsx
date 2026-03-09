@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { getProjects, createProject, updateProject } from '../services/core';
+import { getProjects, createProject } from '../services/core';
 import { getGithubConfig, getGithubRepos } from '../services/github';
 import { ProjectInput } from '@devmanager/shared/dist/index';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -40,7 +40,6 @@ const Projects: React.FC = () => {
     }, [searchParams, setSearchParams]);
     const [editorData, setEditorData] = useState<any>(null);
     const [visibility, setVisibility] = useState<'public' | 'private'>('private');
-    const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
 
     const { data: githubConfig } = useQuery({ queryKey: ['github-config'], queryFn: getGithubConfig });
     const { data: githubRepos, isLoading: reposLoading } = useQuery({
@@ -64,61 +63,31 @@ const Projects: React.FC = () => {
 
     const createMutation = useMutation({
         mutationFn: createProject,
-        onSuccess: (data: any) => {
-            queryClient.invalidateQueries({ queryKey: ['projects'] });
-            setCurrentProjectId(data._id);
-        },
-    });
-
-    const updateMutation = useMutation({
-        mutationFn: ({ id, data }: { id: string, data: Partial<ProjectInput> }) => updateProject(id, data),
         onSuccess: () => {
             queryClient.invalidateQueries({ queryKey: ['projects'] });
+            setIsDrawerOpen(false);
+            resetForm();
         },
         onError: (error: any) => {
-            const message = error.response?.data?.message || error.message || 'Failed to update project';
+            const message = error.response?.data?.message || error.message || 'Failed to create project';
             alert(message);
-        }
+        },
     });
 
-    // Auto-create on name blur
-    const handleNameBlur = async (e: React.FocusEvent<HTMLInputElement>) => {
-        const name = e.target.value;
-        if (name && !currentProjectId) {
-            createMutation.mutate({
-                name,
-                status: 'draft',
-                visibility: 'private',
-                priority: 'medium'
-            });
-        }
-    };
-
     const handleSave = (data: ProjectInput) => {
-        if (currentProjectId) {
-            updateMutation.mutate({
-                id: currentProjectId,
-                data: {
-                    ...data,
-                    description: editorData,
-                    visibility,
-                    ...(githubRepoOption === 'new' && { createGithubRepo: true }),
-                    ...(githubRepoOption === 'existing' && { githubRepoOwner: selectedRepoOwner, githubRepoName: selectedRepoName })
-                }
-            }, {
-                onSuccess: () => {
-                    setIsDrawerOpen(false);
-                    resetForm();
-                }
-            });
-        }
+        createMutation.mutate({
+            ...data,
+            description: editorData,
+            visibility,
+            ...(githubRepoOption === 'new' && { createGithubRepo: true }),
+            ...(githubRepoOption === 'existing' && { githubRepoOwner: selectedRepoOwner, githubRepoName: selectedRepoName })
+        });
     };
 
     const resetForm = () => {
         reset();
         setEditorData(null);
         setVisibility('private');
-        setCurrentProjectId(null);
         setGithubRepoOption('none');
         setSelectedRepoOwner('');
         setSelectedRepoName('');
@@ -222,7 +191,6 @@ const Projects: React.FC = () => {
                             <label className="block text-sm font-semibold text-gray-700 mb-2">Project Name</label>
                             <input
                                 {...register('name')}
-                                onBlur={handleNameBlur}
                                 className="w-full bg-gray-50 border-gray-100 rounded-xl px-4 py-3 text-lg font-medium focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all outline-none placeholder:text-gray-400"
                                 placeholder="e.g. Website Redesign"
                             />
@@ -359,9 +327,10 @@ const Projects: React.FC = () => {
                         <button
                             type="button"
                             onClick={handleSubmit(handleSave)}
+                            disabled={createMutation.isPending}
                             className="px-6 py-2.5 rounded-lg text-sm font-medium bg-gray-900 text-white hover:bg-gray-800 transition-all shadow-lg shadow-gray-900/20 active:scale-95"
                         >
-                            Create Project
+                            {createMutation.isPending ? 'Creating...' : 'Create Project'}
                         </button>
                     </div>
                 </form>
