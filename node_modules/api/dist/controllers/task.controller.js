@@ -94,6 +94,21 @@ async function createGithubBranch(token, owner, repo, branchName, baseBranch = '
         return null;
     }
 }
+async function hasGithubRepoAccess(token, owner, repo) {
+    try {
+        const response = await fetch(`https://api.github.com/repos/${owner}/${repo}`, {
+            headers: {
+                Authorization: `Bearer ${token}`,
+                Accept: 'application/vnd.github.v3+json'
+            }
+        });
+        return response.ok;
+    }
+    catch (error) {
+        console.error('hasGithubRepoAccess error:', error?.message || error);
+        return false;
+    }
+}
 const slugify = (value) => value
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
@@ -883,6 +898,36 @@ const startTaskWork = async (req, res) => {
                     : 'Task is already in progress.'
             });
         }
+        const project = task.projectId
+            ? await Project_1.default.findById(task.projectId).select('name githubRepoOwner githubRepoName dockployAppId')
+            : null;
+        if (!project) {
+            return res.status(400).json({ message: 'Task project not found. Cannot start task.' });
+        }
+        if (!project.dockployAppId) {
+            return res.status(400).json({
+                message: 'Project is not configured for Docker (Dockploy). Configure Docker setup before starting this task.'
+            });
+        }
+        if (!project.githubRepoOwner || !project.githubRepoName) {
+            return res.status(400).json({
+                message: 'Project repository is not linked. Link GitHub repository before starting this task.'
+            });
+        }
+        const config = await GithubConfig_1.default.findOne().select('personalAccessToken');
+        if (!config?.personalAccessToken) {
+            return res.status(400).json({ message: 'GitHub integration is not connected. Cannot start task.' });
+        }
+        const user = await User_1.default.findById(req.user.userId).select('githubUsername');
+        if (!user?.githubUsername) {
+            return res.status(400).json({ message: 'Your GitHub account is not set up. Cannot start task.' });
+        }
+        const repoAccessible = await hasGithubRepoAccess(config.personalAccessToken, project.githubRepoOwner, project.githubRepoName);
+        if (!repoAccessible) {
+            return res.status(400).json({
+                message: `GitHub repository access check failed for ${project.githubRepoOwner}/${project.githubRepoName}.`
+            });
+        }
         const patch = {
             activeWorkerId: req.user.userId,
             status: 'in_progress',
@@ -896,29 +941,18 @@ const startTaskWork = async (req, res) => {
             patch.lastWorkStartedAt = now;
         // On start: create user-specific GitHub branch for this task.
         if (task.projectId && !task.githubBranch) {
-            const project = await Project_1.default.findById(task.projectId).select('githubRepoOwner githubRepoName');
-            const config = await GithubConfig_1.default.findOne().select('personalAccessToken');
-            const user = await User_1.default.findById(req.user.userId).select('githubUsername');
-            if (project?.githubRepoOwner && project?.githubRepoName) {
-                if (!config?.personalAccessToken) {
-                    return res.status(400).json({ message: 'GitHub integration is not connected. Cannot start task.' });
-                }
-                if (!user?.githubUsername) {
-                    return res.status(400).json({ message: 'Your GitHub account is not set up. Cannot start task.' });
-                }
-                const taskTitleSegment = getTaskTitleBranchSegment(task);
-                const branchName = `tasks/${slugify(user.githubUsername)}/inprogress/${taskTitleSegment}`;
-                const createdBranch = await createGithubBranch(config.personalAccessToken, project.githubRepoOwner, project.githubRepoName, branchName, 'dev');
-                if (!createdBranch) {
-                    return res.status(400).json({ message: 'Failed to create GitHub branch. Task was not started.' });
-                }
-                const restricted = await restrictBranchToUser(config.personalAccessToken, project.githubRepoOwner, project.githubRepoName, createdBranch, user.githubUsername);
-                if (!restricted) {
-                    // Best effort only: do not block task start if branch restriction cannot be enforced.
-                    console.warn(`Proceeding without branch restriction for ${createdBranch}`);
-                }
-                patch.githubBranch = createdBranch;
+            const taskTitleSegment = getTaskTitleBranchSegment(task);
+            const branchName = `tasks/${slugify(user.githubUsername)}/inprogress/${taskTitleSegment}`;
+            const createdBranch = await createGithubBranch(config.personalAccessToken, project.githubRepoOwner, project.githubRepoName, branchName, 'dev');
+            if (!createdBranch) {
+                return res.status(400).json({ message: 'Failed to create GitHub branch. Task was not started.' });
             }
+            const restricted = await restrictBranchToUser(config.personalAccessToken, project.githubRepoOwner, project.githubRepoName, createdBranch, user.githubUsername);
+            if (!restricted) {
+                // Best effort only: do not block task start if branch restriction cannot be enforced.
+                console.warn(`Proceeding without branch restriction for ${createdBranch}`);
+            }
+            patch.githubBranch = createdBranch;
         }
         const updated = await Task_1.default.findByIdAndUpdate(req.params.id, patch, { new: true })
             .populate('assigneeId', 'firstName lastName email')

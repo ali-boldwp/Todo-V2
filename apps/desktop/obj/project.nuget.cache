@@ -1,8 +1,10 @@
 {
   "version": 2,
-  "dgSpecHash": "LFR18tQpudU=",
+  "dgSpecHash": "wgb4wDjtstQ=",
   "success": true,
   "projectFilePath": "D:\\Todo V2\\apps\\desktop\\DevManager.Desktop.csproj",
-  "expectedPackageFiles": [],
+  "expectedPackageFiles": [
+    "C:\\Users\\Alienware\\.nuget\\packages\\microsoft.web.webview2\\1.0.2903.40\\microsoft.web.webview2.1.0.2903.40.nupkg.sha512"
+  ],
   "logs": []
 }

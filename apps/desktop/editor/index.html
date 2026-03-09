@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Desktop Editor</title>
+  <style>
+    html, body { margin: 0; padding: 0; height: 100%; background: #0e151f; color: #d8e1ee; font-family: Segoe UI, sans-serif; }
+    #topbar { height: 30px; display: flex; align-items: center; justify-content: space-between; padding: 0 10px; border-bottom: 1px solid #2a3645; background: #131d29; font-size: 12px; }
+    #meta { color: #8ea0b7; }
+    #status { color: #8ea0b7; }
+    #editor { height: calc(100% - 31px); }
+    textarea { width: 100%; height: calc(100% - 31px); border: 0; outline: none; resize: none; background: #0e151f; color: #d8e1ee; font: 13px Consolas, monospace; padding: 10px; box-sizing: border-box; }
+  </style>
+</head>
+<body>
+  <div id="topbar">
+    <div id="meta">No file selected</div>
+    <div id="status">Ready</div>
+  </div>
+  <div id="editor"></div>
+  <script src="https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs/loader.js"></script>
+  <script>
+    const metaEl = document.getElementById("meta");
+    const statusEl = document.getElementById("status");
+    let currentFile = null;
+    let editor = null;
+    let fallback = null;
+
+    function post(message) {
+      if (window.chrome && window.chrome.webview) {
+        window.chrome.webview.postMessage(message);
+      }
+    }
+
+    function getValue() {
+      if (editor) return editor.getValue();
+      if (fallback) return fallback.value;
+      return "";
+    }
+
+    function setValue(value, language) {
+      if (editor && window.monaco) {
+        const model = editor.getModel();
+        if (model) {
+          window.monaco.editor.setModelLanguage(model, language || "plaintext");
+          editor.setValue(value || "");
+        }
+        return;
+      }
+      if (fallback) fallback.value = value || "";
+    }
+
+    window.setEditorFile = function(path, content, language) {
+      currentFile = path || null;
+      metaEl.textContent = path ? `${path} (${language})` : "No file selected";
+      setValue(content || "", language || "plaintext");
+      statusEl.textContent = "Ready";
+    };
+
+    window.requestSaveFromHost = function() {
+      post({ type: "save", path: currentFile, content: getValue() });
+      statusEl.textContent = "Saved";
+    };
+
+    function bootFallback() {
+      const ta = document.createElement("textarea");
+      document.body.appendChild(ta);
+      fallback = ta;
+      post({ type: "ready" });
+    }
+
+    if (typeof require === "undefined") {
+      bootFallback();
+    } else {
+      require.config({ paths: { vs: "https://cdn.jsdelivr.net/npm/monaco-editor@0.52.2/min/vs" } });
+      require(["vs/editor/editor.main"], function() {
+        editor = monaco.editor.create(document.getElementById("editor"), {
+          value: "// Open a file from Explorer to start editing",
+          language: "typescript",
+          theme: "vs-dark",
+          automaticLayout: true,
+          minimap: { enabled: true },
+          fontSize: 13,
+          fontFamily: "Consolas, 'JetBrains Mono', monospace",
+          wordWrap: "off",
+          smoothScrolling: true
+        });
+
+        editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, () => {
+          post({ type: "save", path: currentFile, content: editor.getValue() });
+          statusEl.textContent = "Saved";
+        });
+
+        editor.onDidChangeModelContent(() => {
+          statusEl.textContent = "Modified";
+        });
+
+        post({ type: "ready" });
+      }, function() {
+        bootFallback();
+      });
+    }
+  </script>
+</body>
+</html>

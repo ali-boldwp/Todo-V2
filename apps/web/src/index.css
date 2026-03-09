@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -6,15 +6,30 @@
 
 @layer base {
     :root {
-        --app-blue: #4f6ef7;
-        --app-blue-dark: #3a56e0;
+        --app-bg: #111923;
+        --app-title: #1c2833;
+        --app-panel: #1b2532;
+        --app-panel-soft: #1f2b3a;
+        --app-border: #2a3645;
+        --app-border-soft: #344355;
+        --app-text: #d8e1ee;
+        --app-muted: #8a99ad;
+        --app-accent: #37c0d7;
     }
 
     html,
     body {
-        @apply bg-white text-gray-900 antialiased;
-        font-family: 'Plus Jakarta Sans', sans-serif;
+        @apply antialiased;
+        background:
+            radial-gradient(1100px 600px at 12% -20%, #33465b 0%, transparent 55%),
+            linear-gradient(180deg, #131d29 0%, #111923 55%);
+        color: var(--app-text);
+        font-family: 'Space Grotesk', sans-serif;
         font-size: 13px;
+    }
+
+    #root {
+        min-height: 100vh;
     }
 }
 
@@ -29,11 +44,18 @@
 }
 
 ::-webkit-scrollbar-thumb {
-    @apply bg-gray-200 rounded-full;
+    background: #2f3d4f;
+    border-radius: 999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    @apply bg-gray-300;
+    background: #3d536d;
+}
+
+code,
+kbd,
+pre {
+    font-family: 'JetBrains Mono', monospace;
 }
 
 @keyframes appFadeIn {

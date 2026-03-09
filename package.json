@@ -9,6 +9,9 @@
     "start": "npm run dev",
     "predev": "node scripts/free-ports.js 3000 5000",
     "dev": "concurrently \"npm run dev --workspace=apps/api\" \"npm run dev --workspace=apps/web\"",
+    "presup": "node scripts/free-ports.js 3000 5000",
+    "desktop:dev": "powershell -NoProfile -Command \"Get-Process DevManager.Desktop -ErrorAction SilentlyContinue | Stop-Process -Force; dotnet clean apps/desktop/DevManager.Desktop.csproj; dotnet watch --no-hot-reload --project apps/desktop/DevManager.Desktop.csproj run\"",
+    "sup": "concurrently -n api,web,desktop -c cyan,green,magenta \"npm run dev --workspace=apps/api\" \"npm run dev --workspace=apps/web\" \"npm run desktop:dev\"",
     "build": "npm run build --workspaces --if-present",
     "lint": "npm run lint --workspaces --if-present",
     "test": "npm run test --workspaces --if-present"
