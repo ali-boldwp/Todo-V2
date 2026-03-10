@@ -237,7 +237,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
                     <SidebarItem to="/verifications" icon={CheckSquare} label="Verifications" alert={myPendingVerifications > 0} />
                     {user?.role !== 'client' && <SidebarItem to="/chat" icon={MessageCircle} label="Chat" />}
 
-                    <SectionLabel label="Projects" onAdd={() => navigate('/projects?action=create')} />
+                    <SectionLabel label="Projects" onAdd={user?.role === 'client' ? undefined : () => navigate('/projects?action=create')} />
                     <div className="space-y-0.5">
                         {projects.map((project: any) => (
                             <ProjectItem

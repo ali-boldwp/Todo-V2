@@ -11,6 +11,7 @@ import { ProjectSchema } from '@devmanager/shared/dist/index';
 import RichTextEditor from '../components/RichTextEditor';
 import Drawer from '../components/Drawer';
 import Switch from '../components/Switch';
+import { useAuth } from '../context/AuthContext';
 
 // Helper to check if description is JSON (EditorJS output)
 const renderDescription = (desc: any) => {
@@ -22,6 +23,8 @@ const renderDescription = (desc: any) => {
 };
 
 const Projects: React.FC = () => {
+    const { user } = useAuth();
+    const canCreateProject = user?.role !== 'client';
     const [searchParams, setSearchParams] = useSearchParams();
     const { data: projects, isLoading, error } = useQuery({ queryKey: ['projects'], queryFn: getProjects });
     const queryClient = useQueryClient();
@@ -30,14 +33,16 @@ const Projects: React.FC = () => {
     // Check for create action
     React.useEffect(() => {
         if (searchParams.get('action') === 'create') {
-            setIsDrawerOpen(true);
+            if (canCreateProject) {
+                setIsDrawerOpen(true);
+            }
             setSearchParams(prev => {
                 const newParams = new URLSearchParams(prev);
                 newParams.delete('action');
                 return newParams;
             });
         }
-    }, [searchParams, setSearchParams]);
+    }, [canCreateProject, searchParams, setSearchParams]);
     const [editorData, setEditorData] = useState<any>(null);
     const [visibility, setVisibility] = useState<'public' | 'private'>('private');
 
@@ -75,6 +80,11 @@ const Projects: React.FC = () => {
     });
 
     const handleSave = (data: ProjectInput) => {
+        if (!canCreateProject) {
+            alert('Clients cannot create projects.');
+            return;
+        }
+
         createMutation.mutate({
             ...data,
             description: editorData,
@@ -124,13 +134,21 @@ const Projects: React.FC = () => {
                         <span className="text-xs text-gray-500 bg-gray-100 px-2 py-0.5 rounded-full">{projects?.length || 0}</span>
                     </div>
                 </div>
-                <button
-                    onClick={() => setIsDrawerOpen(true)}
-                    className="h-8 bg-[#4f6ef7] hover:bg-[#3a56e0] text-white px-3 rounded-md text-[12.5px] font-semibold transition-colors shadow-sm shadow-[#4f6ef7]/30 flex items-center"
-                >
-                    <span className="mr-1.5 text-base leading-none">+</span> New Project
-                </button>
+                {canCreateProject && (
+                    <button
+                        onClick={() => setIsDrawerOpen(true)}
+                        className="h-8 bg-[#4f6ef7] hover:bg-[#3a56e0] text-white px-3 rounded-md text-[12.5px] font-semibold transition-colors shadow-sm shadow-[#4f6ef7]/30 flex items-center"
+                    >
+                        <span className="mr-1.5 text-base leading-none">+</span> New Project
+                    </button>
+                )}
             </div>
+
+            {!canCreateProject && (
+                <div className="mb-5 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                    Client accounts can view their assigned projects but cannot create new ones.
+                </div>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                 {projects?.map((project: any) => (
