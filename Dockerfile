@@ -29,7 +29,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 # Default port for API
 ENV PORT=3030
-ENV MONGO_URI=mongodb://root:iV4U6vH5v2t7AWPOdlcZQ7LXxNEOfQfqCZrg2i4oUdsYKAoYtOUarnFlAeYcyVQZ@jgsogwg400wk0c4sw8040gcc:27017/devmanager?directConnection=true
+ENV MONGO_URI=mongodb://root:iV4U6vH5v2t7AWPOdlcZQ7LXxNEOfQfqCZrg2i4oUdsYKAoYtOUarnFlAeYcyVQZ@jgsogwg400wk0c4sw8040gcc:27017/devmanager?authSource=admin&directConnection=true
 ENV JWT_SECRET=supersecretkey
 ENV REDIS_URL=redis://localhost:6379
 ENV GITHUB_CLIENT_ID="Ov23lievqX0deavCNgFA"
