@@ -11,7 +11,7 @@ router.use(auth_1.requireGithubSetupForTeamMembers);
 router.get('/clients', client_controller_1.getClients);
 router.post('/clients', client_controller_1.createClient);
 router.get('/projects', project_controller_1.getProjects);
-router.post('/projects', auth_1.requireAdmin, project_controller_1.createProject); // Note: Should clients be able to create projects? User said client shouldn't delete, maybe not create either? Let's stick to task strictly for now. Wait, I should make deleteProject requireAdmin.
+router.post('/projects', (0, auth_1.authorize)(['admin', 'client']), project_controller_1.createProject);
 router.put('/projects/:id', project_controller_1.updateProject);
 router.get('/projects/:id', project_controller_1.getProject);
 router.delete('/projects/:id', auth_1.requireAdmin, project_controller_1.deleteProject);

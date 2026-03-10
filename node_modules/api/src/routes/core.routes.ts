@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { createClient, getClients } from '../controllers/client.controller';
 import { createProject, getProject, getProjects, updateProject, deleteProject, addProjectMember, removeProjectMember, uploadProjectDocument, deleteProjectDocument, downloadProjectDocument, fixProjectRepo, getProjectRepoStatus, getProjectDockployStatus, triggerProjectDockployDeploy } from '../controllers/project.controller';
-import { authenticate, requireAdmin, requireGithubSetupForTeamMembers, requireProfileImageSetup } from '../middleware/auth';
+import { authenticate, authorize, requireAdmin, requireGithubSetupForTeamMembers, requireProfileImageSetup } from '../middleware/auth';
 
 const router = Router();
 
@@ -13,7 +13,7 @@ router.get('/clients', getClients);
 router.post('/clients', createClient);
 
 router.get('/projects', getProjects);
-router.post('/projects', requireAdmin, createProject); // Note: Should clients be able to create projects? User said client shouldn't delete, maybe not create either? Let's stick to task strictly for now. Wait, I should make deleteProject requireAdmin.
+router.post('/projects', authorize(['admin', 'client']), createProject);
 router.put('/projects/:id', updateProject);
 router.get('/projects/:id', getProject);
 router.delete('/projects/:id', requireAdmin, deleteProject);
