@@ -1,0 +1,36 @@
+# ─────────────────────────────────────────────────────────────────
+# Antigravity (OpenCode) – Sidecar Container
+# Runs `opencode serve` as a headless AI server.
+# The main API container communicates with it over the Docker network
+# via OPENCODE_URL=http://opencode:5001
+# ─────────────────────────────────────────────────────────────────
+FROM node:20-bookworm-slim
+
+# Install git (needed for repo cloning inside the container)
+RUN apt-get update -qq && \
+    apt-get install -y --no-install-recommends git ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install OpenCode globally
+RUN npm install -g opencode-ai
+
+# Repos root — shared volume with the API container
+# Each project gets a subdirectory: /repos/{projectId}/
+RUN mkdir -p /repos
+VOLUME ["/repos"]
+
+# Expose the OpenCode serve port
+EXPOSE 5001
+
+# Working directory for the global server (no codebase context)
+# Per-project servers are spawned by the API into /repos/{id}/
+WORKDIR /repos
+
+# Set HOME so opencode can find ~/.config/opencode/config.json
+ENV HOME=/root
+
+# Health check — the API uses this to confirm readiness
+HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=3 \
+  CMD node -e "fetch('http://localhost:5001/global/health').then(r=>r.ok?process.exit(0):process.exit(1)).catch(()=>process.exit(1))"
+
+CMD ["opencode", "serve", "--port", "5001", "--hostname", "0.0.0.0"]

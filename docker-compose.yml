@@ -1,4 +1,5 @@
 version: '3.8'
+
 services:
   mongo:
     image: mongo:latest
@@ -17,19 +18,58 @@ services:
     ports:
       - "6379:6379"
 
+  # ── Antigravity (OpenCode) AI Sidecar ─────────────────────────────────────
+  # Runs `opencode serve` so the API can use it for repo-aware task planning.
+  # Configure your AI provider key via ANTHROPIC_API_KEY or GOOGLE_API_KEY.
+  opencode:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.opencode
+    container_name: devmanager_opencode
+    restart: unless-stopped
+    ports:
+      - "5001:5001"        # Optional: expose for debugging. Remove in production.
+    volumes:
+      - repos_data:/repos  # Shared with the API container for cloned project repos
+      - opencode_config:/root/.config/opencode  # Persists AI provider config
+    environment:
+      # Set ONE of these to configure which AI provider OpenCode uses:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:5001/global/health').then(r=>r.ok?process.exit(0):process.exit(1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ── Main Application ───────────────────────────────────────────────────────
   app:
     build: .
     container_name: devmanager_app
     ports:
       - "3030:3030"
+    volumes:
+      - repos_data:/var/devmanager/repos  # Same cloned repos the opencode sidecar uses
     environment:
       - PORT=3030
       - MONGO_URI=mongodb://admin:password123@mongo:27017/devmanager?authSource=admin
       - REDIS_URL=redis://redis:6379
       - JWT_SECRET=supersecretkey
+      # Antigravity — points to the opencode sidecar via internal Docker network
+      - OPENCODE_URL=http://opencode:5001
+      - REPOS_ROOT=/var/devmanager/repos
+      - OPENCODE_BASE_PORT=5010
     depends_on:
-      - mongo
-      - redis
+      mongo:
+        condition: service_started
+      redis:
+        condition: service_started
+      opencode:
+        condition: service_healthy
 
 volumes:
   mongo_data:
+  repos_data:        # Shared between app and opencode containers
+  opencode_config:   # Persists AI provider config across restarts

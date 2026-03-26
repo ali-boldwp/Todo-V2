@@ -22,12 +22,20 @@ ENV VITE_API_URL=https://beta.devregion.com/api
 RUN npm run build
 
 # Production runtime stage
-FROM node:20-alpine AS runner
+# bookworm-slim instead of alpine so git works correctly for repo cloning
+FROM node:20-bookworm-slim AS runner
+
+# Install git — needed by repo.service.ts to clone project repos for Antigravity
+RUN apt-get update -qq && \
+    apt-get install -y --no-install-recommends git ca-certificates && \
+    rm -rf /var/lib/apt/lists/*
+
+# Create repos directory for Antigravity codebase context
+RUN mkdir -p /var/devmanager/repos
 
 WORKDIR /app
 
 ENV NODE_ENV=production
-# Default port for API
 ENV PORT=3030
 ENV MONGO_URI=mongodb://root:iV4U6vH5v2t7AWPOdlcZQ7LXxNEOfQfqCZrg2i4oUdsYKAoYtOUarnFlAeYcyVQZ@jgsogwg400wk0c4sw8040gcc:27017/devmanager?authSource=admin&directConnection=true
 ENV JWT_SECRET=supersecretkey
@@ -36,6 +44,10 @@ ENV GITHUB_CLIENT_ID="Ov23lievqX0deavCNgFA"
 ENV GITHUB_CLIENT_SECRET="24c00c09a9f1cfb1d0192375a8687fd430d11d8a"
 ENV GITHUB_SETUP_CALLBACK_URL=https://beta.devregion.com/api/auth/github/setup/callback
 ENV FRONTEND_BASE_URL=https://beta.devregion.com
+# Antigravity — override via docker-compose or -e flags
+ENV OPENCODE_URL=http://opencode:5001
+ENV REPOS_ROOT=/var/devmanager/repos
+ENV OPENCODE_BASE_PORT=5010
 
 # Copy necessary files
 # Copy node_modules with compiled binaries from builder
