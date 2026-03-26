@@ -52,4 +52,7 @@ const UserSchema = new mongoose_1.Schema({
 }, { timestamps: true });
 // Compound index for email to be unique is already handled by Schema definition
 // UserSchema.index({ email: 1 }, { unique: true });
+// Performance indexes
+UserSchema.index({ role: 1 });
+UserSchema.index({ isActive: 1 });
 exports.default = mongoose_1.default.model('User', UserSchema);

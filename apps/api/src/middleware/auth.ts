@@ -53,12 +53,20 @@ export const requireGithubSetupForTeamMembers = async (req: AuthRequest, res: Re
             return next();
         }
 
-        const user = await User.findById(req.user.userId).select('githubUsername githubUserId githubConnectedAt');
+        // Skip if already completed (from JWT token)
+        if (req.user.githubSetupCompleted === true) {
+            return next();
+        }
+
+        // Only query DB if not cached
+        const user = await User.findById(req.user.userId).select('githubUsername githubUserId githubConnectedAt').lean();
         const completed = !!user?.githubUsername && !!user?.githubUserId && !!user?.githubConnectedAt;
         if (!completed) {
             return res.status(403).json({ message: 'You must complete GitHub setup before accessing this feature.' });
         }
 
+        // Cache for subsequent middleware
+        req.user.githubSetupCompleted = true;
         next();
     } catch (error) {
         return res.status(500).json({ message: 'Server error' });
@@ -69,15 +77,22 @@ export const requireProfileImageSetup = async (req: AuthRequest, res: Response, 
     try {
         if (!req.user) return res.status(401).json({ message: 'Authentication required' });
 
-        const user = await User.findById(req.user.userId).select('profileImageUrl');
-        const completed = !!user?.profileImageUrl;
-        if (!completed) {
+        // Skip if already completed (from JWT token)
+        if (req.user.profileSetupCompleted === true) {
+            return next();
+        }
+
+        // Only query DB if not cached
+        const user = await User.findById(req.user.userId).select('profileImageUrl').lean();
+        if (!user?.profileImageUrl) {
             return res.status(403).json({
                 message: 'You must upload a profile image before accessing this feature.',
                 code: 'PROFILE_SETUP_REQUIRED'
             });
         }
 
+        // Cache for subsequent middleware
+        req.user.profileSetupCompleted = true;
         next();
     } catch (error) {
         return res.status(500).json({ message: 'Server error' });

@@ -29,13 +29,13 @@ api.interceptors.response.use(
         if (error.response && error.response.status === 403) {
             const code = error.response?.data?.code;
             const message = `${error.response?.data?.message || ''}`.toLowerCase();
-            if (code === 'PROFILE_SETUP_REQUIRED' && window.location.pathname !== '/profile/setup') {
-                window.location.href = '/profile/setup';
+            if (code === 'PROFILE_SETUP_REQUIRED' && window.location.pathname !== '/setup-profile') {
+                window.location.href = '/setup-profile';
             } else if (
                 message.includes('github setup') &&
-                window.location.pathname !== '/github/setup'
+                window.location.pathname !== '/setup-github'
             ) {
-                window.location.href = '/github/setup';
+                window.location.href = '/setup-github';
             }
         }
         return Promise.reject(error);

@@ -1,0 +1,7 @@
+﻿
+> web@0.1.2 build
+> tsc && vite build
+
+[36mvite v6.3.5 [32mbuilding for production...[36m[39m
+transforming...
+[32mΓ£ô[39m 4 modules transformed.

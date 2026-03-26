@@ -10,6 +10,7 @@ export declare const TaskSchema: z.ZodObject<{
     dueDate: z.ZodOptional<z.ZodString>;
     needsClarification: z.ZodDefault<z.ZodBoolean>;
     clarificationText: z.ZodOptional<z.ZodAny>;
+    aiPrompt: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
     status: "todo" | "in_progress" | "review" | "done" | "under_verification" | "clarification" | "clarified";
     type: "task" | "bug" | "feature";
@@ -21,6 +22,7 @@ export declare const TaskSchema: z.ZodObject<{
     assigneeId?: string | undefined;
     dueDate?: string | undefined;
     clarificationText?: any;
+    aiPrompt?: string | undefined;
 }, {
     projectId: string;
     title: string;
@@ -32,5 +34,6 @@ export declare const TaskSchema: z.ZodObject<{
     dueDate?: string | undefined;
     needsClarification?: boolean | undefined;
     clarificationText?: any;
+    aiPrompt?: string | undefined;
 }>;
 export type TaskInput = z.infer<typeof TaskSchema>;

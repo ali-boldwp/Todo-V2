@@ -26,6 +26,7 @@ export interface ITask extends Document {
     dueDate?: Date;
     needsClarification?: boolean;
     clarificationText?: any;
+    aiPrompt?: string;
     githubBranch?: string;
     attachments?: Array<{
         name: string;
@@ -70,6 +71,7 @@ const TaskSchema: Schema = new Schema({
     dueDate: { type: Date },
     needsClarification: { type: Boolean, default: false },
     clarificationText: { type: Schema.Types.Mixed },
+    aiPrompt: { type: String },
     githubBranch: { type: String },
     attachments: [{
         name: { type: String, required: true },

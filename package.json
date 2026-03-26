@@ -17,8 +17,11 @@
     "test": "npm run test --workspaces --if-present"
   },
   "devDependencies": {
+    "@types/node": "^20.11.0",
     "concurrently": "^8.2.2",
-    "typescript": "^5.3.3",
-    "@types/node": "^20.11.0"
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "react-router-dom": "^7.13.2"
   }
 }

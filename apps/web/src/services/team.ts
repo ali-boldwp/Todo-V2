@@ -2,7 +2,11 @@ import api from './api';
 
 export const getTeamMembers = async () => {
     const res = await api.get('/auth/team-members');
-    return res.data;
+    const data = res.data;
+    if (Array.isArray(data)) return data;
+    if (data.members) return data.members;
+    if (data.data) return data.data;
+    return [];
 };
 
 export const createTeamMember = async (data: {

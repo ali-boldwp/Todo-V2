@@ -12,6 +12,8 @@ export interface IProject extends Document {
     members: mongoose.Types.ObjectId[];
     githubRepoOwner?: string;
     githubRepoName?: string;
+    repoLocalPath?: string;   // /var/devmanager/repos/{projectId}
+    repoClonedAt?: Date;
     dockployAppId?: string;
     dockployAutoDeploy?: boolean;
     dockployLastDeployStatus?: 'idle' | 'success' | 'failed';
@@ -49,6 +51,8 @@ const ProjectSchema: Schema = new Schema({
     members: [{ type: Schema.Types.ObjectId, ref: 'User', index: true }],
     githubRepoOwner: { type: String },
     githubRepoName: { type: String },
+    repoLocalPath: { type: String },
+    repoClonedAt: { type: Date },
     dockployAppId: { type: String },
     dockployAutoDeploy: { type: Boolean, default: false },
     dockployLastDeployStatus: { type: String, enum: ['idle', 'success', 'failed'], default: 'idle' },

@@ -1,5 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { createContext, useContext, useState, useEffect } from 'react';
 import { getProfileSetupStatus } from '../services/auth';
 
 interface User {
@@ -36,7 +35,7 @@ const parseJwt = (token: string) => {
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [user, setUser] = useState<User | null>(null);
     const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
-    const navigate = useNavigate();
+    // const navigate = useNavigate();
 
     const hydrateUserFromToken = (rawToken: string) => {
         const decoded = parseJwt(rawToken);
@@ -91,7 +90,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             profileSetupCompleted: newUser.profileSetupCompleted ?? false,
             githubSetupCompleted: newUser.githubSetupCompleted ?? false,
         });
-        navigate('/');
     };
 
     const setAuthFromToken = (newToken: string) => {
@@ -104,7 +102,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         localStorage.removeItem('token');
         setToken(null);
         setUser(null);
-        navigate('/login');
+        // navigate('/login');
     };
 
     return (

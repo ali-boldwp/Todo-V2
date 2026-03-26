@@ -822,3 +822,85 @@ export const downloadProjectDocument = async (req: AuthRequest, res: Response) =
         res.status(500).json({ message: 'Server error' });
     }
 };
+
+// ─── Antigravity Repo Setup ────────────────────────────────────────────────
+
+/**
+ * POST /projects/:id/setup-repo
+ * Clones (or pulls) the project's GitHub repo to the server local filesystem
+ * so Antigravity can use it as codebase context for AI task planning.
+ */
+export const setupProjectRepo = async (req: AuthRequest, res: Response) => {
+    try {
+        const project = await Project.findById(req.params.id)
+            .select('_id name githubRepoOwner githubRepoName repoLocalPath repoClonedAt');
+        if (!project) return res.status(404).json({ message: 'Project not found' });
+
+        if (!project.githubRepoOwner || !project.githubRepoName) {
+            return res.status(400).json({
+                message: 'Project has no linked GitHub repository. Link a repo in project settings first.',
+            });
+        }
+
+        const githubConfig = await GithubConfig.findOne();
+        if (!githubConfig?.personalAccessToken) {
+            return res.status(400).json({ message: 'GitHub integration is not connected.' });
+        }
+
+        // Dynamically import to keep repo logic separated
+        const { cloneOrPullRepo } = await import('../services/repo.service');
+
+        const repoLocalPath = await cloneOrPullRepo(
+            project._id.toString(),
+            project.githubRepoOwner,
+            project.githubRepoName,
+            githubConfig.personalAccessToken
+        );
+
+        // Store the local path on the project document
+        await Project.findByIdAndUpdate(project._id, {
+            repoLocalPath,
+            repoClonedAt: new Date(),
+        });
+
+        return res.json({
+            message: `Repo cloned successfully. Antigravity will use this codebase when planning tasks for "${project.name}".`,
+            repoLocalPath,
+            repo: `${project.githubRepoOwner}/${project.githubRepoName}`,
+        });
+    } catch (error: any) {
+        console.error('setupProjectRepo error:', error.message);
+        return res.status(500).json({ message: error?.message || 'Failed to setup repository' });
+    }
+};
+
+/**
+ * GET /projects/:id/ai-repo-status
+ * Returns whether the local repo clone exists for Antigravity.
+ */
+export const getProjectAIRepoStatus = async (req: AuthRequest, res: Response) => {
+    try {
+        const project = await Project.findById(req.params.id)
+            .select('_id name githubRepoOwner githubRepoName repoLocalPath repoClonedAt');
+        if (!project) return res.status(404).json({ message: 'Project not found' });
+
+        const { repoExists } = await import('../services/repo.service');
+        const cloned = project.repoLocalPath ? repoExists(project._id.toString()) : false;
+
+        return res.json({
+            hasGithubRepo: Boolean(project.githubRepoOwner && project.githubRepoName),
+            repo: project.githubRepoOwner
+                ? `${project.githubRepoOwner}/${project.githubRepoName}`
+                : null,
+            cloned,
+            repoLocalPath: cloned ? project.repoLocalPath : null,
+            repoClonedAt: project.repoClonedAt || null,
+            message: cloned
+                ? 'Repo is cloned. Antigravity will use it for context-aware task planning.'
+                : 'Repo not yet cloned. Call POST /setup-repo to enable AI codebase context.',
+        });
+    } catch (error: any) {
+        return res.status(500).json({ message: error?.message || 'Server error' });
+    }
+};
+

@@ -71,3 +71,20 @@ export const downloadProjectDocument = async (projectId: string, docId: string) 
     const response = await api.get(`/projects/${projectId}/documents/${docId}/download`);
     return response.data;
 };
+
+// --- Antigravity AI ---
+export const getAIStatus = async () => {
+    const response = await api.get('/ai/status');
+    return response.data;
+};
+
+export const setupProjectRepo = async (projectId: string) => {
+    const response = await api.post(`/projects/${projectId}/setup-repo`);
+    return response.data;
+};
+
+export const getProjectAIRepoStatus = async (projectId: string) => {
+    const response = await api.get(`/projects/${projectId}/ai-repo-status`);
+    return response.data;
+};
+

@@ -27,6 +27,7 @@ import clientRoutes from './routes/client.routes';
 import chatRoutes from './routes/chat.routes';
 import notificationRoutes from './routes/notification.routes';
 import ideRoutes from './routes/ide.routes';
+import aiRoutes from './routes/ai.routes';
 
 app.use(helmet());
 
@@ -66,6 +67,7 @@ app.use('/api/clients', clientRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/ide', ideRoutes);
+app.use('/api', aiRoutes);
 
 const downloadsRoot = path.resolve(__dirname, '../uploads');
 if (!fs.existsSync(downloadsRoot)) {

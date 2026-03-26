@@ -30,6 +30,7 @@ const client_routes_1 = __importDefault(require("./routes/client.routes"));
 const chat_routes_1 = __importDefault(require("./routes/chat.routes"));
 const notification_routes_1 = __importDefault(require("./routes/notification.routes"));
 const ide_routes_1 = __importDefault(require("./routes/ide.routes"));
+const ai_routes_1 = __importDefault(require("./routes/ai.routes"));
 app.use((0, helmet_1.default)());
 exports.allowedOrigins = [
     'http://localhost:3000',
@@ -66,6 +67,7 @@ app.use('/api/clients', client_routes_1.default);
 app.use('/api/chat', chat_routes_1.default);
 app.use('/api/notifications', notification_routes_1.default);
 app.use('/api/ide', ide_routes_1.default);
+app.use('/api', ai_routes_1.default);
 const downloadsRoot = path_1.default.resolve(__dirname, '../uploads');
 if (!fs_1.default.existsSync(downloadsRoot)) {
     fs_1.default.mkdirSync(downloadsRoot, { recursive: true });

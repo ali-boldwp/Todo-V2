@@ -10,4 +10,5 @@ export const TaskSchema = z.object({
     dueDate: z.string().optional(),
     needsClarification: z.boolean().default(false),
     clarificationText: z.any().optional(),
+    aiPrompt: z.string().optional(),
 });
