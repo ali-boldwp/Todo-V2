@@ -1,7 +1,14 @@
 # Build stage
-FROM node:20-alpine AS builder
+# Must match the runtime base (bookworm-slim/glibc) so native modules
+# like bcrypt compile against the same libc that the runner uses.
+FROM node:20-bookworm-slim AS builder
 
 WORKDIR /app
+
+# Install build tools needed for native addons (bcrypt, etc.)
+RUN apt-get update -qq && \
+    apt-get install -y --no-install-recommends python3 make g++ && \
+    rm -rf /var/lib/apt/lists/*
 
 # Copy dependency definitions
 COPY package.json package-lock.json ./
