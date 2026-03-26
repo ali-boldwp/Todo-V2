@@ -25,7 +25,7 @@ COPY . .
 
 # Build all workspaces
 # VITE_API_URL set to beta domain for production
-ENV VITE_API_URL=https://beta.devregion.com/api
+ENV VITE_API_URL=https://todo.devregion.com/api
 RUN npm run build
 
 # Production runtime stage
@@ -49,8 +49,8 @@ ENV JWT_SECRET=supersecretkey
 ENV REDIS_URL=redis://localhost:6379
 ENV GITHUB_CLIENT_ID="Ov23lievqX0deavCNgFA"
 ENV GITHUB_CLIENT_SECRET="24c00c09a9f1cfb1d0192375a8687fd430d11d8a"
-ENV GITHUB_SETUP_CALLBACK_URL=https://beta.devregion.com/api/auth/github/setup/callback
-ENV FRONTEND_BASE_URL=https://beta.devregion.com
+ENV GITHUB_SETUP_CALLBACK_URL=https://todo.devregion.com/api/auth/github/setup/callback
+ENV FRONTEND_BASE_URL=https://todo.devregion.com
 # Antigravity — override via docker-compose or -e flags
 ENV OPENCODE_URL=http://opencode:5001
 ENV REPOS_ROOT=/var/devmanager/repos

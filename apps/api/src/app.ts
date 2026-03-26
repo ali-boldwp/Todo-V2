@@ -36,7 +36,8 @@ export const allowedOrigins = [
     'http://localhost:3001',
     'http://localhost:3030',
     'http://localhost:5173',
-    'https://beta.devregion.com'
+    'https://beta.devregion.com',
+    'https://todo.devregion.com',
 ];
 
 app.use(cors({
@@ -79,14 +80,24 @@ app.get('/health', (_req, res) => {
     res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Serve static files in production
+// Serve React SPA in production
+// __dirname in compiled output = /app/apps/api/dist/
+// Dockerfile copies web build to  /app/apps/web/dist/
+// Allow override via STATIC_PATH env var for flexibility
 if (process.env.NODE_ENV === 'production') {
-    const buildPath = path.join(__dirname, '../../web/dist');
-    app.use(express.static(buildPath));
+    const buildPath = process.env.STATIC_PATH
+        || path.resolve(__dirname, '../../../apps/web/dist');
 
-    app.get('*', (_req, res) => {
-        res.sendFile(path.join(buildPath, 'index.html'));
-    });
+    if (!fs.existsSync(buildPath)) {
+        logger.warn({ buildPath }, 'Web dist not found — frontend will not be served. Check STATIC_PATH or Dockerfile copy step.');
+    } else {
+        logger.info({ buildPath }, 'Serving frontend static files');
+        app.use(express.static(buildPath));
+        // Fall through to index.html for client-side routing
+        app.get('*', (_req, res) => {
+            res.sendFile(path.join(buildPath, 'index.html'));
+        });
+    }
 }
 
 export default app;
