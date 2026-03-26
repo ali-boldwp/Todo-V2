@@ -55,6 +55,8 @@ ENV FRONTEND_BASE_URL=https://todo.devregion.com
 ENV OPENCODE_URL=http://opencode:5001
 ENV REPOS_ROOT=/var/devmanager/repos
 ENV OPENCODE_BASE_PORT=5010
+# Explicit absolute path to the web build — avoids __dirname resolution issues
+ENV STATIC_PATH=/app/apps/web/dist
 
 # Copy necessary files
 # Copy node_modules with compiled binaries from builder
