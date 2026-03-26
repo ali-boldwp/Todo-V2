@@ -78,6 +78,11 @@ export const getAIStatus = async () => {
     return response.data;
 };
 
+export const getAISessions = async () => {
+    const response = await api.get('/ai/sessions');
+    return response.data;
+};
+
 export const setupProjectRepo = async (projectId: string) => {
     const response = await api.post(`/projects/${projectId}/setup-repo`);
     return response.data;

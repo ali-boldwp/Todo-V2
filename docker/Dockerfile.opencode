@@ -8,8 +8,8 @@ FROM node:20-bookworm-slim
 
 # Install git (needed for repo cloning inside the container)
 RUN apt-get update -qq && \
-    apt-get install -y --no-install-recommends git ca-certificates && \
-    rm -rf /var/lib/apt/lists/*
+  apt-get install -y --no-install-recommends git ca-certificates && \
+  rm -rf /var/lib/apt/lists/*
 
 # Install OpenCode globally
 RUN npm install -g opencode-ai
@@ -28,6 +28,13 @@ WORKDIR /repos
 
 # Set HOME so opencode can find ~/.config/opencode/config.json
 ENV HOME=/root
+
+# AI provider keys — set ONE of these when deploying
+# Pass via docker-compose environment or -e flag (not hardcoded here)
+# ANTHROPIC_API_KEY, GOOGLE_API_KEY, or OPENAI_API_KEY
+ENV ANTHROPIC_API_KEY="AIzaSyBK2NrqAwxPJjeZOg-laMRPZzig_B6oD18"
+ENV GOOGLE_API_KEY="AIzaSyBK2NrqAwxPJjeZOg-laMRPZzig_B6oD18"
+ENV OPENAI_API_KEY=""
 
 # Health check — the API uses this to confirm readiness
 HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=3 \
