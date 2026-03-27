@@ -29,11 +29,10 @@ WORKDIR /repos
 # Set HOME so opencode can find ~/.config/opencode/config.json
 ENV HOME=/root
 
-# AI provider keys — set ONE of these when deploying
-# Pass via docker-compose environment or -e flag (not hardcoded here)
-# ANTHROPIC_API_KEY, GOOGLE_API_KEY, or OPENAI_API_KEY
-ENV ANTHROPIC_API_KEY="AIzaSyBK2NrqAwxPJjeZOg-laMRPZzig_B6oD18"
+# AI provider key — OpenCode reads this automatically at startup
+# Using Google Gemini as the AI provider
 ENV GOOGLE_API_KEY="AIzaSyBK2NrqAwxPJjeZOg-laMRPZzig_B6oD18"
+ENV ANTHROPIC_API_KEY=""
 ENV OPENAI_API_KEY=""
 
 # Health check — the API uses this to confirm readiness
