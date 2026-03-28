@@ -52,7 +52,7 @@ ENV GITHUB_CLIENT_SECRET="24c00c09a9f1cfb1d0192375a8687fd430d11d8a"
 ENV GITHUB_SETUP_CALLBACK_URL=https://todo.devregion.com/api/auth/github/setup/callback
 ENV FRONTEND_BASE_URL=https://todo.devregion.com
 # Antigravity — override via docker-compose or -e flags
-ENV OPENCODE_URL=http://opencode:5001
+ENV OPENCODE_URL=http://i9yqjqarpzmphdnz4ao77evn.185.185.80.245.sslip.io
 ENV REPOS_ROOT=/var/devmanager/repos
 ENV OPENCODE_BASE_PORT=5010
 # Explicit absolute path to the web build — avoids __dirname resolution issues
