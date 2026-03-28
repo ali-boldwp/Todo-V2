@@ -1,9 +1,42 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.downloadProjectDocument = exports.deleteProjectDocument = exports.uploadProjectDocument = exports.removeProjectMember = exports.triggerProjectDockployDeploy = exports.getProjectDockployStatus = exports.getProjectRepoStatus = exports.fixProjectRepo = exports.addProjectMember = exports.deleteProject = exports.updateProject = exports.getProject = exports.createProject = exports.getProjects = void 0;
+exports.getProjectAIRepoStatus = exports.setupProjectRepo = exports.downloadProjectDocument = exports.deleteProjectDocument = exports.uploadProjectDocument = exports.removeProjectMember = exports.triggerProjectDockployDeploy = exports.getProjectDockployStatus = exports.getProjectRepoStatus = exports.fixProjectRepo = exports.addProjectMember = exports.deleteProject = exports.updateProject = exports.getProject = exports.createProject = exports.getProjects = void 0;
 const Project_1 = __importDefault(require("../models/Project"));
 const GithubConfig_1 = __importDefault(require("../models/GithubConfig"));
 const DockployConfig_1 = __importDefault(require("../models/DockployConfig"));
@@ -738,3 +771,74 @@ const downloadProjectDocument = async (req, res) => {
     }
 };
 exports.downloadProjectDocument = downloadProjectDocument;
+// ─── Antigravity Repo Setup ────────────────────────────────────────────────
+/**
+ * POST /projects/:id/setup-repo
+ * Clones (or pulls) the project's GitHub repo to the server local filesystem
+ * so Antigravity can use it as codebase context for AI task planning.
+ */
+const setupProjectRepo = async (req, res) => {
+    try {
+        const project = await Project_1.default.findById(req.params.id)
+            .select('_id name githubRepoOwner githubRepoName repoLocalPath repoClonedAt');
+        if (!project)
+            return res.status(404).json({ message: 'Project not found' });
+        if (!project.githubRepoOwner || !project.githubRepoName) {
+            return res.status(400).json({
+                message: 'Project has no linked GitHub repository. Link a repo in project settings first.',
+            });
+        }
+        const githubConfig = await GithubConfig_1.default.findOne();
+        if (!githubConfig?.personalAccessToken) {
+            return res.status(400).json({ message: 'GitHub integration is not connected.' });
+        }
+        // Dynamically import to keep repo logic separated
+        const { cloneOrPullRepo } = await Promise.resolve().then(() => __importStar(require('../services/repo.service')));
+        const repoLocalPath = await cloneOrPullRepo(project._id.toString(), project.githubRepoOwner, project.githubRepoName, githubConfig.personalAccessToken);
+        // Store the local path on the project document
+        await Project_1.default.findByIdAndUpdate(project._id, {
+            repoLocalPath,
+            repoClonedAt: new Date(),
+        });
+        return res.json({
+            message: `Repo cloned successfully. Antigravity will use this codebase when planning tasks for "${project.name}".`,
+            repoLocalPath,
+            repo: `${project.githubRepoOwner}/${project.githubRepoName}`,
+        });
+    }
+    catch (error) {
+        console.error('setupProjectRepo error:', error.message);
+        return res.status(500).json({ message: error?.message || 'Failed to setup repository' });
+    }
+};
+exports.setupProjectRepo = setupProjectRepo;
+/**
+ * GET /projects/:id/ai-repo-status
+ * Returns whether the local repo clone exists for Antigravity.
+ */
+const getProjectAIRepoStatus = async (req, res) => {
+    try {
+        const project = await Project_1.default.findById(req.params.id)
+            .select('_id name githubRepoOwner githubRepoName repoLocalPath repoClonedAt');
+        if (!project)
+            return res.status(404).json({ message: 'Project not found' });
+        const { repoExists } = await Promise.resolve().then(() => __importStar(require('../services/repo.service')));
+        const cloned = project.repoLocalPath ? repoExists(project._id.toString()) : false;
+        return res.json({
+            hasGithubRepo: Boolean(project.githubRepoOwner && project.githubRepoName),
+            repo: project.githubRepoOwner
+                ? `${project.githubRepoOwner}/${project.githubRepoName}`
+                : null,
+            cloned,
+            repoLocalPath: cloned ? project.repoLocalPath : null,
+            repoClonedAt: project.repoClonedAt || null,
+            message: cloned
+                ? 'Repo is cloned. Antigravity will use it for context-aware task planning.'
+                : 'Repo not yet cloned. Call POST /setup-repo to enable AI codebase context.',
+        });
+    }
+    catch (error) {
+        return res.status(500).json({ message: error?.message || 'Server error' });
+    }
+};
+exports.getProjectAIRepoStatus = getProjectAIRepoStatus;

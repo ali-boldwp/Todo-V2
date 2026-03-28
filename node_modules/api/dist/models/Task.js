@@ -60,6 +60,7 @@ const TaskSchema = new mongoose_1.Schema({
     dueDate: { type: Date },
     needsClarification: { type: Boolean, default: false },
     clarificationText: { type: mongoose_1.Schema.Types.Mixed },
+    aiPrompt: { type: String },
     githubBranch: { type: String },
     attachments: [{
             name: { type: String, required: true },

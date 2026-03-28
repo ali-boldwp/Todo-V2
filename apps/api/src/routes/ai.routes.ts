@@ -121,7 +121,7 @@ router.post('/ai/chat', authenticate, requireProfileImageSetup, requireGithubSet
         }
 
         const Project = (await import('../models/Project')).default;
-        const projects = await Project.find(projectQuery).select('_id name repoLocalPath');
+        const projects = await Project.find(projectQuery).select('_id name repoLocalPath githubRepoOwner githubRepoName');
 
         const User = (await import('../models/User')).default;
         const teamMembers = await User.find({

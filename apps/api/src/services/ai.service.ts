@@ -1,5 +1,5 @@
 import { resolveServerUrl } from './opencode.service';
-import { repoExists, getRepoFileTree, getPackageJson } from './repo.service';
+import { repoExists, getRepoFileTree, getPackageJson, cloneOrPullRepo } from './repo.service';
 
 // OpenCode server URL used when no project repo is available (global fallback)
 const GLOBAL_OPENCODE_URL = process.env.OPENCODE_URL || 'http://localhost:5001';
@@ -30,12 +30,48 @@ interface Project {
     _id: string;
     name: string;
     repoLocalPath?: string;
+    githubRepoOwner?: string;
+    githubRepoName?: string;
 }
 
 interface TeamMember {
     _id: string;
     firstName: string;
     lastName: string;
+}
+
+async function ensureProjectRepoAvailable(currentProject: Project | undefined): Promise<Project | undefined> {
+    const projectId = currentProject?._id?.toString?.();
+    if (!currentProject || !projectId) return currentProject;
+    if (repoExists(projectId)) return currentProject;
+    if (!currentProject.githubRepoOwner || !currentProject.githubRepoName) return currentProject;
+
+    try {
+        const GithubConfig = (await import('../models/GithubConfig')).default;
+        const githubConfig = await GithubConfig.findOne().select('personalAccessToken');
+        if (!githubConfig?.personalAccessToken) return currentProject;
+
+        const repoLocalPath = await cloneOrPullRepo(
+            projectId,
+            currentProject.githubRepoOwner,
+            currentProject.githubRepoName,
+            githubConfig.personalAccessToken
+        );
+
+        const ProjectModel = (await import('../models/Project')).default;
+        await ProjectModel.findByIdAndUpdate(projectId, {
+            repoLocalPath,
+            repoClonedAt: new Date(),
+        });
+
+        return {
+            ...currentProject,
+            repoLocalPath,
+        };
+    } catch (error: any) {
+        console.warn(`[ai.service] Failed to auto-setup repo for project ${projectId}:`, error?.message || error);
+        return currentProject;
+    }
 }
 
 // ─── OpenCode API helpers ────────────────────────────────────────────────────
@@ -238,9 +274,11 @@ export async function chatWithAI(
 
     try {
         // Find the current project (if any)
-        const currentProject = projectId
+        let currentProject = projectId
             ? projects.find(p => p._id.toString() === projectId.toString())
             : undefined;
+
+        currentProject = await ensureProjectRepoAvailable(currentProject);
 
         // Resolve the best OpenCode server (per-project with repo context, or global fallback)
         opencodeBase = await resolveServerUrl(
