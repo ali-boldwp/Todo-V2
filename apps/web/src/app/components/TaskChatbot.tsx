@@ -46,65 +46,17 @@ export function TaskChatbot({ isOpen, onClose, onTaskCreated, initialProjectId }
   const { data: teamMembers = [] } = useQuery({ queryKey: ['teamMembers'], queryFn: getTeamMembers });
 
   const [messages, setMessages] = useState<Message[]>([]);
-  // Store messages in AI format for the backend conversation history
   const [chatHistory, setChatHistory] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
-  const [taskDraft, setTaskDraft] = useState<any>(EMPTY_DRAFT(initialProjectId));
+  const [taskDraft, setTaskDraft] = useState<any>(EMPTY_DRAFT());
   const [taskCreated, setTaskCreated] = useState(false);
 
+  const selectedProjectId = taskDraft.projectId || '';
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-
-  useEffect(() => { scrollToBottom(); }, [messages]);
-
-  // Greet on open
-  useEffect(() => {
-    if (isOpen && messages.length === 0) {
-      addMessage('assistant', `Hi ${user?.firstName || 'there'}! 👋 Describe the task you want to create and I'll plan the full implementation for you.`, [
-        'Add user authentication',
-        'Fix a bug',
-        'Build a new feature',
-        'Refactor existing code',
-      ]);
-    }
-  }, [isOpen]);
-
-  // Reset on close
-  useEffect(() => {
-    if (!isOpen) {
-      setTimeout(() => {
-        setMessages([]);
-        setChatHistory([]);
-        setTaskDraft(EMPTY_DRAFT(initialProjectId));
-        setTaskCreated(false);
-        setInput('');
-      }, 300);
-    }
-  }, [isOpen]);
-
-  const createTaskMutation = useMutation({
-    mutationFn: (data: any) => createTask(data),
-    onSuccess: (createdTask) => {
-      queryClient.invalidateQueries({ queryKey: ['tasks', taskDraft.projectId] });
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      setTaskCreated(true);
-      addMessage('assistant',
-        `✅ Task created! **"${taskDraft.title}"** is now in your project with the full implementation plan attached. You can find it in the tasks list.`,
-        ['Create another task', 'Close']
-      );
-      onTaskCreated?.(createdTask);
-    },
-    onError: (err: any) => {
-      addMessage('assistant',
-        `❌ Failed to create task: ${err?.response?.data?.message || 'Something went wrong. Please try again.'}`,
-        ['Try again'],
-        true
-      );
-    },
-  });
 
   const addMessage = (
     role: 'user' | 'assistant',
@@ -112,17 +64,82 @@ export function TaskChatbot({ isOpen, onClose, onTaskCreated, initialProjectId }
     suggestions?: string[],
     isError?: boolean
   ) => {
-    setMessages(prev => [...prev, {
-      id: Date.now().toString(),
-      role,
-      content,
-      timestamp: new Date(),
-      suggestions,
-      isError,
-    }]);
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        role,
+        content,
+        timestamp: new Date(),
+        suggestions,
+        isError,
+      },
+    ]);
   };
 
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  useEffect(() => {
+    if (isOpen && messages.length === 0) {
+      addMessage(
+        'assistant',
+        `Hi ${user?.firstName || 'there'}! Please select a project first, then describe the task you want to create and I'll plan the full implementation for you.`
+      );
+    }
+  }, [isOpen, messages.length, user?.firstName]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setTimeout(() => {
+        setMessages([]);
+        setChatHistory([]);
+        setTaskDraft(EMPTY_DRAFT());
+        setTaskCreated(false);
+        setInput('');
+      }, 300);
+    }
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || !initialProjectId || selectedProjectId) return;
+    const initialProject = projects.find((project: any) => project._id === initialProjectId);
+    if (!initialProject) return;
+
+    setTaskDraft(EMPTY_DRAFT(initialProjectId));
+    addMessage(
+      'assistant',
+      `Project selected: ${initialProject.name}. Now tell me what task you want to create.`,
+      ['Add user authentication', 'Fix a bug', 'Build a new feature', 'Refactor existing code']
+    );
+  }, [initialProjectId, isOpen, projects, selectedProjectId]);
+
+  const createTaskMutation = useMutation({
+    mutationFn: (data: any) => createTask(data),
+    onSuccess: (createdTask) => {
+      queryClient.invalidateQueries({ queryKey: ['tasks', taskDraft.projectId] });
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      setTaskCreated(true);
+      addMessage(
+        'assistant',
+        `Task created! "${taskDraft.title}" is now in your project with the full implementation plan attached. You can find it in the tasks list.`,
+        ['Create another task', 'Close']
+      );
+      onTaskCreated?.(createdTask);
+    },
+    onError: (err: any) => {
+      addMessage(
+        'assistant',
+        `Failed to create task: ${err?.response?.data?.message || 'Something went wrong. Please try again.'}`,
+        ['Try again'],
+        true
+      );
+    },
+  });
+
   const callAI = async (userMessage: string) => {
+    if (!selectedProjectId) return;
     setIsTyping(true);
 
     const newHistory = [
@@ -134,30 +151,28 @@ export function TaskChatbot({ isOpen, onClose, onTaskCreated, initialProjectId }
       const { data } = await api.post('/ai/chat', {
         messages: newHistory,
         taskDraft,
-        projectId: initialProjectId,
+        projectId: selectedProjectId,
       });
 
       const { reply, taskDraft: updatedDraft, action, suggestions } = data;
 
-      // Update history with assistant reply
       setChatHistory([...newHistory, { role: 'assistant', content: reply }]);
 
-      // Merge draft (keep non-null/non-empty values)
       const merged = { ...taskDraft };
       if (updatedDraft) {
-        Object.entries(updatedDraft).forEach(([k, v]) => {
-          if (v !== null && v !== '' && v !== undefined) merged[k] = v;
+        Object.entries(updatedDraft).forEach(([key, value]) => {
+          if (value !== null && value !== '' && value !== undefined) merged[key] = value;
         });
       }
+      merged.projectId = merged.projectId || selectedProjectId;
       setTaskDraft(merged);
 
       addMessage('assistant', reply, suggestions);
 
-      // If AI says create, actually save the task
       if (action === 'create') {
         const payload: any = {
           title: merged.title,
-          projectId: merged.projectId || initialProjectId,
+          projectId: merged.projectId || selectedProjectId,
           priority: merged.priority || 'medium',
           status: 'todo',
           description: merged.description || '',
@@ -169,7 +184,8 @@ export function TaskChatbot({ isOpen, onClose, onTaskCreated, initialProjectId }
         createTaskMutation.mutate(payload);
       }
     } catch (err: any) {
-      addMessage('assistant',
+      addMessage(
+        'assistant',
         `Sorry, I couldn't reach the AI service. ${err?.response?.data?.message || 'Please check your connection and try again.'}`,
         undefined,
         true
@@ -179,23 +195,43 @@ export function TaskChatbot({ isOpen, onClose, onTaskCreated, initialProjectId }
     }
   };
 
+  const handleProjectChange = (projectId: string) => {
+    const project = projects.find((item: any) => item._id === projectId);
+    const hadConversation = chatHistory.length > 0 || taskDraft.title || taskDraft.description;
+
+    setTaskDraft(EMPTY_DRAFT(projectId || undefined));
+    setTaskCreated(false);
+    setInput('');
+
+    if (hadConversation) {
+      setMessages([]);
+      setChatHistory([]);
+    }
+
+    if (!projectId || !project) return;
+
+    addMessage(
+      'assistant',
+      `Project selected: ${project.name}. Now tell me what task you want to create.`,
+      ['Add user authentication', 'Fix a bug', 'Build a new feature', 'Refactor existing code']
+    );
+    setTimeout(() => inputRef.current?.focus(), 0);
+  };
+
   const handleSend = async () => {
     const userMessage = input.trim();
-    if (!userMessage || isTyping) return;
+    if (!userMessage || isTyping || !selectedProjectId) return;
 
     setInput('');
     addMessage('user', userMessage);
 
-    // Handle post-creation commands
     if (taskCreated) {
       if (userMessage.toLowerCase().includes('another')) {
         setMessages([]);
         setChatHistory([]);
-        setTaskDraft(EMPTY_DRAFT(initialProjectId));
+        setTaskDraft(EMPTY_DRAFT());
         setTaskCreated(false);
-        addMessage('assistant', `Let's create another task! What would you like to build?`, [
-          'New feature', 'Bug fix', 'Refactor', 'Documentation',
-        ]);
+        addMessage('assistant', 'Let\'s create another task. Please select a project first.');
         return;
       }
       if (userMessage.toLowerCase() === 'close') {
@@ -208,23 +244,28 @@ export function TaskChatbot({ isOpen, onClose, onTaskCreated, initialProjectId }
   };
 
   const handleSuggestionClick = (suggestion: string) => {
-    if (suggestion.toLowerCase() === 'close') { onClose(); return; }
+    if (suggestion.toLowerCase() === 'close') {
+      onClose();
+      return;
+    }
+    if (!selectedProjectId) return;
     setInput(suggestion);
     inputRef.current?.focus();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSend();
+    }
   };
 
-  const assignee = teamMembers.find((m: any) => m._id === taskDraft.assigneeId);
-  const project = projects.find((p: any) => p._id === (taskDraft.projectId || initialProjectId));
+  const assignee = teamMembers.find((member: any) => member._id === taskDraft.assigneeId);
+  const project = projects.find((item: any) => item._id === selectedProjectId);
 
   return (
     <Drawer isOpen={isOpen} onClose={onClose} title="AI Task Planner" size="xl">
       <div className="flex flex-col h-full -m-4">
-
-        {/* Header */}
         <div className="bg-gradient-to-r from-indigo-600 to-purple-600 p-6 text-white">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-12 h-12 rounded-xl bg-white/20 backdrop-blur flex items-center justify-center">
@@ -232,11 +273,29 @@ export function TaskChatbot({ isOpen, onClose, onTaskCreated, initialProjectId }
             </div>
             <div>
               <h2 className="text-lg font-bold">AI Task Planner</h2>
-              <p className="text-sm text-indigo-100">Describe your task → get a full implementation plan</p>
+              <p className="text-sm text-indigo-100">Select a project first, then describe your task</p>
             </div>
           </div>
 
-          {/* Live draft preview */}
+          <div className="mt-4">
+            <label className="block text-[10px] font-bold text-indigo-200 uppercase tracking-widest mb-1.5">
+              Project
+            </label>
+            <select
+              value={selectedProjectId}
+              onChange={(e) => handleProjectChange(e.target.value)}
+              disabled={isTyping || createTaskMutation.isPending || projects.length === 0}
+              className="w-full rounded-xl border border-white/20 bg-white/10 px-4 py-3 text-sm text-white backdrop-blur outline-none disabled:opacity-60"
+            >
+              <option value="" className="text-slate-900">Select a project</option>
+              {projects.map((projectOption: any) => (
+                <option key={projectOption._id} value={projectOption._id} className="text-slate-900">
+                  {projectOption.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
           {taskDraft.title && (
             <div className="mt-4 p-3 rounded-xl bg-white/10 backdrop-blur border border-white/20 space-y-1">
               <p className="text-[10px] font-bold text-indigo-200 uppercase tracking-widest mb-1.5">Draft</p>
@@ -270,14 +329,13 @@ export function TaskChatbot({ isOpen, onClose, onTaskCreated, initialProjectId }
               )}
               {taskDraft.description && (
                 <div className="mt-2 text-[10px] text-indigo-200 bg-white/10 rounded-lg px-2 py-1.5 border border-white/10">
-                  📋 Implementation plan generated
+                  Implementation plan generated
                 </div>
               )}
             </div>
           )}
         </div>
 
-        {/* Messages */}
         <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-slate-50">
           {messages.map((msg) => (
             <div key={msg.id}>
@@ -306,16 +364,15 @@ export function TaskChatbot({ isOpen, onClose, onTaskCreated, initialProjectId }
                 )}
               </div>
 
-              {/* Suggestions */}
               {msg.role === 'assistant' && msg.suggestions && (
                 <div className="flex flex-wrap gap-2 mt-3 ml-11">
-                  {msg.suggestions.map((s, i) => (
+                  {msg.suggestions.map((suggestion, index) => (
                     <button
-                      key={i}
-                      onClick={() => handleSuggestionClick(s)}
+                      key={index}
+                      onClick={() => handleSuggestionClick(suggestion)}
                       className="px-3 py-1.5 rounded-full bg-white border-2 border-indigo-200 text-indigo-700 text-xs font-semibold hover:bg-indigo-50 hover:border-indigo-300 transition-all"
                     >
-                      {s}
+                      {suggestion}
                     </button>
                   ))}
                 </div>
@@ -323,7 +380,6 @@ export function TaskChatbot({ isOpen, onClose, onTaskCreated, initialProjectId }
             </div>
           ))}
 
-          {/* Typing indicator */}
           {(isTyping || createTaskMutation.isPending) && (
             <div className="flex gap-3">
               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white">
@@ -341,7 +397,6 @@ export function TaskChatbot({ isOpen, onClose, onTaskCreated, initialProjectId }
           <div ref={messagesEndRef} />
         </div>
 
-        {/* Input */}
         <div className="border-t-2 border-slate-200 bg-white p-4">
           <div className="flex items-end gap-3">
             <div className="flex-1">
@@ -351,21 +406,23 @@ export function TaskChatbot({ isOpen, onClose, onTaskCreated, initialProjectId }
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Describe a task, e.g. 'Add JWT auth to the API'"
-                disabled={isTyping || createTaskMutation.isPending}
+                placeholder={selectedProjectId ? "Describe a task, e.g. 'Add JWT auth to the API'" : 'Select a project to start'}
+                disabled={isTyping || createTaskMutation.isPending || !selectedProjectId}
                 className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 outline-none transition-all text-sm disabled:opacity-50"
               />
             </div>
             <button
               onClick={handleSend}
-              disabled={!input.trim() || isTyping || createTaskMutation.isPending}
+              disabled={!input.trim() || isTyping || createTaskMutation.isPending || !selectedProjectId}
               className="h-12 w-12 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed text-white flex items-center justify-center shadow-lg hover:shadow-xl transition-all"
             >
               <Send className="w-5 h-5" />
             </button>
           </div>
           <p className="text-xs text-slate-400 mt-2 text-center">
-            AI will plan the implementation and create the task for you
+            {selectedProjectId
+              ? 'AI will plan the implementation and create the task for you'
+              : 'Select a project before starting the AI task planner'}
           </p>
         </div>
       </div>
