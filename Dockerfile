@@ -37,6 +37,8 @@ RUN apt-get update -qq && \
     apt-get install -y --no-install-recommends git ca-certificates && \
     rm -rf /var/lib/apt/lists/*
 
+RUN npm install -g opencode-ai
+
 # Create repos directory for Antigravity codebase context
 RUN mkdir -p /var/devmanager/repos
 
@@ -52,9 +54,11 @@ ENV GITHUB_CLIENT_SECRET="24c00c09a9f1cfb1d0192375a8687fd430d11d8a"
 ENV GITHUB_SETUP_CALLBACK_URL=https://todo.devregion.com/api/auth/github/setup/callback
 ENV FRONTEND_BASE_URL=https://todo.devregion.com
 # Antigravity — override via docker-compose or -e flags
-ENV OPENCODE_URL=http://i9yqjqarpzmphdnz4ao77evn.185.185.80.245.sslip.io
+ENV OPENCODE_URL=http://127.0.0.1:5001
 ENV REPOS_ROOT=/var/devmanager/repos
 ENV OPENCODE_BASE_PORT=5010
+ENV OPENCODE_PORT=5001
+ENV START_OPENCODE=1
 # Explicit absolute path to the web build — avoids __dirname resolution issues
 ENV STATIC_PATH=/app/apps/web/dist
 
@@ -78,9 +82,12 @@ COPY --from=builder /app/apps/web/dist ./apps/web/dist
 
 # Shared packages
 COPY --from=builder /app/packages ./packages
+COPY docker/start-with-opencode.sh ./docker/start-with-opencode.sh
+
+RUN chmod +x ./docker/start-with-opencode.sh
 
 # Expose port
 EXPOSE 3030
 
-# Start API
-CMD ["node", "apps/api/dist/index.js"]
+# Start OpenCode and the API in the same container.
+CMD ["./docker/start-with-opencode.sh"]
