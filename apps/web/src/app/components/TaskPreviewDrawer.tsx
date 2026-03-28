@@ -20,7 +20,6 @@ import { useQuery } from '@tanstack/react-query';
 import { getProjects } from '../../services/core';
 import { getTeamMembers } from '../../services/team';
 import { OutputData } from '@editorjs/editorjs';
-import { useAuth } from '../../context/AuthContext';
 import { CodexTaskChat } from './CodexTaskChat';
 
 interface TaskPreviewDrawerProps {
@@ -30,7 +29,6 @@ interface TaskPreviewDrawerProps {
 }
 
 export function TaskPreviewDrawer({ isOpen, onClose, task }: TaskPreviewDrawerProps) {
-  const { user } = useAuth();
   const [description, setDescription] = useState<OutputData>(task?.description || { blocks: [] });
   const [isTaskRunning, setIsTaskRunning] = useState(task?.activeWorkerId ? true : false);
   const [isPaused, setIsPaused] = useState(task?.isWorkPaused || false);
@@ -96,7 +94,6 @@ export function TaskPreviewDrawer({ isOpen, onClose, task }: TaskPreviewDrawerPr
       taskTitle: task.title,
       projectId: task.projectId,
       assignee: assignee ? `${assignee.firstName} ${assignee.lastName}` : 'Unassigned',
-      startedBy: `${user?.firstName} ${user?.lastName}`,
       isAIGenerated: !!task.aiPrompt,
       timestamp: new Date().toISOString()
     });
@@ -104,8 +101,7 @@ export function TaskPreviewDrawer({ isOpen, onClose, task }: TaskPreviewDrawerPr
     console.log('📡 MESSAGE COMMAND CENTER: Task status updated', {
       event: 'TASK_STARTED',
       taskId: task._id,
-      userId: user?.id,
-      message: `${user?.firstName} ${user?.lastName} started working on \"${task.title}\"`,
+      message: `Task "${task.title}" was started from the preview drawer`,
       timestamp: new Date().toISOString()
     });
 
@@ -134,15 +130,13 @@ export function TaskPreviewDrawer({ isOpen, onClose, task }: TaskPreviewDrawerPr
     console.log('⏸️ CODEX: Task paused', {
       taskId: task._id,
       taskTitle: task.title,
-      pausedBy: `${user?.firstName} ${user?.lastName}`,
       timestamp: new Date().toISOString()
     });
     
     console.log('📡 MESSAGE COMMAND CENTER: Task paused', {
       event: 'TASK_PAUSED',
       taskId: task._id,
-      userId: user?.id,
-      message: `${user?.firstName} ${user?.lastName} paused work on "${task.title}"`,
+      message: `Task "${task.title}" was paused from the preview drawer`,
       timestamp: new Date().toISOString()
     });
   };
@@ -153,15 +147,13 @@ export function TaskPreviewDrawer({ isOpen, onClose, task }: TaskPreviewDrawerPr
     console.log('▶️ CODEX: Task resumed', {
       taskId: task._id,
       taskTitle: task.title,
-      resumedBy: `${user?.firstName} ${user?.lastName}`,
       timestamp: new Date().toISOString()
     });
     
     console.log('📡 MESSAGE COMMAND CENTER: Task resumed', {
       event: 'TASK_RESUMED',
       taskId: task._id,
-      userId: user?.id,
-      message: `${user?.firstName} ${user?.lastName} resumed work on "${task.title}"`,
+      message: `Task "${task.title}" was resumed from the preview drawer`,
       timestamp: new Date().toISOString()
     });
   };
@@ -173,7 +165,6 @@ export function TaskPreviewDrawer({ isOpen, onClose, task }: TaskPreviewDrawerPr
     console.log('✅ CODEX: Task finished', {
       taskId: task._id,
       taskTitle: task.title,
-      finishedBy: `${user?.firstName} ${user?.lastName}`,
       totalTime: task.totalWorkedSeconds ? formatDuration(task.totalWorkedSeconds) : '0h 0m',
       timestamp: new Date().toISOString()
     });
@@ -181,8 +172,7 @@ export function TaskPreviewDrawer({ isOpen, onClose, task }: TaskPreviewDrawerPr
     console.log('📡 MESSAGE COMMAND CENTER: Task completed', {
       event: 'TASK_FINISHED',
       taskId: task._id,
-      userId: user?.id,
-      message: `${user?.firstName} ${user?.lastName} finished "${task.title}" and moved it to verification`,
+      message: `Task "${task.title}" was finished from the preview drawer`,
       timestamp: new Date().toISOString()
     });
   };
