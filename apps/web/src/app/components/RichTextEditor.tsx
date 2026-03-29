@@ -4,7 +4,7 @@ import EditorJS, { OutputData } from '@editorjs/editorjs';
 import Header from '@editorjs/header';
 // @ts-ignore
 import List from '@editorjs/list';
-import { useAuth } from '../context/MockAuthContext';
+import { useAuth } from '../../context/AuthContext';
 import './RichTextEditor.css';
 
 interface RichTextEditorProps {

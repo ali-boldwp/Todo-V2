@@ -14,11 +14,7 @@ export interface IProject extends Document {
     githubRepoName?: string;
     repoLocalPath?: string;   // /var/devmanager/repos/{projectId}
     repoClonedAt?: Date;
-    dockployAppId?: string;
-    dockployAutoDeploy?: boolean;
-    dockployLastDeployStatus?: 'idle' | 'success' | 'failed';
-    dockployLastDeployAt?: Date;
-    dockployLastDeployMessage?: string;
+
     projectUrl?: string;
     devWebsiteUrl?: string;
     accessAccounts: {
@@ -53,11 +49,7 @@ const ProjectSchema: Schema = new Schema({
     githubRepoName: { type: String },
     repoLocalPath: { type: String },
     repoClonedAt: { type: Date },
-    dockployAppId: { type: String },
-    dockployAutoDeploy: { type: Boolean, default: false },
-    dockployLastDeployStatus: { type: String, enum: ['idle', 'success', 'failed'], default: 'idle' },
-    dockployLastDeployAt: { type: Date },
-    dockployLastDeployMessage: { type: String },
+
     projectUrl: { type: String },
     devWebsiteUrl: { type: String },
     accessAccounts: [{

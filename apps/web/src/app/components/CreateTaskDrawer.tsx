@@ -3,12 +3,15 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { X, Save, Loader2 } from 'lucide-react';
 import { createTask, updateTask } from '../../services/task';
 import { getTeamMembers } from '../../services/team';
+import RichTextEditor from './RichTextEditor';
+import { OutputData } from '@editorjs/editorjs';
 
 interface CreateTaskDrawerProps {
     isOpen: boolean;
     onClose: () => void;
     task?: any; // if provided, we're editing
     initialProjectId?: string;
+    initialStatus?: string;
 }
 
 const PRIORITY_OPTIONS = ['low', 'medium', 'high'] as const;
@@ -20,17 +23,18 @@ const STATUS_OPTIONS = [
     { value: 'done', label: 'Done' },
 ] as const;
 
-export function CreateTaskDrawer({ isOpen, onClose, task, initialProjectId }: CreateTaskDrawerProps) {
+export function CreateTaskDrawer({ isOpen, onClose, task, initialProjectId, initialStatus = 'todo' }: CreateTaskDrawerProps) {
     const queryClient = useQueryClient();
     const isEditing = !!task;
 
     const [title, setTitle] = useState('');
     const [priority, setPriority] = useState<string>('medium');
-    const [status, setStatus] = useState<string>('todo');
+    const [status, setStatus] = useState<string>(initialStatus);
     const [assigneeId, setAssigneeId] = useState('');
     const [verifierId, setVerifierId] = useState('');
     const [dueDate, setDueDate] = useState('');
     const [estimatedHours, setEstimatedHours] = useState('');
+    const [description, setDescription] = useState<OutputData | any>({ blocks: [] });
 
     const { data: teamMembers = [] } = useQuery({
         queryKey: ['teamMembers'],
@@ -48,16 +52,18 @@ export function CreateTaskDrawer({ isOpen, onClose, task, initialProjectId }: Cr
             setVerifierId(task.verifierId?._id || task.verifierId || '');
             setDueDate(task.dueDate ? task.dueDate.slice(0, 10) : '');
             setEstimatedHours(task.estimatedHours ? String(task.estimatedHours) : '');
+            setDescription(task.description || { blocks: [] });
         } else {
             setTitle('');
             setPriority('medium');
-            setStatus('todo');
+            setStatus(initialStatus);
             setAssigneeId('');
             setVerifierId('');
             setDueDate('');
             setEstimatedHours('');
+            setDescription({ blocks: [] });
         }
-    }, [task, isOpen]);
+    }, [task, isOpen, initialStatus]);
 
     const createMutation = useMutation({
         mutationFn: (data: any) => createTask(data),
@@ -93,6 +99,9 @@ export function CreateTaskDrawer({ isOpen, onClose, task, initialProjectId }: Cr
         if (verifierId) payload.verifierId = verifierId;
         if (dueDate) payload.dueDate = dueDate;
         if (estimatedHours) payload.estimatedHours = Number(estimatedHours);
+        if (description && description.blocks && description.blocks.length > 0) {
+            payload.description = description;
+        }
 
         if (isEditing) {
             updateMutation.mutate(payload);
@@ -234,6 +243,21 @@ export function CreateTaskDrawer({ isOpen, onClose, task, initialProjectId }: Cr
                                     onChange={(e) => setEstimatedHours(e.target.value)}
                                     placeholder="e.g. 4"
                                     className="w-full h-10 px-3 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Description */}
+                        <div>
+                            <label className="block text-xs font-semibold text-gray-600 mb-1.5 uppercase tracking-wide">
+                                Description
+                            </label>
+                            <div className="bg-white rounded-lg border border-gray-200 p-3 min-h-[150px]">
+                                <RichTextEditor
+                                    holder="create-task-drawer-desc-v2"
+                                    data={description}
+                                    onChange={setDescription}
+                                    placeholder="Add task details..."
                                 />
                             </div>
                         </div>

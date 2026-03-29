@@ -13,6 +13,7 @@ import {
   TrendingUp,
   FileText,
 } from 'lucide-react';
+import RichTextEditor from '../components/RichTextEditor';
 
 export function ProjectOverviewPage() {
   const { id } = useParams<{ id: string }>();
@@ -218,17 +219,28 @@ export function ProjectOverviewPage() {
               <FileText className="w-5 h-5 text-slate-600" />
               <h2 className="text-lg font-bold text-slate-900">Overview Notes</h2>
             </div>
-            <div className="prose prose-sm max-w-none">
-              <p className="text-slate-600">
-                Use this section to document project goals, architecture decisions, and important
-                notes. This acts as the source of truth for the entire project team.
-              </p>
-              <div className="mt-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
-                <p className="text-sm text-slate-500 italic">
-                  No description added yet. Click edit to add project documentation.
-                </p>
+            {project.description && typeof project.description !== 'string' && project.description.blocks?.length > 0 ? (
+              <div className="bg-slate-50 rounded-lg border border-slate-200 p-4">
+                <RichTextEditor
+                  holder={`project-overview-desc-${id}`}
+                  data={project.description}
+                  onChange={() => {}}
+                  readOnly={true}
+                />
               </div>
-            </div>
+            ) : (
+              <div className="prose prose-sm max-w-none">
+                <p className="text-slate-600">
+                  Use this section to document project goals, architecture decisions, and important
+                  notes. This acts as the source of truth for the entire project team.
+                </p>
+                <div className="mt-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
+                  <p className="text-sm text-slate-500 italic">
+                    No description added yet. Go to settings to add project documentation.
+                  </p>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>

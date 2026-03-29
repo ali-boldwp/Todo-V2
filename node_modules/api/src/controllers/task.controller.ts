@@ -1032,15 +1032,10 @@ export const startTaskWork = async (req: AuthRequest, res: Response) => {
         }
 
         const project = task.projectId
-            ? await Project.findById(task.projectId).select('name githubRepoOwner githubRepoName dockployAppId')
+            ? await Project.findById(task.projectId).select('name githubRepoOwner githubRepoName')
             : null;
         if (!project) {
             return res.status(400).json({ message: 'Task project not found. Cannot start task.' });
-        }
-        if (!project.dockployAppId) {
-            return res.status(400).json({
-                message: 'Project is not configured for Docker (Dockploy). Configure Docker setup before starting this task.'
-            });
         }
         if (!project.githubRepoOwner || !project.githubRepoName) {
             return res.status(400).json({
@@ -1071,6 +1066,7 @@ export const startTaskWork = async (req: AuthRequest, res: Response) => {
 
         const patch: any = {
             activeWorkerId: req.user!.userId,
+            assigneeId: req.user!.userId,
             status: 'in_progress',
             isWorkPaused: false,
             finishedAt: null

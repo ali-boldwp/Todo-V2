@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { createClient, getClients } from '../controllers/client.controller';
-import { createProject, getProject, getProjects, updateProject, deleteProject, addProjectMember, removeProjectMember, uploadProjectDocument, deleteProjectDocument, downloadProjectDocument, fixProjectRepo, getProjectRepoStatus, getProjectDockployStatus, triggerProjectDockployDeploy, setupProjectRepo, getProjectAIRepoStatus } from '../controllers/project.controller';
+import { createProject, getProject, getProjects, updateProject, deleteProject, addProjectMember, removeProjectMember, uploadProjectDocument, deleteProjectDocument, downloadProjectDocument, fixProjectRepo, getProjectRepoStatus, setupProjectRepo, getProjectAIRepoStatus } from '../controllers/project.controller';
 import { authenticate, authorize, requireAdmin, requireGithubSetupForTeamMembers, requireProfileImageSetup } from '../middleware/auth';
 
 const router = Router();
@@ -19,8 +19,6 @@ router.get('/projects/:id', getProject);
 router.delete('/projects/:id', requireAdmin, deleteProject);
 router.post('/projects/:id/fix-repo', requireAdmin, fixProjectRepo);
 router.get('/projects/:id/repo-status', requireAdmin, getProjectRepoStatus);
-router.get('/projects/:id/dockploy-status', requireAdmin, getProjectDockployStatus);
-router.post('/projects/:id/dockploy-deploy', requireAdmin, triggerProjectDockployDeploy);
 
 // Antigravity repo setup
 router.post('/projects/:id/setup-repo', requireAdmin, setupProjectRepo);

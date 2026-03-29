@@ -46,15 +46,6 @@ export const getProjectRepoStatus = async (id: string) => {
     return response.data;
 };
 
-export const getProjectDockployStatus = async (id: string) => {
-    const response = await api.get(`/projects/${id}/dockploy-status`);
-    return response.data;
-};
-
-export const triggerProjectDockployDeploy = async (id: string, payload?: any) => {
-    const response = await api.post(`/projects/${id}/dockploy-deploy`, payload || {});
-    return response.data;
-};
 
 // --- Documents ---
 export const uploadProjectDocument = async (projectId: string, data: { title: string; description: string; fileData: string; mimeType: string; fileName: string }) => {

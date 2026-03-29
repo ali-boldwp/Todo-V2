@@ -24,6 +24,8 @@ import {
   FileText,
   Eye,
 } from 'lucide-react';
+import RichTextEditor from '../components/RichTextEditor';
+import { OutputData } from '@editorjs/editorjs';
 
 export function ProjectSettingsPage() {
   const { id } = useParams<{ id: string }>();
@@ -34,7 +36,7 @@ export function ProjectSettingsPage() {
   const { data: mockClients = [] } = useQuery({ queryKey: ['clients'], queryFn: getClients });
 
   const [projectName, setProjectName] = useState('');
-  const [projectDescription, setProjectDescription] = useState('');
+  const [projectDescription, setProjectDescription] = useState<OutputData | any>({ blocks: [] });
   const [projectStatus, setProjectStatus] = useState('active');
   const [selectedClient, setSelectedClient] = useState('');
   const [projectColor, setProjectColor] = useState('#6366f1');
@@ -50,7 +52,7 @@ export function ProjectSettingsPage() {
   useEffect(() => {
     if (project) {
       setProjectName(project.name || '');
-      setProjectDescription(project.description || '');
+      setProjectDescription(typeof project.description === 'string' ? { blocks: [] } : (project.description || { blocks: [] }));
       setProjectStatus(project.status || 'active');
       setSelectedClient(project.clientId || '');
     }
@@ -220,13 +222,14 @@ export function ProjectSettingsPage() {
                 <label className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-2 block">
                   Description
                 </label>
-                <textarea
-                  value={projectDescription}
-                  onChange={(e) => setProjectDescription(e.target.value)}
-                  rows={4}
-                  className="w-full px-4 py-3 rounded-xl border-2 border-slate-200 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-100 outline-none transition-all text-sm resize-none"
-                  placeholder="Describe your project..."
-                />
+                <div className="bg-slate-50 rounded-xl border-2 border-slate-200 p-4 min-h-[120px]">
+                  <RichTextEditor
+                    holder={`project-settings-desc-${id}`}
+                    data={projectDescription}
+                    onChange={setProjectDescription}
+                    placeholder="Describe your project..."
+                  />
+                </div>
               </div>
 
               {/* Client Selection */}

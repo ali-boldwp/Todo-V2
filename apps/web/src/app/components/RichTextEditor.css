@@ -62,3 +62,16 @@
 .codex-editor--empty .ce-block:first-child .ce-paragraph:before {
     margin-top: 0 !important;
 }
+
+/* Fix EditorJS popover and settings positioning in drawers */
+.codex-editor .ce-popover {
+    left: 0 !important;
+    right: auto !important;
+    max-width: 90vw !important;
+    width: 250px !important;
+}
+
+.codex-editor .ce-settings {
+    left: 0 !important;
+    right: auto !important;
+}
