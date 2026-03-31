@@ -14,6 +14,7 @@ import {
   Sparkles,
   Table as TableIcon,
   LayoutGrid,
+  Clock,
 } from 'lucide-react';
 import { TaskPreviewDrawer } from '../components/TaskPreviewDrawer';
 import { TaskChatbot } from '../components/TaskChatbot';
@@ -120,6 +121,13 @@ export function ProjectTasksPage() {
     }
   };
 
+  const formatDuration = (seconds?: number) => {
+    if (!seconds) return '0h 0m';
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    return `${hours}h ${minutes}m`;
+  };
+
   return (
     <div className="min-h-full">
       {/* Page Header */}
@@ -216,6 +224,7 @@ export function ProjectTasksPage() {
                     <th className="px-6 py-4">Priority</th>
                     <th className="px-6 py-4">Assignee</th>
                     <th className="px-6 py-4">Due Date</th>
+                    <th className="px-6 py-4">Time Spent</th>
                     <th className="px-6 py-4 text-right">Actions</th>
                   </tr>
                 </thead>
@@ -275,6 +284,12 @@ export function ProjectTasksPage() {
                         ) : (
                           <span className="text-sm text-slate-400 italic">No date</span>
                         )}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="flex items-center gap-1.5 text-sm text-slate-600" title="Time Spent">
+                          <Clock className="w-4 h-4 text-slate-400" />
+                          <span>{formatDuration(task.totalWorkedSeconds)}</span>
+                        </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-right">
                         <button
@@ -379,6 +394,12 @@ export function ProjectTasksPage() {
                                     <span>{new Date(task.dueDate).toLocaleDateString()}</span>
                                   </div>
                                 )}
+
+                                {/* Time Spent */}
+                                <div className="flex items-center gap-1 text-xs text-slate-500" title="Time Spent">
+                                  <Clock className="w-3 h-3" />
+                                  <span>{formatDuration(task.totalWorkedSeconds)}</span>
+                                </div>
 
                                 {/* Assignee */}
                                 {task.assigneeId && (

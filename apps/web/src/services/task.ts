@@ -46,8 +46,8 @@ export const resumeTaskWork = async (id: string) => {
     return response.data;
 };
 
-export const finishTaskWork = async (id: string) => {
-    const response = await api.post(`/tasks/${id}/finish`);
+export const finishTaskWork = async (id: string, force?: boolean) => {
+    const response = await api.post(`/tasks/${id}/finish`, { force });
     return response.data;
 };
 

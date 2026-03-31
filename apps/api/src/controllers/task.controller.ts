@@ -719,8 +719,10 @@ export const createTask = async (req: AuthRequest, res: Response) => {
         // Create task. Branch is created when someone starts work.
         const task = await Task.create({ ...validated });
         await appendTaskActivity(task._id, {
-            action: 'task_created',
-            message: `Task "${task.title}" created.`,
+            action: validated.aiPrompt ? 'task_created_with_ai' : 'task_created',
+            message: validated.aiPrompt 
+                ? `Task "${task.title}" was successfully created with AI.`
+                : `Task "${task.title}" created.`,
             actor: req.user,
             metadata: {
                 status: task.status,
@@ -729,6 +731,17 @@ export const createTask = async (req: AuthRequest, res: Response) => {
                 assigneeId: task.assigneeId || null,
             }
         });
+
+        if (validated.aiPrompt) {
+            await appendTaskActivity(task._id, {
+                action: 'ai_generation_log',
+                message: `🤖 AI Context & Prompt:\n"${validated.aiPrompt}"`,
+                actor: req.user,
+                metadata: {
+                    aiPrompt: validated.aiPrompt,
+                }
+            });
+        }
 
         res.status(201).json(toTaskResponse(task, req.user!));
         await notifyTaskAudience({
@@ -1037,32 +1050,8 @@ export const startTaskWork = async (req: AuthRequest, res: Response) => {
         if (!project) {
             return res.status(400).json({ message: 'Task project not found. Cannot start task.' });
         }
-        if (!project.githubRepoOwner || !project.githubRepoName) {
-            return res.status(400).json({
-                message: 'Project repository is not linked. Link GitHub repository before starting this task.'
-            });
-        }
-
         const config = await GithubConfig.findOne().select('personalAccessToken');
-        if (!config?.personalAccessToken) {
-            return res.status(400).json({ message: 'GitHub integration is not connected. Cannot start task.' });
-        }
-
         const user = await User.findById(req.user!.userId).select('githubUsername');
-        if (!user?.githubUsername) {
-            return res.status(400).json({ message: 'Your GitHub account is not set up. Cannot start task.' });
-        }
-
-        const repoAccessible = await hasGithubRepoAccess(
-            config.personalAccessToken,
-            project.githubRepoOwner,
-            project.githubRepoName
-        );
-        if (!repoAccessible) {
-            return res.status(400).json({
-                message: `GitHub repository access check failed for ${project.githubRepoOwner}/${project.githubRepoName}.`
-            });
-        }
 
         const patch: any = {
             activeWorkerId: req.user!.userId,
@@ -1075,35 +1064,52 @@ export const startTaskWork = async (req: AuthRequest, res: Response) => {
         if (!task.workStartedAt) patch.workStartedAt = now;
         if (task.isWorkPaused || !task.lastWorkStartedAt) patch.lastWorkStartedAt = now;
 
-        // On start: create user-specific GitHub branch for this task.
-        if (task.projectId && !task.githubBranch) {
-            const taskTitleSegment = getTaskTitleBranchSegment(task);
-            const branchName = `tasks/${slugify(user.githubUsername)}/inprogress/${taskTitleSegment}`;
-            const createdBranch = await createGithubBranch(
+        // On start: create user-specific GitHub branch for this task (if GitHub is configured).
+        if (
+            task.projectId && 
+            !task.githubBranch &&
+            project.githubRepoOwner &&
+            project.githubRepoName &&
+            config?.personalAccessToken &&
+            user?.githubUsername
+        ) {
+            const repoAccessible = await hasGithubRepoAccess(
                 config.personalAccessToken,
-                project.githubRepoOwner!,
-                project.githubRepoName!,
-                branchName,
-                'dev'
+                project.githubRepoOwner,
+                project.githubRepoName
             );
+            
+            if (repoAccessible) {
+                const taskTitleSegment = getTaskTitleBranchSegment(task);
+                const branchName = `tasks/${slugify(user.githubUsername)}/inprogress/${taskTitleSegment}`;
+                const createdBranch = await createGithubBranch(
+                    config.personalAccessToken,
+                    project.githubRepoOwner,
+                    project.githubRepoName,
+                    branchName,
+                    'dev'
+                );
 
-            if (!createdBranch) {
-                return res.status(400).json({ message: 'Failed to create GitHub branch. Task was not started.' });
+                if (createdBranch) {
+                    const restricted = await restrictBranchToUser(
+                        config.personalAccessToken,
+                        project.githubRepoOwner,
+                        project.githubRepoName,
+                        createdBranch,
+                        user.githubUsername
+                    );
+                    if (!restricted) {
+                        // Best effort only: do not block task start if branch restriction cannot be enforced.
+                        console.warn(`Proceeding without branch restriction for ${createdBranch}`);
+                    }
+
+                    patch.githubBranch = createdBranch;
+                } else {
+                    console.warn(`Failed to create GitHub branch for task ${task.id}. Task will start without branch.`);
+                }
+            } else {
+                console.warn(`GitHub repository access check failed for ${project.githubRepoOwner}/${project.githubRepoName}.`);
             }
-
-            const restricted = await restrictBranchToUser(
-                config.personalAccessToken,
-                project.githubRepoOwner!,
-                project.githubRepoName!,
-                createdBranch,
-                user.githubUsername
-            );
-            if (!restricted) {
-                // Best effort only: do not block task start if branch restriction cannot be enforced.
-                console.warn(`Proceeding without branch restriction for ${createdBranch}`);
-            }
-
-            patch.githubBranch = createdBranch;
         }
 
         const updated = await Task.findByIdAndUpdate(req.params.id, patch, { new: true })
@@ -1291,18 +1297,26 @@ export const finishTaskWork = async (req: AuthRequest, res: Response) => {
             branch: task.githubBranch || null,
         };
 
+        const { force } = req.body;
         const project = await Project.findById(task.projectId).select('members githubRepoOwner githubRepoName');
-        if (task.githubBranch && project?.githubRepoOwner && project?.githubRepoName) {
+        
+        const shouldAttemptMerge = !(force && req.user!.role === 'admin') && 
+            task.githubBranch && project?.githubRepoOwner && project?.githubRepoName;
+
+        if (shouldAttemptMerge && task.githubBranch) {
             const config = await GithubConfig.findOne().select('personalAccessToken');
             if (!config?.personalAccessToken) {
                 return res.status(400).json({ message: 'GitHub integration is not connected. Cannot complete task merge flow.' });
             }
 
-            const taskBranch = task.githubBranch;
+            const taskBranch = task.githubBranch as string;
+            const repoOwner = project!.githubRepoOwner as string;
+            const repoName = project!.githubRepoName as string;
+
             const changesComparedToDev = await compareGithubBranches(
                 config.personalAccessToken,
-                project.githubRepoOwner,
-                project.githubRepoName,
+                repoOwner,
+                repoName,
                 'dev',
                 taskBranch
             );
@@ -1322,8 +1336,8 @@ export const finishTaskWork = async (req: AuthRequest, res: Response) => {
             }
             if (changesComparedToDev.aheadBy === 0) {
                 const compareUrl = buildGithubCompareUrl(
-                    project.githubRepoOwner,
-                    project.githubRepoName,
+                    repoOwner,
+                    repoName,
                     'dev',
                     taskBranch
                 );
@@ -1345,8 +1359,8 @@ export const finishTaskWork = async (req: AuthRequest, res: Response) => {
 
             const mergeDevToTask = await mergeGithubBranches(
                 config.personalAccessToken,
-                project.githubRepoOwner,
-                project.githubRepoName,
+                repoOwner,
+                repoName,
                 taskBranch,
                 'dev'
             );
@@ -1372,14 +1386,14 @@ export const finishTaskWork = async (req: AuthRequest, res: Response) => {
                 });
                 if (mergeDevToTask.conflict) {
                     const compareUrl = buildGithubCompareUrl(
-                        project.githubRepoOwner,
-                        project.githubRepoName,
+                        repoOwner,
+                        repoName,
                         taskBranch,
                         'dev'
                     );
                     const pullRequestUrl = buildGithubPullRequestUrl(
-                        project.githubRepoOwner,
-                        project.githubRepoName,
+                        repoOwner,
+                        repoName,
                         taskBranch,
                         'dev'
                     );
@@ -1404,8 +1418,8 @@ export const finishTaskWork = async (req: AuthRequest, res: Response) => {
 
             const mergeTaskToDev = await mergeGithubBranches(
                 config.personalAccessToken,
-                project.githubRepoOwner,
-                project.githubRepoName,
+                repoOwner,
+                repoName,
                 'dev',
                 taskBranch
             );
@@ -1431,14 +1445,14 @@ export const finishTaskWork = async (req: AuthRequest, res: Response) => {
                 });
                 if (mergeTaskToDev.conflict) {
                     const compareUrl = buildGithubCompareUrl(
-                        project.githubRepoOwner,
-                        project.githubRepoName,
+                        repoOwner,
+                        repoName,
                         'dev',
                         taskBranch
                     );
                     const pullRequestUrl = buildGithubPullRequestUrl(
-                        project.githubRepoOwner,
-                        project.githubRepoName,
+                        repoOwner,
+                        repoName,
                         'dev',
                         taskBranch
                     );
@@ -1464,9 +1478,11 @@ export const finishTaskWork = async (req: AuthRequest, res: Response) => {
 
         if (req.user!.role === 'admin') {
             let nextGithubBranch = task.githubBranch;
-            if (task.githubBranch && project?.githubRepoOwner && project?.githubRepoName) {
+            if (shouldAttemptMerge && task.githubBranch) {
                 const config = await GithubConfig.findOne().select('personalAccessToken');
                 if (config?.personalAccessToken) {
+                    const repoOwner = project!.githubRepoOwner as string;
+                    const repoName = project!.githubRepoName as string;
                     const parts = task.githubBranch.split('/');
                     const branchUsername = parts.length >= 2 && parts[0] === 'tasks' ? parts[1] : null;
                     if (branchUsername) {
@@ -1474,8 +1490,8 @@ export const finishTaskWork = async (req: AuthRequest, res: Response) => {
                         const targetDoneBranch = `tasks/${branchUsername}/done/${taskTitleSegment}`;
                         const moved = await moveGithubBranch(
                             config.personalAccessToken,
-                            project.githubRepoOwner,
-                            project.githubRepoName,
+                            repoOwner,
+                            repoName,
                             task.githubBranch,
                             targetDoneBranch
                         );

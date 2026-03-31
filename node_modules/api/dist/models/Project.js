@@ -48,11 +48,6 @@ const ProjectSchema = new mongoose_1.Schema({
     githubRepoName: { type: String },
     repoLocalPath: { type: String },
     repoClonedAt: { type: Date },
-    dockployAppId: { type: String },
-    dockployAutoDeploy: { type: Boolean, default: false },
-    dockployLastDeployStatus: { type: String, enum: ['idle', 'success', 'failed'], default: 'idle' },
-    dockployLastDeployAt: { type: Date },
-    dockployLastDeployMessage: { type: String },
     projectUrl: { type: String },
     devWebsiteUrl: { type: String },
     accessAccounts: [{

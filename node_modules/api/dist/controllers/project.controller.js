@@ -36,19 +36,16 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getProjectAIRepoStatus = exports.setupProjectRepo = exports.downloadProjectDocument = exports.deleteProjectDocument = exports.uploadProjectDocument = exports.removeProjectMember = exports.triggerProjectDockployDeploy = exports.getProjectDockployStatus = exports.getProjectRepoStatus = exports.fixProjectRepo = exports.addProjectMember = exports.deleteProject = exports.updateProject = exports.getProject = exports.createProject = exports.getProjects = void 0;
+exports.getProjectAIRepoStatus = exports.setupProjectRepo = exports.downloadProjectDocument = exports.deleteProjectDocument = exports.uploadProjectDocument = exports.removeProjectMember = exports.getProjectRepoStatus = exports.fixProjectRepo = exports.addProjectMember = exports.deleteProject = exports.updateProject = exports.getProject = exports.createProject = exports.getProjects = void 0;
 const Project_1 = __importDefault(require("../models/Project"));
 const GithubConfig_1 = __importDefault(require("../models/GithubConfig"));
-const DockployConfig_1 = __importDefault(require("../models/DockployConfig"));
 const User_1 = __importDefault(require("../models/User"));
 const project_schema_1 = require("@devmanager/shared/dist/project.schema");
 const socket_1 = require("../socket");
 const notification_service_1 = require("../services/notification.service");
 const ACCESS_FIELD_KEYS = ['projectUrl', 'devWebsiteUrl', 'accessAccounts'];
-const DOCKPLOY_FIELD_KEYS = ['dockployAppId', 'dockployAutoDeploy'];
 const MEMBER_ALLOWED_UPDATE_KEYS = ['description'];
 const hasProjectAccessFieldInPayload = (payload) => ACCESS_FIELD_KEYS.some((key) => Object.prototype.hasOwnProperty.call(payload || {}, key));
-const hasDockployFieldInPayload = (payload) => DOCKPLOY_FIELD_KEYS.some((key) => Object.prototype.hasOwnProperty.call(payload || {}, key));
 const hasAnyKeyOutsideAllowList = (payload, allowed) => {
     const keys = Object.keys(payload || {});
     return keys.some((key) => !allowed.includes(key));
@@ -148,48 +145,6 @@ const ensureDevBranch = async (token, owner, repo) => {
     await createBranch(token, owner, repo, 'dev', defaultBranchSha);
     return { created: true, branch: 'dev' };
 };
-const applyDockployPathTemplate = (template, appId) => template.replace('{appId}', encodeURIComponent(appId));
-const isAscii = (value) => /^[\x00-\x7F]*$/.test(value);
-const requestDockploy = async (config, path, method, body) => {
-    if (!config.apiToken || !isAscii(config.apiToken)) {
-        return {
-            ok: false,
-            status: 400,
-            data: { message: 'Invalid Dockploy API token format. Re-save token as plain ASCII text.' }
-        };
-    }
-    const url = `${config.baseUrl}${path.startsWith('/') ? path : `/${path}`}`;
-    const authHeaderCandidates = [
-        { Authorization: `Bearer ${config.apiToken}` },
-        { 'x-api-key': config.apiToken },
-        { Authorization: config.apiToken },
-    ];
-    let lastResult = { ok: false, status: 500, data: null };
-    for (const authHeaders of authHeaderCandidates) {
-        const response = await fetch(url, {
-            method,
-            headers: {
-                ...authHeaders,
-                'Content-Type': 'application/json',
-                Accept: 'application/json',
-            },
-            body: method === 'POST' ? JSON.stringify(body || {}) : undefined,
-        });
-        const text = await response.text();
-        let parsed = null;
-        try {
-            parsed = text ? JSON.parse(text) : null;
-        }
-        catch {
-            parsed = text || null;
-        }
-        const result = { ok: response.ok, status: response.status, data: parsed };
-        if (result.ok)
-            return result;
-        lastResult = result;
-    }
-    return lastResult;
-};
 const getProjects = async (req, res) => {
     try {
         const query = {};
@@ -266,8 +221,6 @@ const createProject = async (req, res) => {
             clientId,
             githubRepoOwner,
             githubRepoName,
-            dockployAppId: req.body?.dockployAppId ? String(req.body.dockployAppId).trim() : undefined,
-            dockployAutoDeploy: Boolean(req.body?.dockployAutoDeploy),
         });
         await notifyProjectAudience({
             project,
@@ -327,9 +280,6 @@ const updateProject = async (req, res) => {
         if (req.user.role !== 'admin' && hasProjectAccessFieldInPayload(req.body || {})) {
             return res.status(403).json({ message: 'Only admin can update project access credentials' });
         }
-        if (req.user.role !== 'admin' && hasDockployFieldInPayload(req.body || {})) {
-            return res.status(403).json({ message: 'Only admin can update Dockploy settings' });
-        }
         const validated = project_schema_1.ProjectSchema.partial().parse(req.body);
         let githubRepoOwner = validated.githubRepoOwner;
         let githubRepoName = validated.githubRepoName;
@@ -369,12 +319,6 @@ const updateProject = async (req, res) => {
         }
         if (Object.prototype.hasOwnProperty.call(validated, 'githubRepoName')) {
             updateData.githubRepoName = githubRepoName || undefined;
-        }
-        if (Object.prototype.hasOwnProperty.call(req.body || {}, 'dockployAppId')) {
-            updateData.dockployAppId = req.body?.dockployAppId ? String(req.body.dockployAppId).trim() : undefined;
-        }
-        if (Object.prototype.hasOwnProperty.call(req.body || {}, 'dockployAutoDeploy')) {
-            updateData.dockployAutoDeploy = Boolean(req.body?.dockployAutoDeploy);
         }
         if (updateData.githubRepoOwner && updateData.githubRepoName) {
             const config = await GithubConfig_1.default.findOne();
@@ -552,101 +496,6 @@ const getProjectRepoStatus = async (req, res) => {
     }
 };
 exports.getProjectRepoStatus = getProjectRepoStatus;
-const getProjectDockployStatus = async (req, res) => {
-    try {
-        if (req.user.role !== 'admin') {
-            return res.status(403).json({ message: 'Only admins can view Dockploy status' });
-        }
-        const project = await Project_1.default.findById(req.params.id).select('_id name dockployAppId dockployLastDeployStatus dockployLastDeployAt dockployLastDeployMessage');
-        if (!project)
-            return res.status(404).json({ message: 'Project not found' });
-        if (!project.dockployAppId) {
-            return res.json({
-                connected: false,
-                message: 'Project is not linked to a Dockploy app',
-                lastDeployStatus: project.dockployLastDeployStatus || 'idle',
-                lastDeployAt: project.dockployLastDeployAt || null,
-                lastDeployMessage: project.dockployLastDeployMessage || null,
-            });
-        }
-        const config = await DockployConfig_1.default.findOne();
-        if (!config?.baseUrl || !config?.apiToken) {
-            return res.status(400).json({ message: 'Dockploy integration is not configured globally' });
-        }
-        const template = config.appStatusPathTemplate || '/api/application/{appId}';
-        const path = applyDockployPathTemplate(template, project.dockployAppId);
-        const result = await requestDockploy({ baseUrl: config.baseUrl, apiToken: config.apiToken, appStatusPathTemplate: config.appStatusPathTemplate }, path, 'GET');
-        return res.json({
-            connected: result.ok,
-            dockployAppId: project.dockployAppId,
-            dockployResponse: result.data,
-            message: result.ok ? 'Dockploy app reachable' : `Dockploy app check failed (${result.status})`,
-            lastDeployStatus: project.dockployLastDeployStatus || 'idle',
-            lastDeployAt: project.dockployLastDeployAt || null,
-            lastDeployMessage: project.dockployLastDeployMessage || null,
-        });
-    }
-    catch (error) {
-        return res.status(500).json({ message: error?.message || 'Failed to fetch Dockploy status' });
-    }
-};
-exports.getProjectDockployStatus = getProjectDockployStatus;
-const triggerProjectDockployDeploy = async (req, res) => {
-    try {
-        if (req.user.role !== 'admin') {
-            return res.status(403).json({ message: 'Only admins can trigger Dockploy deploys' });
-        }
-        const project = await Project_1.default.findById(req.params.id);
-        if (!project)
-            return res.status(404).json({ message: 'Project not found' });
-        if (!project.dockployAppId) {
-            return res.status(400).json({ message: 'Project is not linked to a Dockploy app' });
-        }
-        const config = await DockployConfig_1.default.findOne();
-        if (!config?.baseUrl || !config?.apiToken) {
-            return res.status(400).json({ message: 'Dockploy integration is not configured globally' });
-        }
-        const template = config.deployPathTemplate || '/api/application/{appId}/deploy';
-        const path = applyDockployPathTemplate(template, project.dockployAppId);
-        const result = await requestDockploy({ baseUrl: config.baseUrl, apiToken: config.apiToken, deployPathTemplate: config.deployPathTemplate }, path, 'POST', req.body || {});
-        project.dockployLastDeployAt = new Date();
-        project.dockployLastDeployStatus = result.ok ? 'success' : 'failed';
-        project.dockployLastDeployMessage = result.ok
-            ? 'Deploy triggered successfully'
-            : `Deploy failed (${result.status})`;
-        await project.save();
-        if (!result.ok) {
-            await notifyProjectAudience({
-                project,
-                actorUserId: req.user.userId,
-                type: 'project_deploy_failed',
-                title: 'Deploy Failed',
-                message: `Deploy failed for project "${project.name}".`,
-            });
-            return res.status(400).json({
-                message: `Failed to trigger deploy (${result.status})`,
-                dockployResponse: result.data,
-            });
-        }
-        await notifyProjectAudience({
-            project,
-            actorUserId: req.user.userId,
-            type: 'project_deploy_triggered',
-            title: 'Deploy Triggered',
-            message: `Deploy was triggered for project "${project.name}".`,
-        });
-        return res.json({
-            message: 'Deploy triggered successfully',
-            dockployResponse: result.data,
-            lastDeployAt: project.dockployLastDeployAt,
-            lastDeployStatus: project.dockployLastDeployStatus,
-        });
-    }
-    catch (error) {
-        return res.status(500).json({ message: error?.message || 'Failed to trigger deploy' });
-    }
-};
-exports.triggerProjectDockployDeploy = triggerProjectDockployDeploy;
 const removeProjectMember = async (req, res) => {
     try {
         const project = await Project_1.default.findByIdAndUpdate(req.params.id, { $pull: { members: req.params.userId } }, { new: true }).populate('members', 'firstName lastName email role');

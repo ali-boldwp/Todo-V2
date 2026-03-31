@@ -899,37 +899,16 @@ const startTaskWork = async (req, res) => {
             });
         }
         const project = task.projectId
-            ? await Project_1.default.findById(task.projectId).select('name githubRepoOwner githubRepoName dockployAppId')
+            ? await Project_1.default.findById(task.projectId).select('name githubRepoOwner githubRepoName')
             : null;
         if (!project) {
             return res.status(400).json({ message: 'Task project not found. Cannot start task.' });
         }
-        if (!project.dockployAppId) {
-            return res.status(400).json({
-                message: 'Project is not configured for Docker (Dockploy). Configure Docker setup before starting this task.'
-            });
-        }
-        if (!project.githubRepoOwner || !project.githubRepoName) {
-            return res.status(400).json({
-                message: 'Project repository is not linked. Link GitHub repository before starting this task.'
-            });
-        }
         const config = await GithubConfig_1.default.findOne().select('personalAccessToken');
-        if (!config?.personalAccessToken) {
-            return res.status(400).json({ message: 'GitHub integration is not connected. Cannot start task.' });
-        }
         const user = await User_1.default.findById(req.user.userId).select('githubUsername');
-        if (!user?.githubUsername) {
-            return res.status(400).json({ message: 'Your GitHub account is not set up. Cannot start task.' });
-        }
-        const repoAccessible = await hasGithubRepoAccess(config.personalAccessToken, project.githubRepoOwner, project.githubRepoName);
-        if (!repoAccessible) {
-            return res.status(400).json({
-                message: `GitHub repository access check failed for ${project.githubRepoOwner}/${project.githubRepoName}.`
-            });
-        }
         const patch = {
             activeWorkerId: req.user.userId,
+            assigneeId: req.user.userId,
             status: 'in_progress',
             isWorkPaused: false,
             finishedAt: null
@@ -939,20 +918,33 @@ const startTaskWork = async (req, res) => {
             patch.workStartedAt = now;
         if (task.isWorkPaused || !task.lastWorkStartedAt)
             patch.lastWorkStartedAt = now;
-        // On start: create user-specific GitHub branch for this task.
-        if (task.projectId && !task.githubBranch) {
-            const taskTitleSegment = getTaskTitleBranchSegment(task);
-            const branchName = `tasks/${slugify(user.githubUsername)}/inprogress/${taskTitleSegment}`;
-            const createdBranch = await createGithubBranch(config.personalAccessToken, project.githubRepoOwner, project.githubRepoName, branchName, 'dev');
-            if (!createdBranch) {
-                return res.status(400).json({ message: 'Failed to create GitHub branch. Task was not started.' });
+        // On start: create user-specific GitHub branch for this task (if GitHub is configured).
+        if (task.projectId &&
+            !task.githubBranch &&
+            project.githubRepoOwner &&
+            project.githubRepoName &&
+            config?.personalAccessToken &&
+            user?.githubUsername) {
+            const repoAccessible = await hasGithubRepoAccess(config.personalAccessToken, project.githubRepoOwner, project.githubRepoName);
+            if (repoAccessible) {
+                const taskTitleSegment = getTaskTitleBranchSegment(task);
+                const branchName = `tasks/${slugify(user.githubUsername)}/inprogress/${taskTitleSegment}`;
+                const createdBranch = await createGithubBranch(config.personalAccessToken, project.githubRepoOwner, project.githubRepoName, branchName, 'dev');
+                if (createdBranch) {
+                    const restricted = await restrictBranchToUser(config.personalAccessToken, project.githubRepoOwner, project.githubRepoName, createdBranch, user.githubUsername);
+                    if (!restricted) {
+                        // Best effort only: do not block task start if branch restriction cannot be enforced.
+                        console.warn(`Proceeding without branch restriction for ${createdBranch}`);
+                    }
+                    patch.githubBranch = createdBranch;
+                }
+                else {
+                    console.warn(`Failed to create GitHub branch for task ${task.id}. Task will start without branch.`);
+                }
             }
-            const restricted = await restrictBranchToUser(config.personalAccessToken, project.githubRepoOwner, project.githubRepoName, createdBranch, user.githubUsername);
-            if (!restricted) {
-                // Best effort only: do not block task start if branch restriction cannot be enforced.
-                console.warn(`Proceeding without branch restriction for ${createdBranch}`);
+            else {
+                console.warn(`GitHub repository access check failed for ${project.githubRepoOwner}/${project.githubRepoName}.`);
             }
-            patch.githubBranch = createdBranch;
         }
         const updated = await Task_1.default.findByIdAndUpdate(req.params.id, patch, { new: true })
             .populate('assigneeId', 'firstName lastName email')
