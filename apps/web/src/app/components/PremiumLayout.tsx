@@ -25,6 +25,7 @@ import {
   Clock,
   Github,
   Sparkles,
+  Briefcase,
 } from 'lucide-react';
 
 // Simple avatar component
@@ -151,6 +152,7 @@ const ProjectItem = ({ project, isOpen, onToggle }: { project: any; isOpen: bool
       {isOpen && (
         <div className="ml-8 mr-3 mt-1 mb-2 space-y-0.5 pl-3 border-l-2 border-slate-100">
           {PROJECT_SUB_ITEMS.map((item) => {
+            if (item.path === 'settings' && user?.role !== 'admin') return null;
             const to = `${basePath}/${item.path}`;
             const isActive = location.pathname === to || location.pathname.startsWith(`${to}/`);
             const hasAlert = item.path === 'verifications' && projectPendingForMe > 0;
@@ -248,10 +250,11 @@ export function PremiumLayout() {
           <SidebarItem to="/projects" icon={Star} label="All Projects" />
           <SidebarItem to="/verifications" icon={CheckSquare} label="Verifications" alert={myPendingVerifications > 0} />
           <SidebarItem to="/team" icon={Users} label="Team" />
-          <SidebarItem to="/time" icon={Clock} label="Time Tracking" />
-          <SidebarItem to="/chat" icon={MessageCircle} label="Chat" />
-          <SidebarItem to="/github-settings" icon={Github} label="GitHub" />
-          <SidebarItem to="/ai-settings" icon={Sparkles} label="AI Settings" />
+          {user?.role === 'admin' && <SidebarItem to="/clients" icon={Briefcase} label="Clients" />}
+          {user?.role !== 'client' && <SidebarItem to="/time" icon={Clock} label="Time Tracking" />}
+          {user?.role !== 'client' && <SidebarItem to="/chat" icon={MessageCircle} label="Chat" />}
+          {user?.role === 'admin' && <SidebarItem to="/github-settings" icon={Github} label="GitHub" />}
+          {user?.role === 'admin' && <SidebarItem to="/ai-settings" icon={Sparkles} label="AI Settings" />}
 
           <SectionLabel label="Projects" onAdd={() => navigate('/projects?action=create')} />
           <div className="space-y-1">

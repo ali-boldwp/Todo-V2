@@ -147,49 +147,117 @@ export function TaskChatbot({ isOpen, onClose, onTaskCreated, initialProjectId }
       { role: 'user' as const, content: userMessage },
     ];
 
+    const assistantMessageId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: assistantMessageId,
+        role: 'assistant',
+        content: '',
+        timestamp: new Date(),
+      },
+    ]);
+
     try {
-      const { data } = await api.post('/ai/chat', {
-        messages: newHistory,
-        taskDraft,
-        projectId: selectedProjectId,
+      const token = localStorage.getItem('token');
+      // Resolve base URL from API client config or env
+      const baseUrl = import.meta.env.VITE_API_URL || '/api';
+      
+      const res = await fetch(`${baseUrl}/ai/chat/stream`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+        },
+        body: JSON.stringify({
+          messages: newHistory,
+          taskDraft,
+          projectId: selectedProjectId,
+        }),
       });
 
-      const { reply, taskDraft: updatedDraft, action, suggestions } = data;
-
-      setChatHistory([...newHistory, { role: 'assistant', content: reply }]);
-
-      const merged = { ...taskDraft };
-      if (updatedDraft) {
-        Object.entries(updatedDraft).forEach(([key, value]) => {
-          if (value !== null && value !== '' && value !== undefined) merged[key] = value;
-        });
+      if (!res.ok) {
+        throw new Error('Failed to connect to AI server');
       }
-      merged.projectId = merged.projectId || selectedProjectId;
-      setTaskDraft(merged);
 
-      addMessage('assistant', reply, suggestions);
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder('utf-8');
+      if (!reader) throw new Error('No reader available');
 
-      if (action === 'create') {
-        const payload: any = {
-          title: merged.title,
-          projectId: merged.projectId || selectedProjectId,
-          priority: merged.priority || 'medium',
-          status: 'todo',
-          description: merged.description || '',
-          aiPrompt: merged.aiPrompt || userMessage,
-        };
-        if (merged.assigneeId) payload.assigneeId = merged.assigneeId;
-        if (merged.dueDate) payload.dueDate = merged.dueDate;
+      let accumulatedReply = '';
+      let isDone = false;
+      let streamedBuffer = '';
 
-        createTaskMutation.mutate(payload);
+      while (!isDone) {
+        const { value, done } = await reader.read();
+        if (done) {
+          isDone = true;
+          break;
+        }
+
+        streamedBuffer += decoder.decode(value, { stream: true });
+        const lines = streamedBuffer.split('\n');
+        
+        // Keep the last partial line in the buffer
+        streamedBuffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.trim().startsWith('data:')) {
+            const dataStr = line.substring(line.indexOf('data:') + 5).trim();
+            if (!dataStr) continue;
+
+            try {
+              const parsed = JSON.parse(dataStr);
+              if (parsed.type === 'error') {
+                throw new Error(parsed.error);
+              } else if (parsed.type === 'delta') {
+                accumulatedReply += parsed.text;
+                // Live update the message content
+                setMessages((prev) => prev.map(m => m.id === assistantMessageId ? { ...m, content: accumulatedReply } : m));
+              } else if (parsed.type === 'done') {
+                const { reply, taskDraft: updatedDraft, action, suggestions } = parsed.parsed;
+                
+                setChatHistory([...newHistory, { role: 'assistant', content: reply }]);
+
+                const merged = { ...taskDraft };
+                if (updatedDraft) {
+                  Object.entries(updatedDraft).forEach(([key, value]) => {
+                    if (value !== null && value !== '' && value !== undefined) merged[key] = value;
+                  });
+                }
+                merged.projectId = merged.projectId || selectedProjectId;
+                setTaskDraft(merged);
+
+                setMessages((prev) => prev.map(m => m.id === assistantMessageId ? { ...m, content: reply, suggestions } : m));
+
+                if (action && action.toLowerCase().includes('create')) {
+                  const payload: any = {
+                    title: merged.title || 'AI Task',
+                    projectId: merged.projectId || selectedProjectId,
+                    priority: merged.priority || 'medium',
+                    status: 'todo',
+                    description: merged.description || '',
+                    aiPrompt: merged.aiPrompt || userMessage,
+                  };
+                  if (merged.assigneeId) payload.assigneeId = merged.assigneeId;
+                  if (merged.dueDate) payload.dueDate = merged.dueDate;
+
+                  createTaskMutation.mutate(payload);
+                }
+              }
+            } catch (e) {
+              // Ignore split JSON errors from partial data lines if any occur across chunks
+            }
+          }
+        }
       }
+
     } catch (err: any) {
-      addMessage(
-        'assistant',
-        `Sorry, I couldn't reach the AI service. ${err?.response?.data?.message || 'Please check your connection and try again.'}`,
-        undefined,
-        true
-      );
+      setMessages((prev) => prev.map(m => m.id === assistantMessageId ? { 
+          ...m, 
+          content: `Sorry, I couldn't reach the AI service. ${err?.message || 'Please try again.'}`,
+          isError: true 
+      } : m));
     } finally {
       setIsTyping(false);
     }

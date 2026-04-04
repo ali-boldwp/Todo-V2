@@ -4,7 +4,7 @@ export interface ITask extends Document {
     projectId: mongoose.Types.ObjectId;
     title: string;
     description?: string;
-    status: 'todo' | 'in_progress' | 'review' | 'done' | 'under_verification' | 'clarification' | 'clarified';
+    status: 'todo' | 'in_progress' | 'review' | 'done' | 'under_verification' | 'clarification' | 'clarified' | 'client_approval';
     priority: 'low' | 'medium' | 'high' | 'urgent';
     type: 'task' | 'bug' | 'feature';
     assigneeId?: mongoose.Types.ObjectId;
@@ -22,6 +22,9 @@ export interface ITask extends Document {
     verifierId?: mongoose.Types.ObjectId;
     verificationComment?: string;
     verificationDecidedAt?: Date;
+    clientApprovalStatus?: 'none' | 'pending' | 'approved' | 'rejected';
+    clientApprovalComment?: string;
+    clientApprovalDecidedAt?: Date;
     isMergedToDev?: boolean;
     dueDate?: Date;
     needsClarification?: boolean;
@@ -49,7 +52,7 @@ const TaskSchema: Schema = new Schema({
     projectId: { type: Schema.Types.ObjectId, ref: 'Project', required: true, index: true },
     title: { type: String, required: true },
     description: { type: Schema.Types.Mixed },
-    status: { type: String, enum: ['todo', 'in_progress', 'review', 'done', 'under_verification', 'clarification', 'clarified'], default: 'todo' },
+    status: { type: String, enum: ['todo', 'in_progress', 'review', 'done', 'under_verification', 'clarification', 'clarified', 'client_approval'], default: 'todo' },
     priority: { type: String, enum: ['low', 'medium', 'high', 'urgent'], default: 'medium' },
     type: { type: String, enum: ['task', 'bug', 'feature'], default: 'task' },
     assigneeId: { type: Schema.Types.ObjectId, ref: 'User' },
@@ -67,6 +70,9 @@ const TaskSchema: Schema = new Schema({
     verifierId: { type: Schema.Types.ObjectId, ref: 'User' },
     verificationComment: { type: String },
     verificationDecidedAt: { type: Date },
+    clientApprovalStatus: { type: String, enum: ['none', 'pending', 'approved', 'rejected'], default: 'none' },
+    clientApprovalComment: { type: String },
+    clientApprovalDecidedAt: { type: Date },
     isMergedToDev: { type: Boolean, default: false },
     dueDate: { type: Date },
     needsClarification: { type: Boolean, default: false },

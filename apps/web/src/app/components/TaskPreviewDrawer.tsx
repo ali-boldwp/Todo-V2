@@ -23,7 +23,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getProjects } from '../../services/core';
 import { getTeamMembers } from '../../services/team';
 import { useAuth } from '../../context/AuthContext';
-import { startTaskWork, pauseTaskWork, resumeTaskWork, finishTaskWork } from '../../services/task';
+import { startTaskWork, pauseTaskWork, resumeTaskWork, finishTaskWork, updateTask, approveTaskClient, rejectTaskClient } from '../../services/task';
 import { OutputData } from '@editorjs/editorjs';
 import { CodexTaskChat } from './CodexTaskChat';
 import clsx from 'clsx';
@@ -47,7 +47,7 @@ interface FinishFlowState {
     hasOpenedResolveUrl: boolean;
 }
 
-type TaskActionType = 'start' | 'pause' | 'resume' | 'approve' | 'reject' | 'fix_branch';
+type TaskActionType = 'start' | 'pause' | 'resume' | 'approve' | 'reject' | 'fix_branch' | 'update';
 type TaskActionModalPhase = 'running' | 'success' | 'error';
 
 interface TaskActionModalState {
@@ -79,6 +79,8 @@ export function TaskPreviewDrawer({ isOpen, onClose, task }: TaskPreviewDrawerPr
   const [isPaused, setIsPaused] = useState(task?.isWorkPaused || false);
   const [localSeconds, setLocalSeconds] = useState<number>(task?.totalWorkedSecondsComputed || task?.totalWorkedSeconds || 0);
 
+  const [isClarificationModalOpen, setIsClarificationModalOpen] = useState(false);
+  const [clarificationText, setClarificationText] = useState('');
   const [isFinishConfirmOpen, setIsFinishConfirmOpen] = useState(false);
   const [taskActionModal, setTaskActionModal] = useState<TaskActionModalState>({
       isOpen: false,
@@ -317,6 +319,46 @@ export function TaskPreviewDrawer({ isOpen, onClose, task }: TaskPreviewDrawerPr
     },
   });
 
+  const updateMutation = useMutation({
+    mutationFn: (data: any) => {
+        if (!task?._id) return Promise.reject(new Error('No task selected'));
+        return updateTask(task._id, data);
+    },
+    onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ['tasks'] });
+        markTaskActionSuccess('Task Updated', 'Task has been marked for clarification.');
+    },
+    onError: (error: any) => {
+        markTaskActionError('Failed to Update Task', error?.response?.data?.message || 'Failed to update task');
+    },
+  });
+
+  const approveClientMutation = useMutation({
+    mutationFn: ({ id, comment }: { id: string; comment?: string }) => {
+        return approveTaskClient(id, comment);
+    },
+    onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ['tasks'] });
+        markTaskActionSuccess('Task Approved', 'Task has been successfully approved by the client.');
+    },
+    onError: (error: any) => {
+        markTaskActionError('Failed to Approve Task', error?.response?.data?.message || 'Failed to approve task');
+    },
+  });
+
+  const rejectClientMutation = useMutation({
+    mutationFn: ({ id, comment }: { id: string; comment?: string }) => {
+        return rejectTaskClient(id, comment);
+    },
+    onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ['tasks'] });
+        markTaskActionSuccess('Task Rejected', 'Task has been rejected and sent back for review.');
+    },
+    onError: (error: any) => {
+        markTaskActionError('Failed to Reject Task', error?.response?.data?.message || 'Failed to reject task');
+    },
+  });
+
   if (!task) return null;
 
   const assignee = teamMembers.find((m: any) => m._id === task.assigneeId?._id || m._id === task.assigneeId);
@@ -378,6 +420,18 @@ export function TaskPreviewDrawer({ isOpen, onClose, task }: TaskPreviewDrawerPr
       setIsFinishConfirmOpen(true);
   };
   
+  const handleClarificationRequest = () => {
+      setIsClarificationModalOpen(true);
+      setClarificationText('');
+  };
+
+  const submitClarification = () => {
+      if (!clarificationText.trim()) return;
+      setIsClarificationModalOpen(false);
+      openTaskActionRunning('update', 'Requesting Clarification', 'System is marking task for clarification.');
+      updateMutation.mutate({ status: 'clarification', needsClarification: true, clarificationText });
+  };
+
   const runFinishFlow = (force?: boolean) => {
       setIsFinishConfirmOpen(false);
       setFinishFlow({
@@ -652,22 +706,33 @@ export function TaskPreviewDrawer({ isOpen, onClose, task }: TaskPreviewDrawerPr
         )}
 
         {/* Action Buttons */}
-        {task.status !== 'done' && task.status !== 'completed' && task.verificationStatus !== 'approved' && (
+        {task.status !== 'done' && task.status !== 'completed' && task.status !== 'client_approval' && task.verificationStatus !== 'approved' && currentUser?.role !== 'client' && (
           <div className="pt-6 border-t-2 border-slate-200">
             <label className="text-xs font-bold text-slate-500 uppercase tracking-wide mb-3 block">
               Task Actions
             </label>
             
             {!isTaskRunning ? (
-              // Start Button
-              <button
-                onClick={handleStartTask}
-                disabled={startMutation.isPending}
-                className="w-full flex items-center justify-center gap-3 px-6 py-4 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-semibold shadow-lg hover:shadow-xl transition-all group disabled:opacity-50"
-              >
-                <Play className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                <span>Start Working on This Task</span>
-              </button>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={handleStartTask}
+                  disabled={startMutation.isPending || task.status === 'clarification'}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-semibold shadow-md hover:shadow-xl transition-all disabled:opacity-50"
+                  title={task.status === 'clarification' ? 'Task is under clarification' : ''}
+                >
+                  <Play className="w-5 h-5 flex-shrink-0" />
+                  <span className="truncate">Start Working</span>
+                </button>
+                
+                <button
+                  onClick={handleClarificationRequest}
+                  disabled={task.status === 'clarification' || updateMutation.isPending}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-amber-50 hover:bg-amber-100 border-2 border-amber-200 hover:border-amber-300 text-amber-700 font-semibold transition-all disabled:opacity-50"
+                >
+                  <AlertCircle className="w-5 h-5 flex-shrink-0" />
+                  <span className="truncate">Ask Clarification</span>
+                </button>
+              </div>
             ) : (
               // Pause/Resume and Finish Buttons
               <div className="space-y-3">
@@ -729,6 +794,41 @@ export function TaskPreviewDrawer({ isOpen, onClose, task }: TaskPreviewDrawerPr
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Action Buttons (Client Approval) */}
+        {task.status === 'client_approval' && (currentUser?.role === 'client' || currentUser?.role === 'admin') && (
+          <div className="pt-6 border-t-2 border-slate-200">
+            <label className="text-xs font-bold text-pink-600 uppercase tracking-wide mb-3 block">
+              Client Approval Required
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => {
+                  const comment = prompt("Any comments? (Optional)");
+                  approveClientMutation.mutate({ id: task._id, comment: comment || undefined });
+                }}
+                disabled={approveClientMutation.isPending || rejectClientMutation.isPending}
+                className="flex items-center justify-center gap-2 py-3 px-4 bg-gradient-to-r from-emerald-500 to-green-600 hover:from-emerald-600 hover:to-green-700 text-white rounded-xl shadow-md font-bold transition-all disabled:opacity-50"
+              >
+                <Check className="w-5 h-5" />
+                Approve
+              </button>
+              <button
+                onClick={() => {
+                  const comment = prompt("Please provide a reason for rejection:");
+                  if (comment !== null) {
+                    rejectClientMutation.mutate({ id: task._id, comment });
+                  }
+                }}
+                disabled={approveClientMutation.isPending || rejectClientMutation.isPending}
+                className="flex items-center justify-center gap-2 py-3 px-4 bg-rose-50 border-2 border-rose-200 text-rose-700 hover:bg-rose-100 rounded-xl shadow-sm font-bold transition-all disabled:opacity-50"
+              >
+                <XCircle className="w-5 h-5" />
+                Reject
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -932,6 +1032,45 @@ export function TaskPreviewDrawer({ isOpen, onClose, task }: TaskPreviewDrawerPr
                                     Close
                                 </button>
                             )}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {isClarificationModalOpen && (
+                <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-[100] p-4">
+                    <div className="bg-white rounded-xl w-full max-w-lg p-6 shadow-xl border border-gray-100">
+                        <div className="flex items-center gap-3 mb-4">
+                            <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center shrink-0">
+                                <AlertCircle className="w-5 h-5 text-amber-600" />
+                            </div>
+                            <div>
+                                <h3 className="text-lg font-bold text-gray-900">Request Clarification</h3>
+                                <p className="text-sm text-gray-500">Provide details on what needs to be clarified</p>
+                            </div>
+                        </div>
+                        <textarea
+                            value={clarificationText}
+                            onChange={(e) => setClarificationText(e.target.value)}
+                            className="w-full h-32 p-3 border-2 border-gray-200 rounded-lg text-sm text-gray-800 placeholder-gray-400 focus:outline-none focus:border-amber-500 focus:ring-1 focus:ring-amber-500 transition-colors resize-none"
+                            placeholder="Enter your question or clarification request..."
+                            autoFocus
+                        />
+                        <div className="mt-6 flex justify-end gap-3">
+                            <button
+                                onClick={() => setIsClarificationModalOpen(false)}
+                                disabled={updateMutation.isPending}
+                                className="px-5 py-2.5 text-sm font-semibold border-2 border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={submitClarification}
+                                disabled={updateMutation.isPending || !clarificationText.trim()}
+                                className="px-5 py-2.5 text-sm font-semibold bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-lg hover:from-amber-600 hover:to-orange-600 disabled:opacity-50 shadow-md transition-all"
+                            >
+                                {updateMutation.isPending ? 'Submitting...' : 'Submit Request'}
+                            </button>
                         </div>
                     </div>
                 </div>

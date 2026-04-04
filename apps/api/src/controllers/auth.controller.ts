@@ -9,7 +9,7 @@ const isGithubSetupCompleted = (user: any) =>
     !!user.githubUsername && !!user.githubUserId && !!user.githubConnectedAt;
 const isProfileSetupCompleted = (user: any) => !!user.profileImageUrl;
 
-const buildAuthResponse = (user: any) => {
+export const buildAuthResponse = (user: any) => {
     const githubSetupCompleted = isGithubSetupCompleted(user);
     const profileSetupCompleted = isProfileSetupCompleted(user);
     const token = jwt.sign(

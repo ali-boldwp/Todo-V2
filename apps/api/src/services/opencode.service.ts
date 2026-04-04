@@ -62,6 +62,7 @@ export async function getOrStartProjectServer(
         cwd: repoPath,
         detached: false,
         stdio: 'ignore',
+        shell: process.platform === 'win32',
         env: { ...process.env },
     });
 

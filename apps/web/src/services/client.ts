@@ -31,3 +31,8 @@ export const deleteClient = async (id: string) => {
     const response = await api.delete(`/clients/${id}`);
     return response.data;
 };
+
+export const autoLoginClient = async (id: string) => {
+    const response = await api.post(`/clients/${id}/auto-login`);
+    return response.data;
+};

@@ -12,8 +12,8 @@ router.post('/profile/image', authenticate, uploadProfileImage);
 router.get('/github/setup/url', authenticate, getGithubSetupUrl);
 router.get('/github/setup/status', authenticate, getGithubSetupStatus);
 
-// Admin-only team member management
-router.get('/team-members', authenticate, requireProfileImageSetup, requireAdmin, getTeamMembers);
+// Admin-only team member management (except for getting members which is read-only for squad visibility)
+router.get('/team-members', authenticate, requireProfileImageSetup, getTeamMembers);
 router.post('/team-members', authenticate, requireProfileImageSetup, requireAdmin, createTeamMember);
 router.patch('/team-members/:id', authenticate, requireProfileImageSetup, requireAdmin, updateTeamMember);
 router.delete('/team-members/:id', authenticate, requireProfileImageSetup, requireAdmin, deleteTeamMember);

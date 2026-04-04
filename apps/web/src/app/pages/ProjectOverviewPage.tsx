@@ -13,6 +13,7 @@ import {
   TrendingUp,
   FileText,
 } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import RichTextEditor from '../components/RichTextEditor';
 
 export function ProjectOverviewPage() {
@@ -57,6 +58,33 @@ export function ProjectOverviewPage() {
   const doneTasks = projectTasks.filter((t: any) => t.status === 'done').length;
   const inProgressTasks = projectTasks.filter((t: any) => t.status === 'in_progress').length;
   const completionRate = totalTasks > 0 ? Math.round((doneTasks / totalTasks) * 100) : 0;
+  
+  const totalLoggedSeconds = projectTasks.reduce((sum: number, t: any) => sum + (t.totalWorkedSeconds || 0), 0);
+  const totalLoggedHours = (totalLoggedSeconds / 3600).toFixed(1);
+
+  let teamStats = project.members?.map((member: any) => {
+    const memberId = typeof member === 'string' ? member : member._id;
+    const completedMemberTasks = projectTasks.filter((t: any) => {
+      const assigneeId = typeof t.assigneeId === 'object' ? t.assigneeId?._id : t.assigneeId;
+      return assigneeId === memberId && t.status === 'done';
+    });
+    
+    const completedTasksCount = completedMemberTasks.length;
+    const loggedSeconds = completedMemberTasks.reduce((sum: number, t: any) => sum + (t.totalWorkedSeconds || 0), 0);
+    
+    return {
+      name: `${member.firstName || ''} ${member.lastName || ''}`.trim() || member.email || 'Unknown',
+      tasksCount: completedTasksCount,
+      completedCount: completedTasksCount,
+      hours: Number((loggedSeconds / 3600).toFixed(1))
+    };
+  }) || [];
+
+  // Sort by hours (high to low), fallback to tasks count
+  teamStats.sort((a: any, b: any) => {
+    if (b.hours !== a.hours) return b.hours - a.hours;
+    return b.tasksCount - a.tasksCount;
+  });
 
   return (
     <div className="min-h-full p-8">
@@ -114,10 +142,10 @@ export function ProjectOverviewPage() {
             <div className="rounded-xl border-2 border-slate-200 bg-gradient-to-br from-slate-50 to-gray-50 p-4">
               <div className="flex items-center gap-2 text-slate-600 text-sm font-bold uppercase tracking-wide mb-2">
                 <Clock size={16} />
-                Timeline
+                Total Hours
               </div>
               <div className="text-base font-bold text-emerald-700">
-                {project.endDate ? `Due ${new Date(project.endDate).toLocaleDateString()}` : 'No deadline'}
+                {totalLoggedHours}h logged
               </div>
             </div>
           </div>
@@ -158,6 +186,39 @@ export function ProjectOverviewPage() {
             </div>
           </div>
         </div>
+
+        {/* Team Stats */}
+        {teamStats.length > 0 && (
+          <div className="bg-white rounded-2xl border-2 border-slate-200 shadow-sm p-6">
+            <div className="flex items-center gap-2 mb-6">
+              <Users className="w-5 h-5 text-slate-600" />
+              <h2 className="text-lg font-bold text-slate-900">Team Statistics</h2>
+            </div>
+            {teamStats.some((s: any) => s.tasksCount > 0 || s.hours > 0) ? (
+              <div className="h-80 w-full mt-4">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={teamStats} margin={{ top: 10, right: 10, left: -20, bottom: 20 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748B' }} dy={10} />
+                    <YAxis yAxisId="left" orientation="left" stroke="#818CF8" axisLine={false} tickLine={false} tick={{ fontSize: 12 }} />
+                    <YAxis yAxisId="right" orientation="right" stroke="#34D399" axisLine={false} tickLine={false} tick={{ fontSize: 12 }} />
+                    <Tooltip 
+                      cursor={{ fill: '#F8FAFC' }} 
+                      contentStyle={{ borderRadius: '12px', border: '1px solid #E2E8F0', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)', padding: '12px' }}
+                    />
+                    <Legend wrapperStyle={{ paddingTop: '20px' }} />
+                    <Bar yAxisId="left" name="Completed Tasks" dataKey="tasksCount" fill="#818CF8" radius={[4, 4, 0, 0]} maxBarSize={50} />
+                    <Bar yAxisId="right" name="Hours Logged" dataKey="hours" fill="#34D399" radius={[4, 4, 0, 0]} maxBarSize={50} />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            ) : (
+              <div className="py-8 text-center text-slate-500 bg-slate-50 rounded-xl border border-slate-100">
+                No tasks or hours logged by the team yet.
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Details Grid */}
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">

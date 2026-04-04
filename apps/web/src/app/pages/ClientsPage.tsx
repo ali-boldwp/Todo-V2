@@ -2,9 +2,11 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Plus, Search, Mail, Phone, MapPin, Building2, User, MoreVertical, Shield, ShieldOff, KeyRound, Trash2 } from 'lucide-react';
-import { getClients, createClient, toggleClientStatus, resetClientPassword, deleteClient } from '../../services/client';
+import { Plus, Search, Mail, Phone, MapPin, Building2, User, MoreVertical, Shield, ShieldOff, KeyRound, Trash2, LogIn } from 'lucide-react';
+import { getClients, createClient, toggleClientStatus, resetClientPassword, deleteClient, autoLoginClient } from '../../services/client';
 import { ClientSchema, ClientInput } from '@devmanager/shared/dist/client.schema';
+import { useAuth } from '../../context/AuthContext';
+import { useNavigate } from 'react-router';
 
 export function ClientsPage() {
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -13,6 +15,9 @@ export function ClientsPage() {
 
     const [isMenuOpen, setIsMenuOpen] = useState<string | null>(null);
     const [passwordResetModal, setPasswordResetModal] = useState<{ isOpen: boolean; password?: string }>({ isOpen: false });
+
+    const { setAuthFromToken } = useAuth();
+    const navigate = useNavigate();
 
     const { data: clients, isLoading } = useQuery({
         queryKey: ['clients'],
@@ -52,6 +57,18 @@ export function ClientsPage() {
         }
     });
 
+    const autoLoginMutation = useMutation({
+        mutationFn: autoLoginClient,
+        onSuccess: (data) => {
+            setAuthFromToken(data.token);
+            navigate('/');
+        },
+        onError: (err: any) => {
+            alert(err.response?.data?.message || 'Failed to auto login');
+            setIsMenuOpen(null);
+        }
+    });
+
     const { register, handleSubmit, reset, formState: { errors } } = useForm<ClientInput>({
         resolver: zodResolver(ClientSchema),
         defaultValues: {
@@ -76,6 +93,8 @@ export function ClientsPage() {
             if (window.confirm(`Are you sure you want to delete ${client.name}? This action cannot be undone.`)) {
                 deleteMutation.mutate(client._id);
             }
+        } else if (action === 'auto-login') {
+            autoLoginMutation.mutate(client._id);
         }
     };
 
@@ -161,6 +180,15 @@ export function ClientsPage() {
                                             >
                                                 <ShieldOff size={16} />
                                                 Suspend Client
+                                            </button>
+                                        )}
+                                        {client.userId && (
+                                            <button
+                                                onClick={() => handleAction('auto-login', client)}
+                                                className="w-full text-left px-4 py-2 text-sm text-indigo-600 hover:bg-gray-50 flex items-center gap-2"
+                                            >
+                                                <LogIn size={16} />
+                                                Auto Login
                                             </button>
                                         )}
                                         <button

@@ -28,9 +28,10 @@ const STATUS_LABELS: any = {
   under_verification: 'Under Verification',
   clarification: 'Clarification',
   clarified: 'Clarified',
+  client_approval: 'Client Approval',
 };
 
-const SECTION_ORDER = ['clarification', 'todo', 'in_progress', 'under_verification', 'review', 'clarified', 'done'];
+const SECTION_ORDER = ['clarification', 'todo', 'in_progress', 'under_verification', 'review', 'clarified', 'client_approval', 'done'];
 
 export function ProjectTasksPage() {
   const { id: projectId } = useParams<{ id: string }>();
@@ -95,6 +96,8 @@ export function ProjectTasksPage() {
         return 'border-violet-200 bg-gradient-to-r from-violet-50 to-purple-50';
       case 'review':
         return 'border-indigo-200 bg-gradient-to-r from-indigo-50 to-blue-50';
+      case 'client_approval':
+        return 'border-pink-200 bg-gradient-to-r from-pink-50 to-rose-50';
       case 'done':
         return 'border-emerald-200 bg-gradient-to-r from-emerald-50 to-green-50';
       default:
@@ -114,6 +117,8 @@ export function ProjectTasksPage() {
         return 'text-violet-700';
       case 'review':
         return 'text-indigo-700';
+      case 'client_approval':
+        return 'text-pink-700';
       case 'done':
         return 'text-emerald-700';
       default:
@@ -244,6 +249,7 @@ export function ProjectTasksPage() {
                           task.status === 'in_progress' ? 'bg-blue-100 text-blue-800' :
                           task.status === 'review' ? 'bg-indigo-100 text-indigo-800' :
                           task.status === 'under_verification' ? 'bg-violet-100 text-violet-800' :
+                          task.status === 'client_approval' ? 'bg-pink-100 text-pink-800' :
                           task.status === 'clarification' ? 'bg-amber-100 text-amber-800' :
                           'bg-slate-100 text-slate-800'
                         }`}>

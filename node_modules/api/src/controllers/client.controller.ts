@@ -4,6 +4,7 @@ import { AuthRequest } from '../middleware/auth';
 import Client from '../models/Client';
 import User from '../models/User';
 import { ClientSchema } from '@devmanager/shared/dist/client.schema';
+import { buildAuthResponse } from './auth.controller';
 
 export const getClients = async (_req: AuthRequest, res: Response) => {
     try {
@@ -127,5 +128,23 @@ export const deleteClient = async (req: AuthRequest, res: Response) => {
         res.json({ message: 'Client deleted successfully' });
     } catch (error) {
         res.status(500).json({ message: 'Server error' });
+    }
+};
+
+export const autoLoginClient = async (req: AuthRequest, res: Response) => {
+    try {
+        const client = await Client.findById(req.params.id);
+
+        if (!client) return res.status(404).json({ message: 'Client not found' });
+        if (!client.userId) return res.status(400).json({ message: 'Client has no associated user account' });
+
+        const user = await User.findById(client.userId);
+        if (!user) return res.status(404).json({ message: 'User account not found for this client' });
+
+        if (user.isActive === false) return res.status(403).json({ message: 'Client user account is suspended' });
+
+        res.json(buildAuthResponse(user));
+    } catch (error: any) {
+        res.status(500).json({ message: 'Server error', error: error.message });
     }
 };

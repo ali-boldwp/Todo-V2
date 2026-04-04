@@ -61,7 +61,7 @@ export const router = createBrowserRouter([
       },
       {
         path: "team",
-        element: <ProtectedRoute requireAdmin><TeamPage /></ProtectedRoute>
+        element: <ProtectedRoute><TeamPage /></ProtectedRoute>
       },
       {
         path: "team/:id",

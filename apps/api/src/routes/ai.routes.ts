@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { chatWithAI, TaskDraft, ChatMessage } from '../services/ai.service';
+import { TaskDraft, ChatMessage } from '../services/ai.service';
 import { authenticate, requireProfileImageSetup, requireGithubSetupForTeamMembers } from '../middleware/auth';
 import type { AuthRequest } from '../middleware/auth';
 import { getGlobalServerUrl, listRunningServers } from '../services/opencode.service';
@@ -97,6 +97,72 @@ router.get('/ai/sessions', authenticate, async (_req, res) => {
     }
 });
 
+/** POST /api/ai/chat/stream */
+router.post('/ai/chat/stream', authenticate, requireProfileImageSetup, requireGithubSetupForTeamMembers, async (req: AuthRequest, res) => {
+    try {
+        const { messages, taskDraft, projectId } = req.body as {
+            messages: ChatMessage[];
+            taskDraft: TaskDraft;
+            projectId?: string;
+        };
+
+        if (!messages || !Array.isArray(messages)) {
+            res.status(400).json({ error: 'Invalid messages array' });
+            return;
+        }
+
+        const projectQuery: any = {};
+        if (req.user!.role !== 'admin') {
+            if (req.user!.role === 'client' && req.user!.clientId) {
+                projectQuery.clientId = req.user!.clientId;
+            } else {
+                projectQuery.members = req.user!.userId;
+            }
+        }
+
+        const Project = (await import('../models/Project')).default;
+        const projects = await Project.find(projectQuery).select('_id name repoLocalPath githubRepoOwner githubRepoName');
+
+        const User = (await import('../models/User')).default;
+        const teamMembers = await User.find({
+            teamId: (req.user as any).teamId,
+            isActive: true
+        }).select('_id firstName lastName');
+
+        // Setup SSE Headers
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+        // Disable buffering for real-time streaming
+        res.setHeader('X-Accel-Buffering', 'no');
+        res.flushHeaders();
+
+        const { streamChatWithAI } = await import('../services/ai.service');
+
+        try {
+            for await (const chunk of streamChatWithAI(
+                messages,
+                taskDraft || {},
+                projectId,
+                projects as any,
+                teamMembers as any
+            )) {
+                // write to stream
+                res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+            }
+        } catch (streamError: any) {
+            console.error('AI chat stream error:', streamError.message);
+            res.write(`data: ${JSON.stringify({ type: 'error', error: streamError.message })}\n\n`);
+        } finally {
+            res.end();
+        }
+
+    } catch (error: any) {
+        console.error('AI chat route error:', error.message);
+        res.status(500).json({ error: 'AI service error', message: error.message });
+    }
+});
+
 /** POST /api/ai/chat */
 router.post('/ai/chat', authenticate, requireProfileImageSetup, requireGithubSetupForTeamMembers, async (req: AuthRequest, res) => {
     try {
@@ -129,6 +195,8 @@ router.post('/ai/chat', authenticate, requireProfileImageSetup, requireGithubSet
             isActive: true
         }).select('_id firstName lastName');
 
+        // Keep standard chat for backwards compatibility if needed
+        const { chatWithAI } = await import('../services/ai.service');
         const result = await chatWithAI(
             messages,
             taskDraft || {},

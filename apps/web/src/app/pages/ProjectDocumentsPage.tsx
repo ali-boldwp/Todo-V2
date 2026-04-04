@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getProject, uploadProjectDocument, deleteProjectDocument, downloadProjectDocument } from '../../services/core';
 import { useAuth } from '../../context/AuthContext';

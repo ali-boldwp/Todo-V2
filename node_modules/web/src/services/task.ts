@@ -1,8 +1,9 @@
 import api from './api';
 import { TaskInput } from '@devmanager/shared/dist/index';
 
-export const getTasks = async (projectId: string) => {
-    const response = await api.get('/tasks', { params: { projectId } });
+export const getTasks = async (projectId?: string) => {
+    const params = projectId ? { projectId } : undefined;
+    const response = await api.get('/tasks', { params });
     return response.data;
 };
 
@@ -98,5 +99,15 @@ export const deleteAttachment = async (taskId: string, index: number) => {
 
 export const downloadAttachment = async (taskId: string, index: number) => {
     const response = await api.get(`/tasks/${taskId}/attachments/${index}/download`);
+    return response.data;
+};
+
+export const approveTaskClient = async (id: string, comment?: string) => {
+    const response = await api.post(`/tasks/${id}/client-approve`, { comment });
+    return response.data;
+};
+
+export const rejectTaskClient = async (id: string, comment?: string) => {
+    const response = await api.post(`/tasks/${id}/client-reject`, { comment });
     return response.data;
 };

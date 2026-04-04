@@ -1032,6 +1032,9 @@ export const startTaskWork = async (req: AuthRequest, res: Response) => {
         if (task.verificationStatus === 'pending' || task.status === 'under_verification') {
             return res.status(400).json({ message: 'Task is under verification and cannot be started' });
         }
+        if (task.status === 'clarification') {
+            return res.status(400).json({ message: 'Task is under clarification and cannot be started' });
+        }
 
         const currentWorker: any = task.activeWorkerId;
         const currentWorkerId = currentWorker?._id?.toString?.() || currentWorker?.toString?.();
@@ -1513,13 +1516,14 @@ export const finishTaskWork = async (req: AuthRequest, res: Response) => {
                     activeWorkerId: null,
                     lastWorkStartedAt: null,
                     isWorkPaused: false,
-                    status: 'done',
+                    status: 'client_approval',
                     finishedAt: new Date(),
                     verificationStatus: 'approved',
                     isMergedToDev: true,
                     verifierId: null,
                     verificationComment: null,
                     verificationDecidedAt: new Date(),
+                    clientApprovalStatus: 'pending',
                     githubBranch: nextGithubBranch,
                 },
                 { new: true }
@@ -1532,12 +1536,13 @@ export const finishTaskWork = async (req: AuthRequest, res: Response) => {
             if (!updated) return res.status(404).json({ message: 'Task not found' });
             await appendTaskActivity(updated._id, {
                 action: 'task_auto_approved',
-                message: `Task completed and auto-approved by admin.`,
+                message: `Task completed and auto-approved by admin, now awaiting client approval.`,
                 actor: req.user,
                 metadata: {
                     githubBranch: nextGithubBranch || null,
                     isMergedToDev: true,
                     elapsedSeconds: elapsed,
+                    clientApprovalStatus: 'pending'
                 }
             });
             res.json(toTaskResponse(updated, req.user!));
@@ -1765,10 +1770,11 @@ export const approveTaskVerification = async (req: AuthRequest, res: Response) =
         const updated = await Task.findByIdAndUpdate(
             req.params.id,
             {
-                status: 'done',
+                status: 'client_approval',
                 verificationStatus: 'approved',
                 verificationComment: req.body?.comment || null,
                 verificationDecidedAt: new Date(),
+                clientApprovalStatus: 'pending',
                 githubBranch: nextGithubBranch,
             },
             { new: true }
@@ -1794,7 +1800,7 @@ export const approveTaskVerification = async (req: AuthRequest, res: Response) =
             actorUserId: req.user!.userId,
             type: 'task_verification_approved',
             title: 'Task Verified',
-            message: `"${updated.title}" was approved in verification.`,
+            message: `"${updated.title}" was approved in verification and sent for client approval.`,
         });
         emitTaskEvent('task:updated', updated);
     } catch (error) {
@@ -1854,6 +1860,102 @@ export const rejectTaskVerification = async (req: AuthRequest, res: Response) =>
             type: 'task_verification_rejected',
             title: 'Task Verification Rejected',
             message: `"${updated.title}" was rejected in verification and moved back to review.`,
+        });
+        emitTaskEvent('task:updated', updated);
+    } catch (error) {
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+export const approveTaskClient = async (req: AuthRequest, res: Response) => {
+    try {
+        if (req.user!.role !== 'client' && req.user!.role !== 'admin') {
+            return res.status(403).json({ message: 'Only clients or admins can approve tasks for clients' });
+        }
+
+        const task = await Task.findById(req.params.id);
+        if (!task) return res.status(404).json({ message: 'Task not found' });
+        if (task.clientApprovalStatus !== 'pending' || task.status !== 'client_approval') {
+            return res.status(400).json({ message: 'Task is not pending client approval' });
+        }
+
+        const updated = await Task.findByIdAndUpdate(
+            req.params.id,
+            {
+                status: 'done',
+                clientApprovalStatus: 'approved',
+                clientApprovalComment: req.body?.comment || null,
+                clientApprovalDecidedAt: new Date(),
+            },
+            { new: true }
+        )
+            .populate('assigneeId', 'firstName lastName email')
+            .populate('activeWorkerId', 'firstName lastName email role')
+            .populate('verifierId', 'firstName lastName email role')
+            .populate('workLogs.userId', 'firstName lastName email role');
+
+        if (!updated) return res.status(404).json({ message: 'Task not found' });
+        await appendTaskActivity(updated._id, {
+            action: 'task_client_approved',
+            message: `Task client approval received.`,
+            actor: req.user,
+            metadata: { comment: req.body?.comment || null }
+        });
+        res.json(toTaskResponse(updated, req.user!));
+        await notifyTaskAudience({
+            task: updated,
+            actorUserId: req.user!.userId,
+            type: 'task_client_approved',
+            title: 'Task Client Approved',
+            message: `"${updated.title}" was approved by the client!`,
+        });
+        emitTaskEvent('task:updated', updated);
+    } catch (error) {
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+export const rejectTaskClient = async (req: AuthRequest, res: Response) => {
+    try {
+        if (req.user!.role !== 'client' && req.user!.role !== 'admin') {
+            return res.status(403).json({ message: 'Only clients or admins can reject tasks for clients' });
+        }
+
+        const task = await Task.findById(req.params.id);
+        if (!task) return res.status(404).json({ message: 'Task not found' });
+        if (task.clientApprovalStatus !== 'pending' || task.status !== 'client_approval') {
+            return res.status(400).json({ message: 'Task is not pending client approval' });
+        }
+
+        const updated = await Task.findByIdAndUpdate(
+            req.params.id,
+            {
+                status: 'review',
+                clientApprovalStatus: 'rejected',
+                clientApprovalComment: req.body?.comment || null,
+                clientApprovalDecidedAt: new Date(),
+            },
+            { new: true }
+        )
+            .populate('assigneeId', 'firstName lastName email')
+            .populate('activeWorkerId', 'firstName lastName email role')
+            .populate('verifierId', 'firstName lastName email role')
+            .populate('workLogs.userId', 'firstName lastName email role');
+
+        if (!updated) return res.status(404).json({ message: 'Task not found' });
+        await appendTaskActivity(updated._id, {
+            action: 'task_client_rejected',
+            message: `Task client approval rejected, moving to review.`,
+            actor: req.user,
+            metadata: { comment: req.body?.comment || null }
+        });
+        res.json(toTaskResponse(updated, req.user!));
+        await notifyTaskAudience({
+            task: updated,
+            actorUserId: req.user!.userId,
+            type: 'task_client_rejected',
+            title: 'Task Client Rejected',
+            message: `"${updated.title}" was rejected by the client! Requires review.`,
         });
         emitTaskEvent('task:updated', updated);
     } catch (error) {

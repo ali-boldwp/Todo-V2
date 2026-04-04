@@ -3,7 +3,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { RegisterSchema, RegisterInput } from '@devmanager/shared/dist/auth.schema';
 import { useAuth } from '../../context/AuthContext';
 import { register as registerApi } from '../../services/auth';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 
 export function RegisterPage() {
     const { login } = useAuth();

@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { 
   Github, 
@@ -89,11 +89,9 @@ export function GitHubSettingsPage() {
   }, [config, selectedRepo]);
 
   const handleConnect = async () => {
-    try {
-        const { url } = await getGithubAuthUrl();
-        window.location.href = url;
-    } catch (error: any) {
-        alert(error.response?.data?.message || 'Failed to get GitHub Auth URL');
+    const pat = prompt('Please enter your GitHub Personal Access Token (classic or fine-grained with repo access):');
+    if (pat && pat.trim()) {
+        updateConfigMutation.mutate({ personalAccessToken: pat.trim(), repoOwner: '', repoName: '' } as any);
     }
   };
 

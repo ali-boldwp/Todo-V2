@@ -110,19 +110,20 @@ async function sendAndWaitForReply(
         throw new Error(`OpenCode sendMessage failed: ${res.status} ${err}`);
     }
 
-    // Wait a moment for OpenCode to start processing
-    await new Promise(r => setTimeout(r, 2000));
-
     // Poll for assistant reply completion
     const deadline = Date.now() + maxWaitMs;
-    let lastAssistantCount = 0;
+    let lastMessageLength = 0;
     let stableCount = 0;
 
-    while (Date.now() < deadline) {
-        await new Promise(r => setTimeout(r, 2000));
+    // Small initial wait to let process kick off
+    await new Promise(r => setTimeout(r, 500)); 
 
+    while (Date.now() < deadline) {
         const listRes = await fetch(`${baseUrl}/session/${sessionId}/message`);
-        if (!listRes.ok) continue;
+        if (!listRes.ok) {
+            await new Promise(r => setTimeout(r, 1000));
+            continue;
+        }
 
         const data: any = await listRes.json();
         const messages: any[] = Array.isArray(data) ? data : [];
@@ -131,9 +132,20 @@ async function sendAndWaitForReply(
             (m: any) => m.info?.role === 'assistant'
         );
 
-        if (assistantMsgs.length === 0) continue;
+        if (assistantMsgs.length === 0) {
+            await new Promise(r => setTimeout(r, 1000));
+            continue;
+        }
 
         const last = assistantMsgs[assistantMsgs.length - 1];
+
+        // Extract text content from parts
+        const parts: any[] = last.parts || [];
+        const text = parts
+            .filter((p: any) => p.type === 'text')
+            .map((p: any) => p.text || '')
+            .join('\n')
+            .trim();
 
         // Check multiple completion signals OpenCode may use
         const status = last.info?.status;
@@ -143,23 +155,18 @@ async function sendAndWaitForReply(
             status?.type === 'completed' ||
             status?.type === 'error' ||
             status === 'completed' ||
-            // Stable message count across polls is a reliable fallback
-            (assistantMsgs.length === lastAssistantCount && ++stableCount >= 2);
+            // Stable text length across 3 polls (3 seconds) is a reliable fallback
+            (text.length > 50 && text.length === lastMessageLength && ++stableCount >= 3);
 
-        if (assistantMsgs.length !== lastAssistantCount) {
-            lastAssistantCount = assistantMsgs.length;
+        if (text.length !== lastMessageLength) {
+            lastMessageLength = text.length;
             stableCount = 0;
         }
 
-        if (!isFinished) continue;
-
-        // Extract text content from parts
-        const parts: any[] = last.parts || [];
-        const text = parts
-            .filter((p: any) => p.type === 'text')
-            .map((p: any) => p.text || '')
-            .join('\n')
-            .trim();
+        if (!isFinished) {
+            await new Promise(r => setTimeout(r, 1000));
+            continue;
+        }
 
         if (text) return text;
     }
@@ -221,46 +228,162 @@ Available projects: ${projectNames}
 Available team members: ${memberNames}
 Today's date: ${today}
 ${repoContext}
-INSTRUCTIONS:
-1. Understand the task from the user's description
-2. If a project repo is available (shown above), reference REAL file names and functions in the plan
-3. Generate a structured implementation plan as the "description" field using this format:
+INSTRUCTIONS FOR STREAMING RESPONSES:
+1. Open your response by talking to the user conversationally. This text will be streamed live to the user.
+2. After your conversational reply, you MUST append a strict JSON block wrapped in \`\`\`json and \`\`\` bounds. 
+3. The JSON block MUST contain the updated task draft and metadata.
 
-## Overview
-[1-2 sentence summary]
-
-## Implementation Steps
-1. [Specific step — reference real files from the repo if available]
-2. [Next step...]
-
-## Files to Modify
-- [filename] — [what changes and why]
-
-## Acceptance Criteria
-- [ ] [Testable outcome]
-
-4. Collect metadata: projectId, priority, assigneeId, dueDate (use sensible defaults)
-5. When ready, set action to "confirm" and show a summary
-
-ALWAYS respond with valid JSON only — no markdown fences, no extra text:
-{"reply": "your message", "taskDraft": {"title": "", "projectId": null, "priority": "medium", "assigneeId": null, "dueDate": null, "description": "", "aiPrompt": ""}, "action": "continue|confirm|create|error", "suggestions": ["..."]}
+FORMAT OF JSON METADATA TO APPEND AT THE END:
+\`\`\`json
+{
+  "taskDraft": {
+    "title": "", 
+    "projectId": null, 
+    "priority": "medium", 
+    "assigneeId": null, 
+    "dueDate": null, 
+    "description": "", 
+    "aiPrompt": ""
+  }, 
+  "action": "continue|confirm|create|error", 
+  "suggestions": ["..."]
+}
+\`\`\`
 
 Rules:
 - aiPrompt = user's original task description (set immediately, never change)
 - description = full implementation plan (generate once you know title + project)
 - action "confirm" = show plan summary + ask "Shall I create this task?"
 - action "create" = user confirmed, ready to save
-- Provide 2-4 quick-reply suggestions
-- JSON only, nothing else
+- Provide 2-4 quick-reply suggestions inside the JSON.
 
 ${conversationHistory ? `Conversation so far:\n${conversationHistory}` : ''}
 
 Current task draft state: ${JSON.stringify(taskDraft)}
 
-Based on the above, respond with JSON only.`;
+Remember: Start with conversational text, then output the JSON metadata block. Do NOT just output JSON.`;
 }
 
 // ─── Public API ──────────────────────────────────────────────────────────────
+
+async function* streamAndWaitForReply(
+    baseUrl: string,
+    sessionId: string,
+    text: string,
+    maxWaitMs = 90000
+): AsyncGenerator<string, void, unknown> {
+    const res = await fetch(`${baseUrl}/session/${sessionId}/message`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ parts: [{ type: 'text', text }] }),
+    });
+    if (!res.ok) {
+        const err = await res.text();
+        throw new Error(`OpenCode sendMessage failed: ${res.status} ${err}`);
+    }
+
+    const deadline = Date.now() + maxWaitMs;
+    let lastYieldedLength = 0;
+    let stableCount = 0;
+
+    await new Promise(r => setTimeout(r, 500));
+
+    while (Date.now() < deadline) {
+        const listRes = await fetch(`${baseUrl}/session/${sessionId}/message`);
+        if (!listRes.ok) {
+            await new Promise(r => setTimeout(r, 500));
+            continue;
+        }
+
+        const data: any = await listRes.json();
+        const messages: any[] = Array.isArray(data) ? data : [];
+        const assistantMsgs = messages.filter((m: any) => m.info?.role === 'assistant');
+
+        if (assistantMsgs.length === 0) {
+            await new Promise(r => setTimeout(r, 500));
+            continue;
+        }
+
+        const last = assistantMsgs[assistantMsgs.length - 1];
+        const parts: any[] = last.parts || [];
+        const currentText = parts.filter((p: any) => p.type === 'text').map((p: any) => p.text || '').join('\n').trimStart();
+
+        if (currentText.length > lastYieldedLength) {
+            const chunk = currentText.substring(lastYieldedLength);
+            yield chunk;
+            lastYieldedLength = currentText.length;
+            stableCount = 0;
+        } else {
+            const status = last.info?.status;
+            const isFinished =
+                status?.finishedAt != null ||
+                last.info?.finishedAt != null ||
+                status?.type === 'completed' ||
+                status?.type === 'error' ||
+                status === 'completed' ||
+                (currentText.length > 50 && ++stableCount >= 20); // 10 seconds of streaming timeout
+
+            if (isFinished) {
+                return;
+            }
+        }
+        await new Promise(r => setTimeout(r, 500));
+    }
+}
+
+export async function* streamChatWithAI(
+    messages: ChatMessage[],
+    taskDraft: TaskDraft,
+    projectId: string | undefined,
+    projects: Project[],
+    teamMembers: TeamMember[]
+): AsyncGenerator<{ type: 'delta' | 'done' | 'error', text?: string, error?: string, parsed?: AIChatResponse }, void, unknown> {
+    let sessionId: string | null = null;
+    let opencodeBase: string = GLOBAL_OPENCODE_URL;
+
+    try {
+        let currentProject = projectId ? projects.find(p => p._id.toString() === projectId.toString()) : undefined;
+        currentProject = await ensureProjectRepoAvailable(currentProject);
+        opencodeBase = await resolveServerUrl(currentProject?._id, currentProject?.repoLocalPath);
+
+        const prompt = await buildPrompt(messages, taskDraft, projects, teamMembers, currentProject);
+        sessionId = await createSession(opencodeBase, `task-plan-${Date.now()}`);
+
+        let fullReply = '';
+        for await (const chunk of streamAndWaitForReply(opencodeBase, sessionId, prompt)) {
+            fullReply += chunk;
+            yield { type: 'delta', text: chunk };
+        }
+
+        const jsonMatch = fullReply.match(/```json\s*([\s\S]*?)\s*```/is);
+        let parsed: any = null;
+        if (jsonMatch) {
+            try { parsed = JSON.parse(jsonMatch[1]); } catch (e) {}
+        }
+        if (!parsed) {
+            const fallbackMatch = fullReply.match(/\{[\s\S]*\}/s);
+            if (fallbackMatch) {
+                 try { parsed = JSON.parse(fallbackMatch[0]); } catch (e) {}
+            }
+        }
+        
+        const unparsedText = fullReply.replace(/```json\s*([\s\S]*?)\s*```/is, '').trim();
+
+        if (parsed) {
+            yield { type: 'done', parsed: { ...parsed, reply: unparsedText } };
+        } else {
+             yield { type: 'done', parsed: { reply: unparsedText, taskDraft, action: 'continue' } };
+        }
+
+    } catch (error: any) {
+        console.error('[ai.service] streamChat error:', error.message);
+        yield { type: 'error', error: 'Sorry, I had trouble connecting to AI. Please try again.' };
+    } finally {
+        if (sessionId) {
+            deleteSession(opencodeBase, sessionId).catch(() => { });
+        }
+    }
+}
 
 export async function chatWithAI(
     messages: ChatMessage[],

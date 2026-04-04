@@ -1,5 +1,5 @@
 import React from 'react';
-import { useSearchParams, useNavigate } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getGithubConfig, getGithubAuthUrl, handleGithubCallback } from '../../services/github';
 import { Github } from 'lucide-react';

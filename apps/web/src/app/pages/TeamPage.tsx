@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getTeamMembers, updateTeamMember, createTeamMember, resetTeamMemberPassword, deleteTeamMember } from '../../services/team';
+import { getTasks } from '../../services/task';
+import { useAuth } from '../../context/AuthContext';
 import {
   UserPlus,
   MoreVertical,
@@ -16,6 +18,7 @@ import {
   CheckCircle,
   Mail,
   Github,
+  Clock,
 } from 'lucide-react';
 
 const ROLE_STYLES: Record<string, string> = {
@@ -61,6 +64,8 @@ const Switch = ({ checked, onChange }: { checked: boolean; onChange: (checked: b
 };
 
 export function TeamPage() {
+  const { user } = useAuth();
+  const isAdminOrManager = user?.role === 'admin' || user?.role === 'manager';
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -75,11 +80,21 @@ export function TeamPage() {
     queryFn: getTeamMembers,
   });
 
+  const { data: allTasks = [] } = useQuery({ 
+    queryKey: ['allTasks'], 
+    queryFn: () => getTasks(),
+  });
+
   if (error) {
     console.error('Team members query error:', error);
   }
 
   const membersArray = Array.isArray(members) ? members : [];
+
+  const totalTasks = allTasks.length;
+  const completedTasks = allTasks.filter((t: any) => t.status === 'done' || t.status === 'completed').length;
+  const totalSeconds = allTasks.reduce((sum: number, t: any) => sum + (t.totalWorkedSeconds || 0), 0);
+  const totalHours = (totalSeconds / 3600).toFixed(1);
 
   const toggleStatusMutation = useMutation({
     mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) => updateTeamMember(id, { isActive }),
@@ -196,96 +211,141 @@ export function TeamPage() {
             </p>
 
             {/* Filter Buttons */}
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setTesterFilter('all')}
-                className={`px-3 py-1.5 text-sm font-semibold rounded-lg border-2 transition-all ${
-                  testerFilter === 'all'
-                    ? 'bg-indigo-50 text-indigo-700 border-indigo-200 shadow-sm'
-                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                }`}
-              >
-                All Members
-              </button>
-              <button
-                onClick={() => setTesterFilter('eligible')}
-                className={`px-3 py-1.5 text-sm font-semibold rounded-lg border-2 transition-all ${
-                  testerFilter === 'eligible'
-                    ? 'bg-emerald-50 text-emerald-700 border-emerald-200 shadow-sm'
-                    : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
-                }`}
-              >
-                Can Test
-              </button>
-            </div>
+            {user?.role !== 'client' && (
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setTesterFilter('all')}
+                  className={`px-3 py-1.5 text-sm font-semibold rounded-lg border-2 transition-all ${
+                    testerFilter === 'all'
+                      ? 'bg-indigo-50 text-indigo-700 border-indigo-200 shadow-sm'
+                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  All Members
+                </button>
+                <button
+                  onClick={() => setTesterFilter('eligible')}
+                  className={`px-3 py-1.5 text-sm font-semibold rounded-lg border-2 transition-all ${
+                    testerFilter === 'eligible'
+                      ? 'bg-emerald-50 text-emerald-700 border-emerald-200 shadow-sm'
+                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                  }`}
+                >
+                  Can Test
+                </button>
+              </div>
+            )}
           </div>
 
-          <button
-            onClick={() => {
-              setIsModalOpen(true);
-              setFormError('');
-              setForm({
-                firstName: '',
-                lastName: '',
-                email: '',
-                githubUsername: '',
-                canVerifyTasks: false,
-                password: '',
-                role: 'member',
-              });
-            }}
-            className="h-11 flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-semibold px-5 rounded-lg transition-all shadow-md hover:shadow-lg"
-          >
-            <UserPlus className="w-5 h-5" />
-            Invite Member
-          </button>
+          {isAdminOrManager && (
+            <button
+              onClick={() => {
+                setIsModalOpen(true);
+                setFormError('');
+                setForm({
+                  firstName: '',
+                  lastName: '',
+                  email: '',
+                  githubUsername: '',
+                  canVerifyTasks: false,
+                  password: '',
+                  role: 'member',
+                });
+              }}
+              className="h-11 flex items-center gap-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-semibold px-5 rounded-lg transition-all shadow-md hover:shadow-lg"
+            >
+              <UserPlus className="w-5 h-5" />
+              Invite Member
+            </button>
+          )}
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <div className="bg-white rounded-xl border-2 border-slate-200 p-5 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs uppercase tracking-wide text-slate-500 font-bold mb-1">Total Members</p>
-                <p className="text-3xl font-bold text-slate-900">{membersArray.length}</p>
-              </div>
-              <div className="w-12 h-12 rounded-xl bg-indigo-100 flex items-center justify-center">
-                <UsersIcon className="w-6 h-6 text-indigo-600" />
+        {user?.role === 'client' ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div className="bg-white rounded-xl border-2 border-slate-200 p-5 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-500 font-bold mb-1">Total Tasks</p>
+                  <p className="text-3xl font-bold text-slate-900">{totalTasks}</p>
+                </div>
+                <div className="w-12 h-12 rounded-xl bg-indigo-100 flex items-center justify-center">
+                  <CheckCircle className="w-6 h-6 text-indigo-600" />
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="bg-white rounded-xl border-2 border-slate-200 p-5 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs uppercase tracking-wide text-slate-500 font-bold mb-1">Active</p>
-                <p className="text-3xl font-bold text-emerald-700">
-                  {membersArray.filter((m: any) => m.isActive).length}
-                </p>
-              </div>
-              <div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center">
-                <CheckCircle className="w-6 h-6 text-emerald-600" />
+            <div className="bg-white rounded-xl border-2 border-slate-200 p-5 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-500 font-bold mb-1">Completed Tasks</p>
+                  <p className="text-3xl font-bold text-emerald-700">{completedTasks}</p>
+                </div>
+                <div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center">
+                  <CheckCircle className="w-6 h-6 text-emerald-600" />
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="bg-white rounded-xl border-2 border-slate-200 p-5 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-xs uppercase tracking-wide text-slate-500 font-bold mb-1">Can Test</p>
-                <p className="text-3xl font-bold text-violet-700">
-                  {membersArray.filter((m: any) => m.canVerifyTasks).length}
-                </p>
-              </div>
-              <div className="w-12 h-12 rounded-xl bg-violet-100 flex items-center justify-center">
-                <Shield className="w-6 h-6 text-violet-600" />
+            <div className="bg-white rounded-xl border-2 border-slate-200 p-5 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-500 font-bold mb-1">Hours Logged</p>
+                  <p className="text-3xl font-bold text-violet-700">{totalHours}h</p>
+                </div>
+                <div className="w-12 h-12 rounded-xl bg-violet-100 flex items-center justify-center">
+                  <Clock className="w-6 h-6 text-violet-600" />
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div className="bg-white rounded-xl border-2 border-slate-200 p-5 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-500 font-bold mb-1">Total Members</p>
+                  <p className="text-3xl font-bold text-slate-900">{membersArray.length}</p>
+                </div>
+                <div className="w-12 h-12 rounded-xl bg-indigo-100 flex items-center justify-center">
+                  <UsersIcon className="w-6 h-6 text-indigo-600" />
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl border-2 border-slate-200 p-5 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-500 font-bold mb-1">Active</p>
+                  <p className="text-3xl font-bold text-emerald-700">
+                    {membersArray.filter((m: any) => m.isActive).length}
+                  </p>
+                </div>
+                <div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center">
+                  <CheckCircle className="w-6 h-6 text-emerald-600" />
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl border-2 border-slate-200 p-5 shadow-sm">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs uppercase tracking-wide text-slate-500 font-bold mb-1">Can Test</p>
+                  <p className="text-3xl font-bold text-violet-700">
+                    {membersArray.filter((m: any) => m.canVerifyTasks).length}
+                  </p>
+                </div>
+                <div className="w-12 h-12 rounded-xl bg-violet-100 flex items-center justify-center">
+                  <Shield className="w-6 h-6 text-violet-600" />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Member Table */}
-        <div className="bg-white border-2 border-slate-200 rounded-2xl shadow-md overflow-x-auto">
+        {user?.role !== 'client' && (
+          <div className="bg-white border-2 border-slate-200 rounded-2xl shadow-md overflow-x-auto">
           {isLoading && (
             <div className="p-8 text-center text-slate-500">Loading members...</div>
           )}
@@ -299,7 +359,7 @@ export function TeamPage() {
                 <th className="px-6 py-4 text-left">Role</th>
                 <th className="px-6 py-4 text-left">Can Test</th>
                 <th className="px-6 py-4 text-left">Status</th>
-                <th className="px-6 py-4 text-right">Actions</th>
+                {isAdminOrManager && <th className="px-6 py-4 text-right">Actions</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -328,7 +388,7 @@ export function TeamPage() {
                     </div>
                   </td>
                   <td className="px-6 py-4">
-                    {m.role === 'admin' ? (
+                    {m.role === 'admin' || !isAdminOrManager ? (
                       <span
                         className={`text-xs font-bold uppercase px-3 py-1.5 rounded-full border-2 ${ROLE_STYLES[m.role]}`}
                       >
@@ -351,14 +411,16 @@ export function TeamPage() {
                       <span className="text-xs font-semibold text-slate-400">N/A</span>
                     ) : (
                       <div className="flex items-center gap-2">
-                        <Switch
-                          checked={!!m.canVerifyTasks}
-                          onChange={(checked) => {
-                            if (!toggleCanVerifyMutation.isPending) {
-                              toggleCanVerify(m._id, checked);
-                            }
-                          }}
-                        />
+                        {isAdminOrManager && (
+                          <Switch
+                            checked={!!m.canVerifyTasks}
+                            onChange={(checked) => {
+                              if (!toggleCanVerifyMutation.isPending) {
+                                toggleCanVerify(m._id, checked);
+                              }
+                            }}
+                          />
+                        )}
                         <span
                           className={`text-xs font-semibold ${
                             m.canVerifyTasks ? 'text-emerald-700' : 'text-slate-500'
@@ -381,59 +443,62 @@ export function TeamPage() {
                       {m.isActive ? 'Active' : 'Suspended'}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-right">
-                    {m.role !== 'admin' && (
-                      <div className="relative inline-block">
-                        <button
-                          onClick={() => setMenuOpen(menuOpen === m._id ? null : m._id)}
-                          className="p-2 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 opacity-0 group-hover:opacity-100 transition-all"
-                        >
-                          <MoreVertical className="w-4 h-4" />
-                        </button>
-                        {menuOpen === m._id && (
-                          <div className="absolute right-0 top-full mt-1 w-52 bg-white rounded-xl shadow-2xl border-2 border-slate-200 py-2 z-20">
-                            <button
-                              onClick={() => {
-                                if (!toggleStatusMutation.isPending) {
-                                  toggleMemberStatus(m._id);
-                                }
-                              }}
-                              className={`w-full text-left px-4 py-2.5 text-sm flex items-center gap-2 hover:bg-slate-50 font-medium ${
-                                m.isActive ? 'text-amber-600' : 'text-emerald-600'
-                              }`}
-                            >
-                              {m.isActive ? (
-                                <ShieldOff className="w-4 h-4" />
-                              ) : (
-                                <Shield className="w-4 h-4" />
-                              )}
-                              {m.isActive ? 'Suspend' : 'Activate'}
-                            </button>
-                            <button
-                              onClick={() => resetPassword(m._id)}
-                              className="w-full text-left px-4 py-2.5 text-sm text-slate-700 flex items-center gap-2 hover:bg-slate-50 font-medium"
-                            >
-                              <KeyRound className="w-4 h-4" />
-                              Reset Password
-                            </button>
-                            <div className="border-t border-slate-100 my-1" />
-                            <button
-                              onClick={() => deleteMember(m._id, `${m.firstName} ${m.lastName}`)}
-                              className="w-full text-left px-4 py-2.5 text-sm text-rose-600 flex items-center gap-2 hover:bg-rose-50 font-medium"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                              Delete Member
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </td>
+                  {isAdminOrManager && (
+                    <td className="px-6 py-4 text-right">
+                      {m.role !== 'admin' && (
+                        <div className="relative inline-block">
+                          <button
+                            onClick={() => setMenuOpen(menuOpen === m._id ? null : m._id)}
+                            className="p-2 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 opacity-0 group-hover:opacity-100 transition-all"
+                          >
+                            <MoreVertical className="w-4 h-4" />
+                          </button>
+                          {menuOpen === m._id && (
+                            <div className="absolute right-0 top-full mt-1 w-52 bg-white rounded-xl shadow-2xl border-2 border-slate-200 py-2 z-20">
+                              <button
+                                onClick={() => {
+                                  if (!toggleStatusMutation.isPending) {
+                                    toggleMemberStatus(m._id);
+                                  }
+                                }}
+                                className={`w-full text-left px-4 py-2.5 text-sm flex items-center gap-2 hover:bg-slate-50 font-medium ${
+                                  m.isActive ? 'text-amber-600' : 'text-emerald-600'
+                                }`}
+                              >
+                                {m.isActive ? (
+                                  <ShieldOff className="w-4 h-4" />
+                                ) : (
+                                  <Shield className="w-4 h-4" />
+                                )}
+                                {m.isActive ? 'Suspend' : 'Activate'}
+                              </button>
+                              <button
+                                onClick={() => resetPassword(m._id)}
+                                className="w-full text-left px-4 py-2.5 text-sm text-slate-700 flex items-center gap-2 hover:bg-slate-50 font-medium"
+                              >
+                                <KeyRound className="w-4 h-4" />
+                                Reset Password
+                              </button>
+                              <div className="border-t border-slate-100 my-1" />
+                              <button
+                                onClick={() => deleteMember(m._id, `${m.firstName} ${m.lastName}`)}
+                                className="w-full text-left px-4 py-2.5 text-sm text-rose-600 flex items-center gap-2 hover:bg-rose-50 font-medium"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                                Delete Member
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+        )}
 
         {/* Invite Modal */}
         {isModalOpen && (
