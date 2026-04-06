@@ -11,7 +11,7 @@ import {
   Lock,
   Loader2
 } from 'lucide-react';
-import { getGithubConfig, saveGithubConfig, getGithubAuthUrl, handleGithubCallback, getGithubRepos } from '../../services/github';
+import { getGithubConfig, saveGithubConfig, disconnectGithub, getGithubAuthUrl, handleGithubCallback, getGithubRepos } from '../../services/github';
 
 export function GitHubSettingsPage() {
   const queryClient = useQueryClient();
@@ -59,6 +59,17 @@ export function GitHubSettingsPage() {
     }
   });
 
+  const disconnectMutation = useMutation({
+    mutationFn: disconnectGithub,
+    onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ['github-config'] });
+        queryClient.invalidateQueries({ queryKey: ['github-repos'] });
+    },
+    onError: (err: any) => {
+        alert('Failed to disconnect GitHub: ' + (err.response?.data?.message || err.message));
+    }
+  });
+
   const callbackFired = useRef(false);
 
   useEffect(() => {
@@ -85,7 +96,7 @@ export function GitHubSettingsPage() {
 
   const handleDisconnect = () => {
     if (confirm('Are you sure you want to disconnect GitHub? This will remove all integrations.')) {
-      updateConfigMutation.mutate({ personalAccessToken: 'disconnected', repoOwner: '', repoName: '' } as any);
+      disconnectMutation.mutate();
     }
   };
 
@@ -183,11 +194,11 @@ export function GitHubSettingsPage() {
             {isConnected ? (
               <button
                 onClick={handleDisconnect}
-                disabled={updateConfigMutation.isPending}
+                disabled={disconnectMutation.isPending}
                 className="px-4 py-2 rounded-lg bg-white border-2 border-rose-200 text-rose-700 hover:bg-rose-50 hover:border-rose-300 text-sm font-semibold flex items-center gap-2 transition-all disabled:opacity-50"
               >
                 <Unlink className="w-4 h-4" />
-                Disconnect
+                {disconnectMutation.isPending ? 'Disconnecting...' : 'Disconnect'}
               </button>
             ) : (
               <button

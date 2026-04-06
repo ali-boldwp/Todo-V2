@@ -16,7 +16,6 @@ export const getGithubConfig = async (_req: AuthRequest, res: Response) => {
 export const saveGithubConfig = async (req: AuthRequest, res: Response) => {
     try {
         const validated = GithubConfigSchema.parse(req.body);
-        // Use upsert with empty filter to maintain a single global config
         const config = await GithubConfig.findOneAndUpdate(
             {},
             { ...validated },
@@ -25,6 +24,15 @@ export const saveGithubConfig = async (req: AuthRequest, res: Response) => {
         res.json(config);
     } catch (error: any) {
         res.status(400).json({ errors: error.issues || error.message });
+    }
+};
+
+export const disconnectGithub = async (_req: AuthRequest, res: Response) => {
+    try {
+        await GithubConfig.deleteOne({});
+        res.json({ message: 'GitHub disconnected successfully' });
+    } catch (error: any) {
+        res.status(500).json({ message: 'Server error' });
     }
 };
 

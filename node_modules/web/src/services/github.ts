@@ -11,6 +11,11 @@ export const saveGithubConfig = async (data: GithubConfigInput) => {
     return response.data;
 };
 
+export const disconnectGithub = async () => {
+    const response = await api.delete('/github/config');
+    return response.data;
+};
+
 export const syncIssues = async () => {
     const response = await api.post('/github/sync');
     return response.data;
