@@ -42,7 +42,9 @@ export const getGithubAuthUrl = async (_req: AuthRequest, res: Response) => {
         if (!clientId) {
             return res.status(500).json({ message: 'GITHUB_CLIENT_ID not configured on server. Please add it to your .env file.' });
         }
-        const url = `https://github.com/login/oauth/authorize?client_id=${clientId}&scope=repo`;
+        const frontendBaseUrl = process.env.FRONTEND_BASE_URL || 'http://localhost:5173';
+        const redirectUri = `${frontendBaseUrl}/github-settings`;
+        const url = `https://github.com/login/oauth/authorize?client_id=${clientId}&scope=repo&redirect_uri=${encodeURIComponent(redirectUri)}`;
         res.json({ url });
     } catch (error) {
         res.status(500).json({ message: 'Server error' });
@@ -63,13 +65,16 @@ export const handleGithubCallback = async (req: AuthRequest, res: Response) => {
             return res.status(500).json({ message: 'GitHub OAuth credentials not configured on server' });
         }
 
+        const frontendBaseUrl = process.env.FRONTEND_BASE_URL || 'http://localhost:5173';
+        const redirectUri = `${frontendBaseUrl}/github-settings`;
+
         const response = await fetch('https://github.com/login/oauth/access_token', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 Accept: 'application/json',
             },
-            body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, code }),
+            body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, code, redirect_uri: redirectUri }),
         });
 
         const data = await response.json();

@@ -236,8 +236,8 @@ export function ClientDetailPage() {
                 completionRate,
             };
         })
-        .filter((m: any) => m.totalTasks > 0 || m.totalSeconds > 0)
-        .sort((a: any, b: any) => b.totalSeconds - a.totalSeconds);
+        .filter((m: any) => m.assignedTasks > 0 || m.totalSeconds > 0)
+        .sort((a: any, b: any) => b.assignedTasks - a.assignedTasks || b.totalSeconds - a.totalSeconds);
     }, [teamMembers, allTasks]);
 
     // Global team totals
