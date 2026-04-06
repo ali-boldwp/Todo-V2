@@ -83,21 +83,32 @@ export function VerificationsPage() {
   };
 
   const pending = mockTasks.filter((task: any) => {
-    const isVerificationTask =
-      task?.verificationStatus === 'pending' || task?.status === 'under_verification';
+    const isVerificationTask = user?.role === 'client'
+      ? task?.status === 'client_approval' || task?.clientApprovalStatus === 'pending'
+      : task?.verificationStatus === 'pending' || task?.status === 'under_verification';
     return isVerificationTask && isRelatedToMe(task) && matchesProjectFilter(task);
   });
 
   const latestApproved = mockTasks
     .filter(
-      (task: any) =>
-        task?.verificationStatus === 'approved' &&
-        isRelatedToMe(task) &&
-        matchesProjectFilter(task)
+      (task: any) => {
+        const isApproved = user?.role === 'client'
+          ? task?.clientApprovalStatus === 'approved'
+          : task?.verificationStatus === 'approved';
+        return isApproved && isRelatedToMe(task) && matchesProjectFilter(task);
+      }
     )
     .sort((a: any, b: any) => {
-      const aTime = new Date(a?.verificationDecidedAt || a?.updatedAt || 0).getTime();
-      const bTime = new Date(b?.verificationDecidedAt || b?.updatedAt || 0).getTime();
+      const aTime = new Date(
+        user?.role === 'client'
+          ? a?.clientApprovalDecidedAt || a?.updatedAt || 0
+          : a?.verificationDecidedAt || a?.updatedAt || 0
+      ).getTime();
+      const bTime = new Date(
+        user?.role === 'client'
+          ? b?.clientApprovalDecidedAt || b?.updatedAt || 0
+          : b?.verificationDecidedAt || b?.updatedAt || 0
+      ).getTime();
       return bTime - aTime;
     })
     .slice(0, 12);
@@ -328,12 +339,12 @@ export function VerificationsPage() {
                       </div>
                       <div className="flex items-center gap-2">
                         <User className="w-4 h-4 text-slate-400" />
-                        <span>Verified by: {getUserLabel(task?.verifierId)}</span>
+                        <span>Verified by: {user?.role === 'client' ? 'Client' : getUserLabel(task?.verifierId)}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <Clock className="w-4 h-4 text-slate-400" />
                         <span>
-                          {formatDateTime(task?.verificationDecidedAt || task?.updatedAt)}
+                          {formatDateTime(user?.role === 'client' ? (task?.clientApprovalDecidedAt || task?.updatedAt) : (task?.verificationDecidedAt || task?.updatedAt))}
                         </span>
                       </div>
                     </div>
