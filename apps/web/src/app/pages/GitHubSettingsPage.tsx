@@ -5,19 +5,10 @@ import {
   Github, 
   Unlink, 
   Check, 
-  AlertCircle, 
-  RefreshCw,
   GitBranch,
   GitCommit,
-  Webhook,
-  Eye,
-  EyeOff,
-  Copy,
-  CheckCircle2,
   Globe,
   Lock,
-  Star,
-  GitFork,
   Loader2
 } from 'lucide-react';
 import { getGithubConfig, saveGithubConfig, getGithubAuthUrl, handleGithubCallback, getGithubRepos } from '../../services/github';
@@ -43,12 +34,7 @@ export function GitHubSettingsPage() {
 
   const [selectedRepo, setSelectedRepo] = useState('');
   const [defaultBranch, setDefaultBranch] = useState('dev');
-  const [webhookEnabled, setWebhookEnabled] = useState(true);
-  const [autoLinkCommits, setAutoLinkCommits] = useState(true);
-  const [showWebhookSecret, setShowWebhookSecret] = useState(false);
-  const [copiedSecret, setCopiedSecret] = useState(false);
-
-  const webhookSecret = 'whsec_a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6';
+  const [autoLinkCommits] = useState(true);
 
   const callbackMutation = useMutation({
     mutationFn: handleGithubCallback,
@@ -116,15 +102,7 @@ export function GitHubSettingsPage() {
     }
   };
 
-  const handleCopySecret = () => {
-    navigator.clipboard.writeText(webhookSecret);
-    setCopiedSecret(true);
-    setTimeout(() => setCopiedSecret(false), 2000);
-  };
 
-  const handleTestWebhook = () => {
-    alert('Webhook test event sent! Check your console for details.');
-  };
 
   if (isConfigLoading || callbackMutation.isPending) {
     return (

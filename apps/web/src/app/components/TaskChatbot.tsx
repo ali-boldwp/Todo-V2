@@ -10,7 +10,6 @@ import { useQuery } from '@tanstack/react-query';
 import { getProjects } from '../../services/core';
 import { getTeamMembers } from '../../services/team';
 import { createTask } from '../../services/task';
-import api from '../../services/api';
 
 interface Message {
   id: string;

@@ -543,7 +543,7 @@ export function ClientDetailPage() {
                                     <div className="col-span-1 text-right">Rate</div>
                                 </div>
 
-                                {teamStats.map((stat: any, idx: number) => {
+                                {teamStats.map((stat: any) => {
                                     const member = stat.member;
                                     const fullName = [member.firstName, member.lastName].filter(Boolean).join(' ') || member.email || 'Unknown';
                                     const initials = member.firstName && member.lastName
