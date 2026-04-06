@@ -24,7 +24,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getProjects } from '../../services/core';
 import { getTeamMembers } from '../../services/team';
 import { useAuth } from '../../context/AuthContext';
-import { startTaskWork, pauseTaskWork, resumeTaskWork, finishTaskWork, updateTask, approveTaskClient, rejectTaskClient, deleteTask } from '../../services/task';
+import { startTaskWork, pauseTaskWork, resumeTaskWork, finishTaskWork, updateTask, approveTaskClient, rejectTaskClient, deleteTask, approveTaskVerification, rejectTaskVerification } from '../../services/task';
 import { OutputData } from '@editorjs/editorjs';
 import { CodexTaskChat } from './CodexTaskChat';
 import clsx from 'clsx';
@@ -367,6 +367,32 @@ export function TaskPreviewDrawer({ isOpen, onClose, task }: TaskPreviewDrawerPr
     onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ['tasks'] });
         markTaskActionSuccess('Task Rejected', 'Task has been rejected and sent back for review.');
+    },
+    onError: (error: any) => {
+        markTaskActionError('Failed to Reject Task', error?.response?.data?.message || 'Failed to reject task');
+    },
+  });
+
+  const approveVerificationMutation = useMutation({
+    mutationFn: ({ id, comment }: { id: string; comment?: string }) => {
+        return approveTaskVerification(id, comment);
+    },
+    onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ['tasks'] });
+        markTaskActionSuccess('Task Verified', 'Task has been successfully verified.');
+    },
+    onError: (error: any) => {
+        markTaskActionError('Failed to Verify Task', error?.response?.data?.message || 'Failed to verify task');
+    },
+  });
+
+  const rejectVerificationMutation = useMutation({
+    mutationFn: ({ id, comment }: { id: string; comment?: string }) => {
+        return rejectTaskVerification(id, comment);
+    },
+    onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ['tasks'] });
+        markTaskActionSuccess('Task Verification Rejected', 'Task has been rejected and sent back for review.');
     },
     onError: (error: any) => {
         markTaskActionError('Failed to Reject Task', error?.response?.data?.message || 'Failed to reject task');
@@ -738,7 +764,57 @@ export function TaskPreviewDrawer({ isOpen, onClose, task }: TaskPreviewDrawerPr
               Task Actions
             </label>
             
-            {!isTaskRunning ? (
+            {task.status === 'under_verification' ? (() => {
+              const currentTeamMember = teamMembers.find((m: any) => m._id === currentUser?.id || m._id === (currentUser as any)?.userId);
+              const isEligibleVerifier = currentUser?.role === 'admin' || currentUser?.role === 'manager' || currentTeamMember?.canVerifyTasks;
+              
+              if (isEligibleVerifier) {
+                return (
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      onClick={() => {
+                        const comment = prompt("Any comments? (Optional)");
+                        if (comment !== null) {
+                            approveVerificationMutation.mutate({ id: task._id, comment: comment || undefined });
+                        }
+                      }}
+                      disabled={approveVerificationMutation.isPending || rejectVerificationMutation.isPending}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-semibold shadow-md hover:shadow-xl transition-all disabled:opacity-50"
+                    >
+                      <CheckCheck className="w-5 h-5 flex-shrink-0" />
+                      <span className="truncate">Verify Task</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        const comment = prompt("Please provide a reason for rejection (Required):");
+                        if (comment !== null) {
+                            if (!comment.trim()) {
+                                alert("Rejection reason is required.");
+                                return;
+                            }
+                            rejectVerificationMutation.mutate({ id: task._id, comment });
+                        }
+                      }}
+                      disabled={approveVerificationMutation.isPending || rejectVerificationMutation.isPending}
+                      className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-rose-50 hover:bg-rose-100 border-2 border-rose-200 hover:border-rose-300 text-rose-700 font-semibold transition-all disabled:opacity-50"
+                    >
+                      <XCircle className="w-5 h-5 flex-shrink-0" />
+                      <span className="truncate">Reject Task</span>
+                    </button>
+                  </div>
+                );
+              } else {
+                return (
+                  <div className="bg-violet-50 border-2 border-violet-200 rounded-xl p-4">
+                    <p className="text-sm font-semibold text-violet-800 flex items-center gap-2">
+                       <CheckCheck className="w-4 h-4 flex-shrink-0" />
+                       Task is under verification
+                    </p>
+                    <p className="text-xs text-violet-600 mt-1">Waiting for an eligible team member to verify.</p>
+                  </div>
+                );
+              }
+            })() : !isTaskRunning ? (
               <div className="grid grid-cols-2 gap-3">
                 <button
                   onClick={handleStartTask}
