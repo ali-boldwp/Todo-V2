@@ -134,7 +134,7 @@ export function ClientsPage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {filteredClients?.map((client: any) => (
-                    <div key={client._id} className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow">
+                    <div key={client._id} className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow cursor-pointer" onClick={() => navigate(`/clients/${client._id}`)}>
                         <div className="flex justify-between items-start mb-4">
                             <div className="flex items-center gap-3">
                                 <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${client.type === 'internal' ? 'bg-blue-100 text-blue-600' : 'bg-purple-100 text-purple-600'
@@ -158,13 +158,13 @@ export function ClientsPage() {
                             </div>
                             <div className="relative">
                                 <button
-                                    onClick={() => setIsMenuOpen(isMenuOpen === client._id ? null : client._id)}
+                                    onClick={(e) => { e.stopPropagation(); setIsMenuOpen(isMenuOpen === client._id ? null : client._id); }}
                                     className="p-1 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors"
                                 >
                                     <MoreVertical size={20} />
                                 </button>
                                 {isMenuOpen === client._id && (
-                                    <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-100 py-1 z-10">
+                                    <div className="absolute right-0 top-full mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-100 py-1 z-10" onClick={(e) => e.stopPropagation()}>
                                         {client.status === 'suspended' ? (
                                             <button
                                                 onClick={() => handleAction('activate', client)}

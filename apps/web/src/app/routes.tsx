@@ -21,6 +21,7 @@ import { ChatPage } from "./pages/ChatPage";
 import { PayrollPage } from "./pages/PayrollPage";
 import { AttendancePage } from "./pages/AttendancePage";
 import { ClientsPage } from "./pages/ClientsPage";
+import { ClientDetailPage } from "./pages/ClientDetailPage";
 import { GithubIntegrationPage } from "./pages/GithubIntegrationPage";
 import { IdeUpdatesIntegrationPage } from "./pages/IdeUpdatesIntegrationPage";
 import { AntigravityIntegrationPage } from "./pages/AntigravityIntegrationPage";
@@ -86,6 +87,10 @@ export const router = createBrowserRouter([
       {
         path: "clients",
         element: <ProtectedRoute requireAdmin><ClientsPage /></ProtectedRoute>
+      },
+      {
+        path: "clients/:id",
+        element: <ProtectedRoute requireAdmin><ClientDetailPage /></ProtectedRoute>
       },
       {
         path: "github-integration",
