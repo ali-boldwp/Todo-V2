@@ -24,7 +24,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getProjects } from '../../services/core';
 import { getTeamMembers } from '../../services/team';
 import { useAuth } from '../../context/AuthContext';
-import { startTaskWork, pauseTaskWork, resumeTaskWork, finishTaskWork, updateTask, approveTaskClient, rejectTaskClient, deleteTask, approveTaskVerification, rejectTaskVerification } from '../../services/task';
+import { startTaskWork, pauseTaskWork, resumeTaskWork, finishTaskWork, updateTask, approveTaskClient, rejectTaskClient, deleteTask, approveTaskVerification, rejectTaskVerification, startTaskVerification, pauseTaskVerification, resumeTaskVerification } from '../../services/task';
 import { OutputData } from '@editorjs/editorjs';
 import { CodexTaskChat } from './CodexTaskChat';
 import clsx from 'clsx';
@@ -80,6 +80,10 @@ export function TaskPreviewDrawer({ isOpen, onClose, task }: TaskPreviewDrawerPr
   const [isPaused, setIsPaused] = useState(task?.isWorkPaused || false);
   const [localSeconds, setLocalSeconds] = useState<number>(task?.totalWorkedSecondsComputed || task?.totalWorkedSeconds || 0);
 
+  const [isVerificationRunning, setIsVerificationRunning] = useState(task?.activeVerifierId ? true : false);
+  const [isVerificationPausedState, setIsVerificationPausedState] = useState(task?.isVerificationPaused || false);
+  const [localVerificationSeconds, setLocalVerificationSeconds] = useState<number>(task?.totalVerificationSeconds || 0);
+
   const [isClarificationModalOpen, setIsClarificationModalOpen] = useState(false);
   const [clarificationText, setClarificationText] = useState('');
   const [isFinishConfirmOpen, setIsFinishConfirmOpen] = useState(false);
@@ -105,6 +109,9 @@ export function TaskPreviewDrawer({ isOpen, onClose, task }: TaskPreviewDrawerPr
       setIsTaskRunning(!!task.activeWorkerId);
       setIsPaused(!!task.isWorkPaused);
       setLocalSeconds(task.totalWorkedSecondsComputed || task.totalWorkedSeconds || 0);
+      setIsVerificationRunning(!!task.activeVerifierId);
+      setIsVerificationPausedState(!!task.isVerificationPaused);
+      setLocalVerificationSeconds(task.totalVerificationSeconds || 0);
     }
   }, [task]);
 
@@ -115,8 +122,13 @@ export function TaskPreviewDrawer({ isOpen, onClose, task }: TaskPreviewDrawerPr
         setLocalSeconds((prev: number) => prev + 1);
       }, 1000);
     }
+    if (isVerificationRunning && !isVerificationPausedState) {
+      interval = setInterval(() => {
+        setLocalVerificationSeconds((prev: number) => prev + 1);
+      }, 1000);
+    }
     return () => clearInterval(interval);
-  }, [isTaskRunning, isPaused]);
+  }, [isTaskRunning, isPaused, isVerificationRunning, isVerificationPausedState]);
 
   useEffect(() => {
       if (!finishFlow.isOpen || finishFlow.phase !== 'running') return;
@@ -392,10 +404,57 @@ export function TaskPreviewDrawer({ isOpen, onClose, task }: TaskPreviewDrawerPr
     },
     onSuccess: () => {
         queryClient.invalidateQueries({ queryKey: ['tasks'] });
+        setIsVerificationRunning(false);
         markTaskActionSuccess('Task Verification Rejected', 'Task has been rejected and sent back for review.');
     },
     onError: (error: any) => {
         markTaskActionError('Failed to Reject Task', error?.response?.data?.message || 'Failed to reject task');
+    },
+  });
+
+  const startVerificationMutation = useMutation({
+    mutationFn: () => {
+        if (!task?._id) return Promise.reject(new Error('No task selected'));
+        return startTaskVerification(task._id);
+    },
+    onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ['tasks'] });
+        setIsVerificationRunning(true);
+        setIsVerificationPausedState(false);
+        markTaskActionSuccess('Verification Started', 'You are now actively verifying this task.');
+    },
+    onError: (error: any) => {
+        markTaskActionError('Failed to Start Verification', error?.response?.data?.message || 'Failed to start verification');
+    },
+  });
+
+  const pauseVerificationMutation = useMutation({
+    mutationFn: () => {
+        if (!task?._id) return Promise.reject(new Error('No task selected'));
+        return pauseTaskVerification(task._id);
+    },
+    onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ['tasks'] });
+        setIsVerificationPausedState(true);
+        markTaskActionSuccess('Verification Paused', 'Verification time tracking paused.');
+    },
+    onError: (error: any) => {
+        markTaskActionError('Failed to Pause Verification', error?.response?.data?.message || 'Failed to pause verification');
+    },
+  });
+
+  const resumeVerificationMutation = useMutation({
+    mutationFn: () => {
+        if (!task?._id) return Promise.reject(new Error('No task selected'));
+        return resumeTaskVerification(task._id);
+    },
+    onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ['tasks'] });
+        setIsVerificationPausedState(false);
+        markTaskActionSuccess('Verification Resumed', 'Verification time tracking resumed.');
+    },
+    onError: (error: any) => {
+        markTaskActionError('Failed to Resume Verification', error?.response?.data?.message || 'Failed to resume verification');
     },
   });
 
@@ -595,21 +654,37 @@ export function TaskPreviewDrawer({ isOpen, onClose, task }: TaskPreviewDrawerPr
             </div>
           </div>
 
-          {/* Time Tracked Row */}
           <div className="flex items-center p-2 rounded-lg hover:bg-slate-100 transition-colors">
             <div className="w-1/3 flex items-center gap-2 text-sm text-slate-500">
               <Clock className="w-4 h-4 text-slate-400" />
               <span>Time Tracked</span>
             </div>
-            <div className="w-2/3 flex items-center gap-3">
-              <span className="text-sm font-medium text-slate-700">
-                {formatDuration(localSeconds)}
-              </span>
-              {task.activeWorkerId && !isPaused && (
-                <span className="inline-flex items-center gap-1 text-[10px] uppercase font-bold text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full animate-pulse">
-                  <Play className="w-3 h-3 flex-shrink-0" />
-                  Running
+            <div className="w-2/3 flex flex-col gap-1">
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-medium text-slate-700">
+                  {formatDuration(localSeconds)} <span className="text-slate-400 text-xs font-normal ml-1">(Dev)</span>
                 </span>
+                {task.activeWorkerId && !isPaused && (
+                  <span className="inline-flex items-center gap-1 text-[10px] uppercase font-bold text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full animate-pulse">
+                    <Play className="w-3 h-3 flex-shrink-0" />
+                    Running
+                  </span>
+                )}
+              </div>
+              
+              {/* Verification Time Tracking Line */}
+              {(localVerificationSeconds > 0 || task.verificationStatus !== 'none') && (
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-medium text-slate-700">
+                    {formatDuration(localVerificationSeconds)} <span className="text-slate-400 text-xs font-normal ml-1">(Verification)</span>
+                  </span>
+                  {task.activeVerifierId && !isVerificationPausedState && (
+                    <span className="inline-flex items-center gap-1 text-[10px] uppercase font-bold text-violet-600 bg-violet-100 px-2 py-0.5 rounded-full animate-pulse">
+                      <Play className="w-3 h-3 flex-shrink-0" />
+                      Running
+                    </span>
+                  )}
+                </div>
               )}
             </div>
           </div>
@@ -769,38 +844,84 @@ export function TaskPreviewDrawer({ isOpen, onClose, task }: TaskPreviewDrawerPr
               const isEligibleVerifier = currentUser?.role === 'admin' || currentUser?.role === 'manager' || currentTeamMember?.canVerifyTasks;
               
               if (isEligibleVerifier) {
+                const isActiveVerifierMe = task.activeVerifierId && (task.activeVerifierId._id === currentUser?.id || task.activeVerifierId === currentUser?.id);
+                
                 return (
-                  <div className="grid grid-cols-2 gap-3">
-                    <button
-                      onClick={() => {
-                        const comment = prompt("Any comments? (Optional)");
-                        if (comment !== null) {
-                            approveVerificationMutation.mutate({ id: task._id, comment: comment || undefined });
-                        }
-                      }}
-                      disabled={approveVerificationMutation.isPending || rejectVerificationMutation.isPending}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-semibold shadow-md hover:shadow-xl transition-all disabled:opacity-50"
-                    >
-                      <CheckCheck className="w-5 h-5 flex-shrink-0" />
-                      <span className="truncate">Verify Task</span>
-                    </button>
-                    <button
-                      onClick={() => {
-                        const comment = prompt("Please provide a reason for rejection (Required):");
-                        if (comment !== null) {
-                            if (!comment.trim()) {
-                                alert("Rejection reason is required.");
-                                return;
-                            }
-                            rejectVerificationMutation.mutate({ id: task._id, comment });
-                        }
-                      }}
-                      disabled={approveVerificationMutation.isPending || rejectVerificationMutation.isPending}
-                      className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-rose-50 hover:bg-rose-100 border-2 border-rose-200 hover:border-rose-300 text-rose-700 font-semibold transition-all disabled:opacity-50"
-                    >
-                      <XCircle className="w-5 h-5 flex-shrink-0" />
-                      <span className="truncate">Reject Task</span>
-                    </button>
+                  <div className="flex flex-col gap-3">
+                    {!task.activeVerifierId ? (
+                      <button
+                        onClick={() => {
+                          openTaskActionRunning('start', 'Starting Verification', 'System is assigning you as active verifier and starting timer.');
+                          startVerificationMutation.mutate();
+                        }}
+                        disabled={startVerificationMutation.isPending}
+                        className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-semibold shadow-md hover:shadow-xl transition-all"
+                      >
+                        <Play className="w-5 h-5 flex-shrink-0" />
+                        <span className="truncate">Start Verification Phase</span>
+                      </button>
+                    ) : isActiveVerifierMe ? (
+                      <>
+                        <div className="grid grid-cols-2 gap-3 mb-2">
+                          <button
+                            onClick={() => {
+                              if (isVerificationPausedState) {
+                                openTaskActionRunning('resume', 'Resuming', 'Resuming verification tracking.');
+                                resumeVerificationMutation.mutate();
+                              } else {
+                                openTaskActionRunning('pause', 'Pausing', 'Pausing verification tracking.');
+                                pauseVerificationMutation.mutate();
+                              }
+                            }}
+                            className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border-2 font-semibold transition-all ${
+                              isVerificationPausedState 
+                                ? 'bg-indigo-50 hover:bg-indigo-100 border-indigo-200 text-indigo-700' 
+                                : 'bg-amber-50 hover:bg-amber-100 border-amber-200 text-amber-700'
+                            }`}
+                          >
+                            {isVerificationPausedState ? <Play className="w-4 h-4" /> : <Pause className="w-4 h-4" />}
+                            <span>{isVerificationPausedState ? 'Resume Timer' : 'Pause Timer'}</span>
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <button
+                            onClick={() => {
+                              const comment = prompt("Any comments? (Optional)");
+                              if (comment !== null) {
+                                  approveVerificationMutation.mutate({ id: task._id, comment: comment || undefined });
+                              }
+                            }}
+                            disabled={approveVerificationMutation.isPending || rejectVerificationMutation.isPending}
+                            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-semibold shadow-md hover:shadow-xl transition-all disabled:opacity-50"
+                          >
+                            <CheckCheck className="w-5 h-5 flex-shrink-0" />
+                            <span className="truncate">Verify Task</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              const comment = prompt("Please provide a reason for rejection (Required):");
+                              if (comment !== null) {
+                                  if (!comment.trim()) {
+                                      alert("Rejection reason is required.");
+                                      return;
+                                  }
+                                  rejectVerificationMutation.mutate({ id: task._id, comment });
+                              }
+                            }}
+                            disabled={approveVerificationMutation.isPending || rejectVerificationMutation.isPending}
+                            className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-rose-50 hover:bg-rose-100 border-2 border-rose-200 hover:border-rose-300 text-rose-700 font-semibold transition-all disabled:opacity-50"
+                          >
+                            <XCircle className="w-5 h-5 flex-shrink-0" />
+                            <span className="truncate">Reject Task</span>
+                          </button>
+                        </div>
+                      </>
+                    ) : (
+                      <div className="bg-violet-50 border-2 border-violet-200 rounded-xl p-4 flex flex-col gap-1 items-center justify-center">
+                        <Loader2 className="w-6 h-6 text-violet-600 animate-spin" />
+                        <span className="text-sm font-semibold text-violet-800">Another team member is verifying</span>
+                      </div>
+                    )}
                   </div>
                 );
               } else {

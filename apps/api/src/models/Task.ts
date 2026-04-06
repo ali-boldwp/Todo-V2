@@ -20,6 +20,15 @@ export interface ITask extends Document {
     }>;
     verificationStatus?: 'none' | 'pending' | 'approved' | 'rejected';
     verifierId?: mongoose.Types.ObjectId;
+    activeVerifierId?: mongoose.Types.ObjectId;
+    verificationStartedAt?: Date;
+    lastVerificationStartedAt?: Date;
+    isVerificationPaused?: boolean;
+    totalVerificationSeconds?: number;
+    verificationLogs?: Array<{
+        userId: mongoose.Types.ObjectId;
+        seconds: number;
+    }>;
     verificationComment?: string;
     verificationDecidedAt?: Date;
     clientApprovalStatus?: 'none' | 'pending' | 'approved' | 'rejected';
@@ -68,6 +77,15 @@ const TaskSchema: Schema = new Schema({
     }],
     verificationStatus: { type: String, enum: ['none', 'pending', 'approved', 'rejected'], default: 'none' },
     verifierId: { type: Schema.Types.ObjectId, ref: 'User' },
+    activeVerifierId: { type: Schema.Types.ObjectId, ref: 'User' },
+    verificationStartedAt: { type: Date },
+    lastVerificationStartedAt: { type: Date },
+    isVerificationPaused: { type: Boolean, default: false },
+    totalVerificationSeconds: { type: Number, default: 0 },
+    verificationLogs: [{
+        userId: { type: Schema.Types.ObjectId, ref: 'User', required: true },
+        seconds: { type: Number, required: true, default: 0 },
+    }],
     verificationComment: { type: String },
     verificationDecidedAt: { type: Date },
     clientApprovalStatus: { type: String, enum: ['none', 'pending', 'approved', 'rejected'], default: 'none' },

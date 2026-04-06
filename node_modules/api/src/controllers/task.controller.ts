@@ -1722,6 +1722,166 @@ export const fixTaskBranch = async (req: AuthRequest, res: Response) => {
 
 export const stopTaskWork = pauseTaskWork;
 
+export const startTaskVerification = async (req: AuthRequest, res: Response) => {
+    try {
+        if (!INTERNAL_ROLES.includes(req.user!.role)) {
+            return res.status(403).json({ message: 'Only admin and team members can start verification' });
+        }
+
+        const task = await Task.findById(req.params.id);
+        if (!task) return res.status(404).json({ message: 'Task not found' });
+        if (task.status !== 'under_verification' || task.verificationStatus !== 'pending') {
+            return res.status(400).json({ message: 'Task is not pending verification' });
+        }
+
+        const verifierId = (task.verifierId as any)?._id?.toString?.() || (task.verifierId as any)?.toString?.();
+        const canVerify = verifierId === req.user!.userId || ['admin', 'manager'].includes(req.user!.role);
+        if (!canVerify) {
+            return res.status(403).json({ message: 'Only the assigned verifier, manager, or admin can start verification' });
+        }
+
+        const currentActive: any = task.activeVerifierId;
+        const currentActiveId = currentActive?._id?.toString?.() || currentActive?.toString?.();
+        if (currentActiveId && currentActiveId !== req.user!.userId) {
+            return res.status(409).json({ message: 'Verification is already in progress by another user' });
+        }
+
+        const now = new Date();
+        const patch: any = {
+            activeVerifierId: req.user!.userId,
+            isVerificationPaused: false,
+        };
+        if (!task.verificationStartedAt) patch.verificationStartedAt = now;
+        if (task.isVerificationPaused || !task.lastVerificationStartedAt) patch.lastVerificationStartedAt = now;
+
+        const updated = await Task.findByIdAndUpdate(req.params.id, patch, { new: true })
+            .populate('assigneeId', 'firstName lastName email')
+            .populate('activeWorkerId', 'firstName lastName email role')
+            .populate('verifierId', 'firstName lastName email role')
+            .populate('workLogs.userId', 'firstName lastName email role');
+
+        if (!updated) return res.status(404).json({ message: 'Task not found' });
+        await appendTaskActivity(updated._id, {
+            action: 'verification_started',
+            message: `${req.user?.firstName || 'A team member'} started verifying task.`,
+            actor: req.user,
+        });
+
+        res.json(toTaskResponse(updated, req.user!));
+        emitTaskEvent('task:updated', updated);
+    } catch (error) {
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+export const pauseTaskVerification = async (req: AuthRequest, res: Response) => {
+    try {
+        if (!INTERNAL_ROLES.includes(req.user!.role)) {
+            return res.status(403).json({ message: 'Only admin and team members can pause verification' });
+        }
+
+        const task = await Task.findById(req.params.id);
+        if (!task) return res.status(404).json({ message: 'Task not found' });
+
+        const currentActive: any = task.activeVerifierId;
+        const currentActiveId = currentActive?._id?.toString?.() || currentActive?.toString?.();
+        if (!currentActiveId) {
+            return res.status(400).json({ message: 'Task verification is not currently active' });
+        }
+
+        const canPause = currentActiveId === req.user!.userId || ['admin', 'manager'].includes(req.user!.role);
+        if (!canPause) {
+            return res.status(403).json({ message: 'Only the active verifier, manager, or admin can pause verification' });
+        }
+
+        if (task.isVerificationPaused) {
+            return res.status(400).json({ message: 'Verification is already paused' });
+        }
+
+        const elapsed = getElapsedSeconds(task.lastVerificationStartedAt);
+        const verificationLogs = mergeWorkLog(task.verificationLogs as any[], currentActiveId, elapsed);
+
+        const updated = await Task.findByIdAndUpdate(
+            req.params.id,
+            {
+                isVerificationPaused: true,
+                totalVerificationSeconds: Number(task.totalVerificationSeconds || 0) + elapsed,
+                verificationLogs,
+            },
+            { new: true }
+        )
+            .populate('assigneeId', 'firstName lastName email')
+            .populate('activeWorkerId', 'firstName lastName email role')
+            .populate('verifierId', 'firstName lastName email role')
+            .populate('workLogs.userId', 'firstName lastName email role');
+
+        if (!updated) return res.status(404).json({ message: 'Task not found' });
+        await appendTaskActivity(updated._id, {
+            action: 'verification_paused',
+            message: `${req.user?.firstName || 'A team member'} paused verification.`,
+            actor: req.user,
+        });
+        res.json(toTaskResponse(updated, req.user!));
+        emitTaskEvent('task:updated', updated);
+    } catch (error) {
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
+export const resumeTaskVerification = async (req: AuthRequest, res: Response) => {
+    try {
+        if (!INTERNAL_ROLES.includes(req.user!.role)) {
+            return res.status(403).json({ message: 'Only admin and team members can resume verification' });
+        }
+
+        const task = await Task.findById(req.params.id);
+        if (!task) return res.status(404).json({ message: 'Task not found' });
+        if (task.status !== 'under_verification' || task.verificationStatus !== 'pending') {
+            return res.status(400).json({ message: 'Task is not under verification' });
+        }
+
+        const currentActive: any = task.activeVerifierId;
+        const currentActiveId = currentActive?._id?.toString?.() || currentActive?.toString?.();
+        if (!currentActiveId) {
+            return res.status(400).json({ message: 'Task verification is not assigned to an active verifier' });
+        }
+
+        const canResume = currentActiveId === req.user!.userId || ['admin', 'manager'].includes(req.user!.role);
+        if (!canResume) {
+            return res.status(403).json({ message: 'Only the active verifier, manager, or admin can resume verification' });
+        }
+
+        if (!task.isVerificationPaused) {
+            return res.status(400).json({ message: 'Verification is not paused' });
+        }
+
+        const updated = await Task.findByIdAndUpdate(
+            req.params.id,
+            {
+                isVerificationPaused: false,
+                lastVerificationStartedAt: new Date()
+            },
+            { new: true }
+        )
+            .populate('assigneeId', 'firstName lastName email')
+            .populate('activeWorkerId', 'firstName lastName email role')
+            .populate('verifierId', 'firstName lastName email role')
+            .populate('workLogs.userId', 'firstName lastName email role');
+
+        if (!updated) return res.status(404).json({ message: 'Task not found' });
+        await appendTaskActivity(updated._id, {
+            action: 'verification_resumed',
+            message: `${req.user?.firstName || 'A team member'} resumed verification.`,
+            actor: req.user,
+        });
+
+        res.json(toTaskResponse(updated, req.user!));
+        emitTaskEvent('task:updated', updated);
+    } catch (error) {
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+
 export const approveTaskVerification = async (req: AuthRequest, res: Response) => {
     try {
         if (!INTERNAL_ROLES.includes(req.user!.role)) {
@@ -1767,6 +1927,16 @@ export const approveTaskVerification = async (req: AuthRequest, res: Response) =
             }
         }
 
+        let verificationLogs = task.verificationLogs as any[] || [];
+        let totalVerificationSeconds = Number(task.totalVerificationSeconds || 0);
+        
+        const currentActiveId = task.activeVerifierId?.toString?.();
+        if (currentActiveId) {
+            const elapsed = task.isVerificationPaused ? 0 : getElapsedSeconds(task.lastVerificationStartedAt);
+            verificationLogs = mergeWorkLog(verificationLogs, currentActiveId, elapsed);
+            totalVerificationSeconds += elapsed;
+        }
+
         const updated = await Task.findByIdAndUpdate(
             req.params.id,
             {
@@ -1776,6 +1946,11 @@ export const approveTaskVerification = async (req: AuthRequest, res: Response) =
                 verificationDecidedAt: new Date(),
                 clientApprovalStatus: 'pending',
                 githubBranch: nextGithubBranch,
+                activeVerifierId: null,
+                lastVerificationStartedAt: null,
+                isVerificationPaused: false,
+                verificationLogs,
+                totalVerificationSeconds,
             },
             { new: true }
         )
@@ -1826,6 +2001,16 @@ export const rejectTaskVerification = async (req: AuthRequest, res: Response) =>
             return res.status(403).json({ message: 'Only assigned verifier can reject this task' });
         }
 
+        let verificationLogs = task.verificationLogs as any[] || [];
+        let totalVerificationSeconds = Number(task.totalVerificationSeconds || 0);
+
+        const currentActiveId = task.activeVerifierId?.toString?.();
+        if (currentActiveId) {
+            const elapsed = task.isVerificationPaused ? 0 : getElapsedSeconds(task.lastVerificationStartedAt);
+            verificationLogs = mergeWorkLog(verificationLogs, currentActiveId, elapsed);
+            totalVerificationSeconds += elapsed;
+        }
+
         const updated = await Task.findByIdAndUpdate(
             req.params.id,
             {
@@ -1835,6 +2020,11 @@ export const rejectTaskVerification = async (req: AuthRequest, res: Response) =>
                 status: 'review',
                 isMergedToDev: false,
                 finishedAt: null,
+                activeVerifierId: null,
+                lastVerificationStartedAt: null,
+                isVerificationPaused: false,
+                verificationLogs,
+                totalVerificationSeconds,
             },
             { new: true }
         )

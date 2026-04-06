@@ -57,6 +57,21 @@ export const fixTaskBranch = async (id: string) => {
     return response.data;
 };
 
+export const startTaskVerification = async (id: string) => {
+    const response = await api.post(`/tasks/${id}/verify/start`);
+    return response.data;
+};
+
+export const pauseTaskVerification = async (id: string) => {
+    const response = await api.post(`/tasks/${id}/verify/pause`);
+    return response.data;
+};
+
+export const resumeTaskVerification = async (id: string) => {
+    const response = await api.post(`/tasks/${id}/verify/resume`);
+    return response.data;
+};
+
 export const approveTaskVerification = async (id: string, comment?: string) => {
     const response = await api.post(`/tasks/${id}/verify/approve`, { comment });
     return response.data;

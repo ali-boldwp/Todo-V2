@@ -207,11 +207,23 @@ export function PremiumLayout() {
 
   // Count pending verifications for user
   const myId = user?.id?.toString?.() || '';
-  const myPendingVerifications = mockTasks.filter((task: any) => {
+  const myPendingVerificationTasks = mockTasks.filter((task: any) => {
     const verifierId = task?.verifierId?._id?.toString?.() || task?.verifierId?.toString?.() || '';
     const isPendingVerification = task?.verificationStatus === 'pending' || task?.status === 'under_verification';
     return isPendingVerification && verifierId === myId;
+  });
+  const myPendingVerifications = myPendingVerificationTasks.length;
+
+  const myActiveTaskCount = mockTasks.filter((task: any) => {
+    const activeWorkerId = task?.activeWorkerId?._id?.toString?.() || task?.activeWorkerId?.toString?.() || '';
+    const activeVerifierId = task?.activeVerifierId?._id?.toString?.() || task?.activeVerifierId?.toString?.() || '';
+    return (activeWorkerId === myId || activeVerifierId === myId) && !task.isWorkPaused && !task.isVerificationPaused;
   }).length;
+
+  const shouldBlockForVerification = 
+    (user?.role === 'member' || user?.role === 'manager') && 
+    myPendingVerifications > 0 && 
+    myActiveTaskCount === 0;
 
   const unreadCount = notifications.filter(n => !n.readAt).length;
 
@@ -428,6 +440,46 @@ export function PremiumLayout() {
           className="fixed inset-0 z-40"
           onClick={() => setIsNotificationsOpen(false)}
         />
+      )}
+
+      {/* Global Verification Blocker */}
+      {shouldBlockForVerification && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/80 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl p-8 max-w-lg w-full">
+            <div className="flex items-center justify-center w-16 h-16 rounded-full bg-rose-100 mb-6 mx-auto">
+              <CheckSquare className="w-8 h-8 text-rose-600" />
+            </div>
+            
+            <h2 className="text-2xl font-bold text-slate-900 text-center mb-2">
+              Action Required
+            </h2>
+            <p className="text-slate-600 text-center mb-6">
+              You have {myPendingVerifications} pending task(s) awaiting your verification.
+              Please start verification before continuing your work.
+            </p>
+            
+            <div className="space-y-3 mb-6 max-h-60 overflow-y-auto">
+              {myPendingVerificationTasks.map((task: any) => (
+                <div key={task._id} className="p-4 rounded-xl border border-rose-100 bg-rose-50 flex items-center justify-between">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-rose-900 truncate">{task.title}</p>
+                    <p className="text-xs text-rose-700 mt-0.5">Project: {task?.projectId?.name || 'Unknown'}</p>
+                  </div>
+                  <button 
+                    onClick={() => navigate(`/project/${task?.projectId?._id?.toString?.() || task?.projectId}/verifications`)}
+                    className="ml-4 px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-lg transition-colors shrink-0"
+                  >
+                    Review
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <div className="text-center text-xs text-slate-400">
+              Your workflow is currently paused until pending verifications are addressed.
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
