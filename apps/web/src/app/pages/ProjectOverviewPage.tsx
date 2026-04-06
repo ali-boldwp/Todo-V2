@@ -63,24 +63,40 @@ export function ProjectOverviewPage() {
   const totalLoggedHours = (totalLoggedSeconds / 3600).toFixed(1);
 
   let teamStats = project.members?.map((member: any) => {
-    const memberId = typeof member === 'string' ? member : member._id;
-    const completedMemberTasks = projectTasks.filter((t: any) => {
-      const assigneeId = typeof t.assigneeId === 'object' ? t.assigneeId?._id : t.assigneeId;
-      return assigneeId === memberId && t.status === 'done';
+    const memberId = (typeof member === 'string' ? member : member._id)?.toString();
+    const memberName = `${member.firstName || ''} ${member.lastName || ''}`.trim() || member.email || 'Unknown';
+
+    // All tasks assigned to this member in this project
+    const assignedTasks = projectTasks.filter((t: any) => {
+      const assigneeId = (t.assigneeId?._id || t.assigneeId)?.toString();
+      return assigneeId === memberId;
     });
-    
-    const completedTasksCount = completedMemberTasks.length;
-    const loggedSeconds = completedMemberTasks.reduce((sum: number, t: any) => sum + (t.totalWorkedSeconds || 0), 0);
-    
+
+    const completedTasksCount = assignedTasks.filter((t: any) =>
+      t.status === 'done' || t.status === 'completed'
+    ).length;
+
+    // Time: sum workLog seconds attributed to this member across all project tasks
+    let loggedSeconds = 0;
+    projectTasks.forEach((t: any) => {
+      if (!Array.isArray(t.workLogs)) return;
+      t.workLogs.forEach((log: any) => {
+        const logUserId = (log.userId?._id || log.userId)?.toString();
+        if (logUserId === memberId) {
+          loggedSeconds += Number(log.seconds || 0);
+        }
+      });
+    });
+
     return {
-      name: `${member.firstName || ''} ${member.lastName || ''}`.trim() || member.email || 'Unknown',
-      tasksCount: completedTasksCount,
+      name: memberName,
+      tasksCount: assignedTasks.length,
       completedCount: completedTasksCount,
       hours: Number((loggedSeconds / 3600).toFixed(1))
     };
   }) || [];
 
-  // Sort by hours (high to low), fallback to tasks count
+  // Sort: most hours first, then most tasks
   teamStats.sort((a: any, b: any) => {
     if (b.hours !== a.hours) return b.hours - a.hours;
     return b.tasksCount - a.tasksCount;
