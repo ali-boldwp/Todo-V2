@@ -49,15 +49,10 @@ export const router = createBrowserRouter([
     element: <ProtectedRoute><GithubMemberSetup /></ProtectedRoute>,
   },
   {
-    // GitHub OAuth callback URL — must match what's registered in the GitHub OAuth App
+    // GitHub OAuth member setup callback — backend redirects here after GitHub auth
+    // Must be accessible without requireAdmin since all team members use this flow
     path: "/github/setup",
-    element: <ProtectedRoute requireAdmin><PremiumLayout /></ProtectedRoute>,
-    children: [
-      {
-        index: true,
-        element: <GitHubSettingsPage />
-      }
-    ]
+    element: <ProtectedRoute><GithubMemberSetup /></ProtectedRoute>,
   },
   {
     path: "/",
