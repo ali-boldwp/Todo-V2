@@ -18,12 +18,13 @@ import {
   Loader2,
   Check,
   GitBranch,
+  Trash2,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getProjects } from '../../services/core';
 import { getTeamMembers } from '../../services/team';
 import { useAuth } from '../../context/AuthContext';
-import { startTaskWork, pauseTaskWork, resumeTaskWork, finishTaskWork, updateTask, approveTaskClient, rejectTaskClient } from '../../services/task';
+import { startTaskWork, pauseTaskWork, resumeTaskWork, finishTaskWork, updateTask, approveTaskClient, rejectTaskClient, deleteTask } from '../../services/task';
 import { OutputData } from '@editorjs/editorjs';
 import { CodexTaskChat } from './CodexTaskChat';
 import clsx from 'clsx';
@@ -82,6 +83,7 @@ export function TaskPreviewDrawer({ isOpen, onClose, task }: TaskPreviewDrawerPr
   const [isClarificationModalOpen, setIsClarificationModalOpen] = useState(false);
   const [clarificationText, setClarificationText] = useState('');
   const [isFinishConfirmOpen, setIsFinishConfirmOpen] = useState(false);
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
   const [taskActionModal, setTaskActionModal] = useState<TaskActionModalState>({
       isOpen: false,
       phase: 'running',
@@ -130,6 +132,18 @@ export function TaskPreviewDrawer({ isOpen, onClose, task }: TaskPreviewDrawerPr
   const { data: teamMembers = [] } = useQuery({ queryKey: ['teamMembers'], queryFn: getTeamMembers });
   const { data: projects = [] } = useQuery({ queryKey: ['projects'], queryFn: getProjects });
   const { user: currentUser } = useAuth();
+  const isAdmin = currentUser?.role === 'admin';
+
+  const deleteMutation = useMutation({
+    mutationFn: () => deleteTask(task._id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      onClose();
+    },
+    onError: (err: any) => {
+      alert('Failed to delete task: ' + (err?.response?.data?.message || err?.message || 'Unknown error'));
+    }
+  });
 
   const formatDuration = (seconds: number) => {
     const hours = Math.floor(seconds / 3600);
@@ -450,7 +464,19 @@ export function TaskPreviewDrawer({ isOpen, onClose, task }: TaskPreviewDrawerPr
         <div className="space-y-6">
         {/* Task Title */}
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 mb-2">{task.title}</h1>
+          <div className="flex items-start justify-between gap-3 mb-2">
+            <h1 className="text-2xl font-bold text-slate-900">{task.title}</h1>
+            {isAdmin && (
+              <button
+                onClick={() => setIsDeleteConfirmOpen(true)}
+                disabled={deleteMutation.isPending}
+                title="Delete task"
+                className="shrink-0 p-2 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-all disabled:opacity-50"
+              >
+                <Trash2 className="w-4 h-4" />
+              </button>
+            )}
+          </div>
           {project && (
             <div className="flex items-center gap-2 text-sm text-slate-500">
               <FolderKanban className="w-4 h-4" />
@@ -1075,6 +1101,42 @@ export function TaskPreviewDrawer({ isOpen, onClose, task }: TaskPreviewDrawerPr
                     </div>
                 </div>
             )}
+
+      {/* Delete Confirmation Modal */}
+      {isDeleteConfirmOpen && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl p-6 w-full max-w-sm">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-rose-100 flex items-center justify-center shrink-0">
+                <Trash2 className="w-5 h-5 text-rose-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Delete Task</h3>
+                <p className="text-sm text-gray-500">This action cannot be undone</p>
+              </div>
+            </div>
+            <p className="text-sm text-gray-700 mb-6">
+              Are you sure you want to permanently delete <span className="font-semibold">"{task.title}"</span>? The GitHub branch will also be removed.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setIsDeleteConfirmOpen(false)}
+                disabled={deleteMutation.isPending}
+                className="px-5 py-2.5 text-sm font-semibold border-2 border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => deleteMutation.mutate()}
+                disabled={deleteMutation.isPending}
+                className="px-5 py-2.5 text-sm font-semibold bg-gradient-to-r from-rose-500 to-red-600 text-white rounded-lg hover:from-rose-600 hover:to-red-700 disabled:opacity-50 shadow-md transition-all flex items-center gap-2"
+              >
+                {deleteMutation.isPending ? <><Loader2 className="w-4 h-4 animate-spin" /> Deleting...</> : <><Trash2 className="w-4 h-4" /> Delete Task</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </>
   );
