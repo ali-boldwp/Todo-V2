@@ -27,6 +27,7 @@ import {
   Sparkles,
   Briefcase,
 } from 'lucide-react';
+import { TaskPreviewDrawer } from './TaskPreviewDrawer';
 
 // Simple avatar component
 const UserAvatar = ({ firstName, lastName, email, sizeClassName = 'w-8 h-8', textClassName = 'text-xs' }: any) => {
@@ -190,6 +191,7 @@ export function PremiumLayout() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [notifications, setNotifications] = useState(mockNotifications);
+  const [selectedVerificationTask, setSelectedVerificationTask] = useState<any>(null);
 
   const { data: mockProjects = [] } = useQuery({ queryKey: ['projects'], queryFn: getProjects });
   const { data: mockTasks = [] } = useQuery({ queryKey: ['tasks', 'all'], queryFn: () => getTasks('' as any).catch(() => []) });
@@ -461,8 +463,11 @@ export function PremiumLayout() {
             <div className="space-y-3 mb-6 max-h-60 overflow-y-auto">
               {myPendingVerificationTasks.map((task: any) => (
                 <div key={task._id} className="p-4 rounded-xl border border-rose-100 bg-rose-50 flex items-center justify-between">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-rose-900 truncate">{task.title}</p>
+                  <div 
+                    className="min-w-0 flex-1 cursor-pointer group"
+                    onClick={() => setSelectedVerificationTask(task)}
+                  >
+                    <p className="text-sm font-semibold text-rose-900 truncate group-hover:text-rose-700 transition-colors cursor-pointer">{task.title}</p>
                     <p className="text-xs text-rose-700 mt-0.5">Project: {task?.projectId?.name || 'Unknown'}</p>
                   </div>
                   <button 
@@ -480,6 +485,14 @@ export function PremiumLayout() {
             </div>
           </div>
         </div>
+      )}
+
+      {selectedVerificationTask && (
+        <TaskPreviewDrawer
+          isOpen={!!selectedVerificationTask}
+          onClose={() => setSelectedVerificationTask(null)}
+          task={selectedVerificationTask}
+        />
       )}
     </div>
   );

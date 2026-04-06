@@ -19,12 +19,17 @@ import {
   Check,
   GitBranch,
   Trash2,
+  Paperclip,
+  Download,
+  Image as ImageIcon,
+  File as FileIcon,
+  Plus,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getProjects } from '../../services/core';
 import { getTeamMembers } from '../../services/team';
 import { useAuth } from '../../context/AuthContext';
-import { startTaskWork, pauseTaskWork, resumeTaskWork, finishTaskWork, updateTask, approveTaskClient, rejectTaskClient, deleteTask, approveTaskVerification, rejectTaskVerification, startTaskVerification, pauseTaskVerification, resumeTaskVerification } from '../../services/task';
+import { startTaskWork, pauseTaskWork, resumeTaskWork, finishTaskWork, updateTask, approveTaskClient, rejectTaskClient, deleteTask, approveTaskVerification, rejectTaskVerification, startTaskVerification, pauseTaskVerification, resumeTaskVerification, uploadAttachment, deleteAttachment } from '../../services/task';
 import { OutputData } from '@editorjs/editorjs';
 import { CodexTaskChat } from './CodexTaskChat';
 import clsx from 'clsx';
@@ -141,6 +146,37 @@ export function TaskPreviewDrawer({ isOpen, onClose, task }: TaskPreviewDrawerPr
       return () => clearInterval(interval);
   }, [finishFlow.isOpen, finishFlow.phase]);
 
+  useEffect(() => {
+    if (!isOpen || !task?._id) return;
+    
+    const handlePaste = (e: ClipboardEvent) => {
+      const target = e.target as HTMLElement;
+      // If typing in input, let normal paste happen (except if it's an image file)
+      const isInput = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+      
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      
+      let fileFound = false;
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].kind === 'file') {
+          const file = items[i].getAsFile();
+          if (file) {
+            fileFound = true;
+            uploadAttachmentMutation.mutate(file);
+          }
+        }
+      }
+      
+      if (fileFound && !isInput) {
+          e.preventDefault();
+      }
+    };
+    
+    document.addEventListener('paste', handlePaste);
+    return () => document.removeEventListener('paste', handlePaste);
+  }, [isOpen, task?._id]);
+
   const { data: teamMembers = [] } = useQuery({ queryKey: ['teamMembers'], queryFn: getTeamMembers });
   const { data: projects = [] } = useQuery({ queryKey: ['projects'], queryFn: getProjects });
   const { user: currentUser } = useAuth();
@@ -162,6 +198,26 @@ export function TaskPreviewDrawer({ isOpen, onClose, task }: TaskPreviewDrawerPr
     const minutes = Math.floor((seconds % 3600) / 60);
     return `${hours}h ${minutes}m`;
   };
+
+  const uploadAttachmentMutation = useMutation({
+    mutationFn: (file: File) => uploadAttachment(task._id, file),
+    onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    },
+    onError: (err: any) => {
+        alert('Failed to upload attachment: ' + (err?.response?.data?.message || err?.message));
+    }
+  });
+
+  const deleteAttachmentMutation = useMutation({
+    mutationFn: (index: number) => deleteAttachment(task._id, index),
+    onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ['tasks'] });
+    },
+    onError: (err: any) => {
+        alert('Failed to delete attachment: ' + (err?.response?.data?.message || err?.message));
+    }
+  });
 
   const openTaskActionRunning = (action: TaskActionType, title: string, message: string) => {
       setTaskActionModal({
@@ -831,6 +887,94 @@ export function TaskPreviewDrawer({ isOpen, onClose, task }: TaskPreviewDrawerPr
             </div>
           </div>
         )}
+
+        {/* Attachments Section */}
+        <div className="pt-4 border-t border-slate-200">
+          <div className="flex items-center justify-between mb-3">
+            <label className="text-xs font-bold text-slate-500 uppercase tracking-wide flex items-center gap-2">
+              <Paperclip className="w-4 h-4" />
+              Attachments
+            </label>
+            <div className="relative">
+              <input
+                type="file"
+                multiple
+                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                onChange={(e) => {
+                  if (e.target.files?.length) {
+                    Array.from(e.target.files).forEach(file => uploadAttachmentMutation.mutate(file));
+                  }
+                  e.target.value = '';
+                }}
+              />
+              <button className="text-xs flex items-center gap-1 font-medium text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-2.5 py-1.5 rounded-lg transition-colors">
+                <Plus className="w-3.5 h-3.5" />
+                Add File
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            {task.attachments?.length > 0 ? (
+              task.attachments.map((att: any, idx: number) => (
+                <div key={idx} className="flex items-center justify-between p-3 rounded-lg border border-slate-200 bg-white hover:border-slate-300 transition-colors group">
+                  <div className="flex items-center gap-3 overflow-hidden">
+                    <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
+                      {att.mimeType?.startsWith('image/') ? (
+                        <ImageIcon className="w-5 h-5 text-indigo-600" />
+                      ) : (
+                        <FileIcon className="w-5 h-5 text-indigo-600" />
+                      )}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-slate-700 truncate">{att.name}</p>
+                      <p className="text-xs text-slate-400">
+                        {att.size ? (att.size / 1024 / 1024).toFixed(2) + ' MB' : 'Unknown size'} • {new Date(att.uploadedAt).toLocaleDateString()}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      onClick={() => {
+                        window.open(`/api/tasks/${task._id}/attachments/${idx}/download`, '_blank');
+                      }}
+                      className="p-1.5 rounded-md text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+                      title="Download"
+                    >
+                      <Download className="w-4 h-4" />
+                    </button>
+                    {isAdmin || (currentUser as any)?.id === att.uploadedBy || (currentUser as any)?.userId === att.uploadedBy ? (
+                      <button
+                        onClick={() => {
+                          if (confirm('Delete this attachment?')) {
+                            deleteAttachmentMutation.mutate(idx);
+                          }
+                        }}
+                        className="p-1.5 rounded-md text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors"
+                        title="Delete"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-6 border-2 border-dashed border-slate-200 rounded-xl bg-slate-50">
+                <Paperclip className="w-6 h-6 text-slate-300 mx-auto mb-2" />
+                <p className="text-sm font-medium text-slate-500">No attachments yet</p>
+                <p className="text-xs text-slate-400">Click Add File or press Ctrl+V to paste an image/file</p>
+              </div>
+            )}
+            
+            {uploadAttachmentMutation.isPending && (
+              <div className="flex items-center gap-3 p-3 rounded-lg border border-slate-200 bg-indigo-50/50">
+                <Loader2 className="w-5 h-5 text-indigo-600 animate-spin flex-shrink-0" />
+                <span className="text-sm text-indigo-600 font-medium">Uploading attachment...</span>
+              </div>
+            )}
+          </div>
+        </div>
 
         {/* Action Buttons */}
         {task.status !== 'done' && task.status !== 'completed' && task.status !== 'client_approval' && task.verificationStatus !== 'approved' && currentUser?.role !== 'client' && (
