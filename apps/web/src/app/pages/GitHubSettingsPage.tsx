@@ -85,7 +85,6 @@ export function GitHubSettingsPage() {
 
   const handleDisconnect = () => {
     if (confirm('Are you sure you want to disconnect GitHub? This will remove all integrations.')) {
-      alert('Disconnecting is currently available in the backend API but we will clear PAT for now.');
       updateConfigMutation.mutate({ personalAccessToken: 'disconnected', repoOwner: '', repoName: '' } as any);
     }
   };
@@ -101,8 +100,6 @@ export function GitHubSettingsPage() {
       });
     }
   };
-
-
 
   if (isConfigLoading || callbackMutation.isPending) {
     return (
