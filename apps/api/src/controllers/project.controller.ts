@@ -375,8 +375,8 @@ export const addProjectMember = async (req: AuthRequest, res: Response) => {
         if (!user) return res.status(404).json({ message: 'User not found' });
 
         const needsGithubSetup = ['manager', 'member'].includes(user.role || '');
-        if (needsGithubSetup && (!user.githubUsername || !user.githubUserId || !user.githubConnectedAt)) {
-            return res.status(400).json({ message: 'This team member must complete GitHub setup before being assigned to projects.' });
+        if (needsGithubSetup && !user.githubUsername) {
+            return res.status(400).json({ message: 'This team member must have a GitHub username configured before being assigned to projects.' });
         }
 
         const project = await Project.findByIdAndUpdate(
