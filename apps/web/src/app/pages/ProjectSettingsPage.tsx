@@ -16,7 +16,6 @@ import {
   Code,
   Github,
   Lock,
-  Crown,
   UserPlus,
   X,
   Check,
