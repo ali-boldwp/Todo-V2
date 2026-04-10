@@ -84,3 +84,14 @@ export const getProjectAIRepoStatus = async (projectId: string) => {
     return response.data;
 };
 
+// --- Project Members ---
+export const addProjectMember = async (projectId: string, userId: string) => {
+    const response = await api.post(`/projects/${projectId}/members`, { userId });
+    return response.data;
+};
+
+export const removeProjectMember = async (projectId: string, userId: string) => {
+    const response = await api.delete(`/projects/${projectId}/members/${userId}`);
+    return response.data;
+};
+
