@@ -34,7 +34,6 @@ var __importStar = (this && this.__importStar) || (function () {
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = require("express");
-const ai_service_1 = require("../services/ai.service");
 const auth_1 = require("../middleware/auth");
 const opencode_service_1 = require("../services/opencode.service");
 const router = (0, express_1.Router)();
@@ -126,6 +125,57 @@ router.get('/ai/sessions', auth_1.authenticate, async (_req, res) => {
         res.status(502).json({ error: 'OpenCode unavailable' });
     }
 });
+/** POST /api/ai/chat/stream */
+router.post('/ai/chat/stream', auth_1.authenticate, auth_1.requireProfileImageSetup, auth_1.requireGithubSetupForTeamMembers, async (req, res) => {
+    try {
+        const { messages, taskDraft, projectId } = req.body;
+        if (!messages || !Array.isArray(messages)) {
+            res.status(400).json({ error: 'Invalid messages array' });
+            return;
+        }
+        const projectQuery = {};
+        if (req.user.role !== 'admin') {
+            if (req.user.role === 'client' && req.user.clientId) {
+                projectQuery.clientId = req.user.clientId;
+            }
+            else {
+                projectQuery.members = req.user.userId;
+            }
+        }
+        const Project = (await Promise.resolve().then(() => __importStar(require('../models/Project')))).default;
+        const projects = await Project.find(projectQuery).select('_id name repoLocalPath githubRepoOwner githubRepoName');
+        const User = (await Promise.resolve().then(() => __importStar(require('../models/User')))).default;
+        const teamMembers = await User.find({
+            teamId: req.user.teamId,
+            isActive: true
+        }).select('_id firstName lastName');
+        // Setup SSE Headers
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+        // Disable buffering for real-time streaming
+        res.setHeader('X-Accel-Buffering', 'no');
+        res.flushHeaders();
+        const { streamChatWithAI } = await Promise.resolve().then(() => __importStar(require('../services/ai.service')));
+        try {
+            for await (const chunk of streamChatWithAI(messages, taskDraft || {}, projectId, projects, teamMembers)) {
+                // write to stream
+                res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+            }
+        }
+        catch (streamError) {
+            console.error('AI chat stream error:', streamError.message);
+            res.write(`data: ${JSON.stringify({ type: 'error', error: streamError.message })}\n\n`);
+        }
+        finally {
+            res.end();
+        }
+    }
+    catch (error) {
+        console.error('AI chat route error:', error.message);
+        res.status(500).json({ error: 'AI service error', message: error.message });
+    }
+});
 /** POST /api/ai/chat */
 router.post('/ai/chat', auth_1.authenticate, auth_1.requireProfileImageSetup, auth_1.requireGithubSetupForTeamMembers, async (req, res) => {
     try {
@@ -150,7 +200,9 @@ router.post('/ai/chat', auth_1.authenticate, auth_1.requireProfileImageSetup, au
             teamId: req.user.teamId,
             isActive: true
         }).select('_id firstName lastName');
-        const result = await (0, ai_service_1.chatWithAI)(messages, taskDraft || {}, projectId, projects, teamMembers);
+        // Keep standard chat for backwards compatibility if needed
+        const { chatWithAI } = await Promise.resolve().then(() => __importStar(require('../services/ai.service')));
+        const result = await chatWithAI(messages, taskDraft || {}, projectId, projects, teamMembers);
         res.json(result);
     }
     catch (error) {

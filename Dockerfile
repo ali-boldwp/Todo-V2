@@ -26,6 +26,8 @@ COPY . .
 # Build all workspaces
 # VITE_API_URL set to beta domain for production
 ENV VITE_API_URL=https://todo.devregion.com/api
+# Limit memory usage during build to prevent OOM kills on smaller servers
+ENV NODE_OPTIONS="--max-old-space-size=2048"
 RUN npm run build
 
 # Production runtime stage

@@ -44,7 +44,7 @@ const UserSchema = new mongoose_1.Schema({
     githubConnectedAt: { type: Date },
     canVerifyTasks: { type: Boolean, default: false },
     passwordHash: { type: String, required: true },
-    role: { type: String, enum: ['admin', 'manager', 'member', 'client'], default: 'member' },
+    role: { type: String, enum: ['admin', 'manager', 'member', 'client', 'client_assistant'], default: 'member' },
     clientId: { type: mongoose_1.Schema.Types.ObjectId, ref: 'Client' },
     firstName: { type: String, required: true },
     lastName: { type: String, required: true },

@@ -52,6 +52,7 @@ async function getOrStartProjectServer(projectId, repoPath) {
         cwd: repoPath,
         detached: false,
         stdio: 'ignore',
+        shell: process.platform === 'win32',
         env: { ...process.env },
     });
     proc.on('error', (err) => {

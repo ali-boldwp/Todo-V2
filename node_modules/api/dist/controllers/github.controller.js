@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getRepositories = exports.syncIssues = exports.handleGithubCallback = exports.getGithubAuthUrl = exports.saveGithubConfig = exports.getGithubConfig = void 0;
+exports.getRepositories = exports.syncIssues = exports.handleGithubCallback = exports.getGithubAuthUrl = exports.disconnectGithub = exports.saveGithubConfig = exports.getGithubConfig = void 0;
 const GithubConfig_1 = __importDefault(require("../models/GithubConfig"));
 const github_schema_1 = require("@devmanager/shared/dist/github.schema");
 const getGithubConfig = async (_req, res) => {
@@ -20,7 +20,6 @@ exports.getGithubConfig = getGithubConfig;
 const saveGithubConfig = async (req, res) => {
     try {
         const validated = github_schema_1.GithubConfigSchema.parse(req.body);
-        // Use upsert with empty filter to maintain a single global config
         const config = await GithubConfig_1.default.findOneAndUpdate({}, { ...validated }, { new: true, upsert: true });
         res.json(config);
     }
@@ -29,13 +28,25 @@ const saveGithubConfig = async (req, res) => {
     }
 };
 exports.saveGithubConfig = saveGithubConfig;
+const disconnectGithub = async (_req, res) => {
+    try {
+        await GithubConfig_1.default.deleteOne({});
+        res.json({ message: 'GitHub disconnected successfully' });
+    }
+    catch (error) {
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+exports.disconnectGithub = disconnectGithub;
 const getGithubAuthUrl = async (_req, res) => {
     try {
         const clientId = process.env.GITHUB_CLIENT_ID;
         if (!clientId) {
             return res.status(500).json({ message: 'GITHUB_CLIENT_ID not configured on server. Please add it to your .env file.' });
         }
-        const url = `https://github.com/login/oauth/authorize?client_id=${clientId}&scope=repo`;
+        const frontendBaseUrl = process.env.FRONTEND_BASE_URL || 'http://localhost:5173';
+        const redirectUri = `${frontendBaseUrl}/github-settings`;
+        const url = `https://github.com/login/oauth/authorize?client_id=${clientId}&scope=repo&redirect_uri=${encodeURIComponent(redirectUri)}`;
         res.json({ url });
     }
     catch (error) {
@@ -54,13 +65,15 @@ const handleGithubCallback = async (req, res) => {
         if (!clientId || !clientSecret) {
             return res.status(500).json({ message: 'GitHub OAuth credentials not configured on server' });
         }
+        const frontendBaseUrl = process.env.FRONTEND_BASE_URL || 'http://localhost:5173';
+        const redirectUri = `${frontendBaseUrl}/github-settings`;
         const response = await fetch('https://github.com/login/oauth/access_token', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 Accept: 'application/json',
             },
-            body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, code }),
+            body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, code, redirect_uri: redirectUri }),
         });
         const data = await response.json();
         if (data.error) {

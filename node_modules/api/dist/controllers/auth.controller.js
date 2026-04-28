@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.handleGithubSetupCallback = exports.getGithubSetupStatus = exports.getGithubSetupUrl = exports.login = exports.register = exports.uploadProfileImage = exports.getProfileSetupStatus = void 0;
+exports.handleGithubSetupCallback = exports.getGithubSetupStatus = exports.getGithubSetupUrl = exports.login = exports.register = exports.uploadProfileImage = exports.getProfileSetupStatus = exports.buildAuthResponse = void 0;
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const User_1 = __importDefault(require("../models/User"));
@@ -39,6 +39,7 @@ const buildAuthResponse = (user) => {
         }
     };
 };
+exports.buildAuthResponse = buildAuthResponse;
 const getProfileSetupStatus = async (req, res) => {
     try {
         if (!req.user?.userId) {
@@ -84,7 +85,7 @@ const uploadProfileImage = async (req, res) => {
         }, { new: true });
         if (!user)
             return res.status(404).json({ message: 'User not found' });
-        res.json(buildAuthResponse(user));
+        res.json((0, exports.buildAuthResponse)(user));
     }
     catch (error) {
         res.status(500).json({ message: 'Server error', error: error.message });
@@ -111,7 +112,7 @@ const register = async (req, res) => {
             role: 'admin',
         });
         // Generate Token
-        res.status(201).json(buildAuthResponse(user));
+        res.status(201).json((0, exports.buildAuthResponse)(user));
     }
     catch (error) {
         if (error.issues) {
@@ -135,7 +136,7 @@ const login = async (req, res) => {
         if (!isMatch) {
             return res.status(400).json({ message: 'Invalid credentials' });
         }
-        res.json(buildAuthResponse(user));
+        res.json((0, exports.buildAuthResponse)(user));
     }
     catch (error) {
         if (error.issues) {
@@ -246,7 +247,7 @@ const handleGithubSetupCallback = async (req, res) => {
         if (!user) {
             return res.redirect(`${frontendBaseUrl}/github/setup?error=user_not_found`);
         }
-        const authPayload = buildAuthResponse(user);
+        const authPayload = (0, exports.buildAuthResponse)(user);
         return res.redirect(`${frontendBaseUrl}/github/setup?success=1&token=${encodeURIComponent(authPayload.token)}&username=${encodeURIComponent(user.githubUsername || '')}`);
     }
     catch (error) {

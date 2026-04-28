@@ -16,4 +16,5 @@ router.get('/:id', (0, auth_1.authorize)(['admin', 'manager']), client_controlle
 router.patch('/:id/status', (0, auth_1.authorize)(['admin', 'manager']), client_controller_1.toggleClientStatus);
 router.post('/:id/reset-password', (0, auth_1.authorize)(['admin', 'manager']), client_controller_1.resetClientPassword);
 router.delete('/:id', (0, auth_1.authorize)(['admin', 'manager']), client_controller_1.deleteClient);
+router.post('/:id/auto-login', (0, auth_1.authorize)(['admin', 'manager']), client_controller_1.autoLoginClient);
 exports.default = router;

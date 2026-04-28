@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.rejectTaskVerification = exports.approveTaskVerification = exports.stopTaskWork = exports.fixTaskBranch = exports.finishTaskWork = exports.resumeTaskWork = exports.pauseTaskWork = exports.startTaskWork = exports.downloadAttachment = exports.getTaskActivityLogs = exports.deleteAttachment = exports.uploadAttachment = exports.deleteTask = exports.updateTask = exports.createTask = exports.getTasks = void 0;
+exports.rejectTaskClient = exports.approveTaskClient = exports.rejectTaskVerification = exports.approveTaskVerification = exports.resumeTaskVerification = exports.pauseTaskVerification = exports.startTaskVerification = exports.stopTaskWork = exports.fixTaskBranch = exports.finishTaskWork = exports.resumeTaskWork = exports.pauseTaskWork = exports.startTaskWork = exports.downloadAttachment = exports.getTaskActivityLogs = exports.deleteAttachment = exports.uploadAttachment = exports.deleteTask = exports.updateTask = exports.createTask = exports.getTasks = void 0;
 const Task_1 = __importDefault(require("../models/Task"));
 const Project_1 = __importDefault(require("../models/Project"));
 const GithubConfig_1 = __importDefault(require("../models/GithubConfig"));
@@ -603,8 +603,10 @@ const createTask = async (req, res) => {
         // Create task. Branch is created when someone starts work.
         const task = await Task_1.default.create({ ...validated });
         await appendTaskActivity(task._id, {
-            action: 'task_created',
-            message: `Task "${task.title}" created.`,
+            action: validated.aiPrompt ? 'task_created_with_ai' : 'task_created',
+            message: validated.aiPrompt
+                ? `Task "${task.title}" was successfully created with AI.`
+                : `Task "${task.title}" created.`,
             actor: req.user,
             metadata: {
                 status: task.status,
@@ -613,6 +615,16 @@ const createTask = async (req, res) => {
                 assigneeId: task.assigneeId || null,
             }
         });
+        if (validated.aiPrompt) {
+            await appendTaskActivity(task._id, {
+                action: 'ai_generation_log',
+                message: `🤖 AI Context & Prompt:\n"${validated.aiPrompt}"`,
+                actor: req.user,
+                metadata: {
+                    aiPrompt: validated.aiPrompt,
+                }
+            });
+        }
         res.status(201).json(toTaskResponse(task, req.user));
         await notifyTaskAudience({
             task,
@@ -888,6 +900,9 @@ const startTaskWork = async (req, res) => {
         if (task.verificationStatus === 'pending' || task.status === 'under_verification') {
             return res.status(400).json({ message: 'Task is under verification and cannot be started' });
         }
+        if (task.status === 'clarification') {
+            return res.status(400).json({ message: 'Task is under clarification and cannot be started' });
+        }
         const currentWorker = task.activeWorkerId;
         const currentWorkerId = currentWorker?._id?.toString?.() || currentWorker?.toString?.();
         if (currentWorkerId && currentWorkerId !== req.user.userId) {
@@ -1117,14 +1132,19 @@ const finishTaskWork = async (req, res) => {
             actorUserId: req.user.userId,
             branch: task.githubBranch || null,
         };
+        const { force } = req.body;
         const project = await Project_1.default.findById(task.projectId).select('members githubRepoOwner githubRepoName');
-        if (task.githubBranch && project?.githubRepoOwner && project?.githubRepoName) {
+        const shouldAttemptMerge = !(force && req.user.role === 'admin') &&
+            task.githubBranch && project?.githubRepoOwner && project?.githubRepoName;
+        if (shouldAttemptMerge && task.githubBranch) {
             const config = await GithubConfig_1.default.findOne().select('personalAccessToken');
             if (!config?.personalAccessToken) {
                 return res.status(400).json({ message: 'GitHub integration is not connected. Cannot complete task merge flow.' });
             }
             const taskBranch = task.githubBranch;
-            const changesComparedToDev = await compareGithubBranches(config.personalAccessToken, project.githubRepoOwner, project.githubRepoName, 'dev', taskBranch);
+            const repoOwner = project.githubRepoOwner;
+            const repoName = project.githubRepoName;
+            const changesComparedToDev = await compareGithubBranches(config.personalAccessToken, repoOwner, repoName, 'dev', taskBranch);
             if (!changesComparedToDev.ok) {
                 await appendTaskActivity(task._id, {
                     action: 'finish_compare_failed',
@@ -1140,7 +1160,7 @@ const finishTaskWork = async (req, res) => {
                 });
             }
             if (changesComparedToDev.aheadBy === 0) {
-                const compareUrl = buildGithubCompareUrl(project.githubRepoOwner, project.githubRepoName, 'dev', taskBranch);
+                const compareUrl = buildGithubCompareUrl(repoOwner, repoName, 'dev', taskBranch);
                 await appendTaskActivity(task._id, {
                     action: 'finish_blocked_no_changes',
                     message: `Finish blocked: no code changes found in ${taskBranch}.`,
@@ -1156,7 +1176,7 @@ const finishTaskWork = async (req, res) => {
                     compareUrl
                 });
             }
-            const mergeDevToTask = await mergeGithubBranches(config.personalAccessToken, project.githubRepoOwner, project.githubRepoName, taskBranch, 'dev');
+            const mergeDevToTask = await mergeGithubBranches(config.personalAccessToken, repoOwner, repoName, taskBranch, 'dev');
             if (!mergeDevToTask.ok) {
                 await appendTaskActivity(task._id, {
                     action: mergeDevToTask.conflict ? 'merge_conflict_dev_to_task' : 'merge_failed_dev_to_task',
@@ -1178,8 +1198,8 @@ const finishTaskWork = async (req, res) => {
                     responseText: mergeDevToTask.responseText || null,
                 });
                 if (mergeDevToTask.conflict) {
-                    const compareUrl = buildGithubCompareUrl(project.githubRepoOwner, project.githubRepoName, taskBranch, 'dev');
-                    const pullRequestUrl = buildGithubPullRequestUrl(project.githubRepoOwner, project.githubRepoName, taskBranch, 'dev');
+                    const compareUrl = buildGithubCompareUrl(repoOwner, repoName, taskBranch, 'dev');
+                    const pullRequestUrl = buildGithubPullRequestUrl(repoOwner, repoName, taskBranch, 'dev');
                     return res.status(409).json({
                         code: 'merge_conflict_dev_to_task',
                         mergeStep: 'dev_to_task',
@@ -1198,7 +1218,7 @@ const finishTaskWork = async (req, res) => {
                     details: mergeDevToTask.message
                 });
             }
-            const mergeTaskToDev = await mergeGithubBranches(config.personalAccessToken, project.githubRepoOwner, project.githubRepoName, 'dev', taskBranch);
+            const mergeTaskToDev = await mergeGithubBranches(config.personalAccessToken, repoOwner, repoName, 'dev', taskBranch);
             if (!mergeTaskToDev.ok) {
                 await appendTaskActivity(task._id, {
                     action: mergeTaskToDev.conflict ? 'merge_conflict_task_to_dev' : 'merge_failed_task_to_dev',
@@ -1220,8 +1240,8 @@ const finishTaskWork = async (req, res) => {
                     responseText: mergeTaskToDev.responseText || null,
                 });
                 if (mergeTaskToDev.conflict) {
-                    const compareUrl = buildGithubCompareUrl(project.githubRepoOwner, project.githubRepoName, 'dev', taskBranch);
-                    const pullRequestUrl = buildGithubPullRequestUrl(project.githubRepoOwner, project.githubRepoName, 'dev', taskBranch);
+                    const compareUrl = buildGithubCompareUrl(repoOwner, repoName, 'dev', taskBranch);
+                    const pullRequestUrl = buildGithubPullRequestUrl(repoOwner, repoName, 'dev', taskBranch);
                     return res.status(409).json({
                         code: 'merge_conflict_task_to_dev',
                         mergeStep: 'task_to_dev',
@@ -1243,15 +1263,17 @@ const finishTaskWork = async (req, res) => {
         }
         if (req.user.role === 'admin') {
             let nextGithubBranch = task.githubBranch;
-            if (task.githubBranch && project?.githubRepoOwner && project?.githubRepoName) {
+            if (shouldAttemptMerge && task.githubBranch) {
                 const config = await GithubConfig_1.default.findOne().select('personalAccessToken');
                 if (config?.personalAccessToken) {
+                    const repoOwner = project.githubRepoOwner;
+                    const repoName = project.githubRepoName;
                     const parts = task.githubBranch.split('/');
                     const branchUsername = parts.length >= 2 && parts[0] === 'tasks' ? parts[1] : null;
                     if (branchUsername) {
                         const taskTitleSegment = getTaskTitleBranchSegment(task);
                         const targetDoneBranch = `tasks/${branchUsername}/done/${taskTitleSegment}`;
-                        const moved = await moveGithubBranch(config.personalAccessToken, project.githubRepoOwner, project.githubRepoName, task.githubBranch, targetDoneBranch);
+                        const moved = await moveGithubBranch(config.personalAccessToken, repoOwner, repoName, task.githubBranch, targetDoneBranch);
                         if (!moved.ok) {
                             return res.status(400).json({
                                 message: `Task completed but branch move failed. ${moved.message || 'Unknown error'}`,
@@ -1267,13 +1289,14 @@ const finishTaskWork = async (req, res) => {
                 activeWorkerId: null,
                 lastWorkStartedAt: null,
                 isWorkPaused: false,
-                status: 'done',
+                status: 'client_approval',
                 finishedAt: new Date(),
                 verificationStatus: 'approved',
                 isMergedToDev: true,
                 verifierId: null,
                 verificationComment: null,
                 verificationDecidedAt: new Date(),
+                clientApprovalStatus: 'pending',
                 githubBranch: nextGithubBranch,
             }, { new: true })
                 .populate('assigneeId', 'firstName lastName email')
@@ -1284,12 +1307,13 @@ const finishTaskWork = async (req, res) => {
                 return res.status(404).json({ message: 'Task not found' });
             await appendTaskActivity(updated._id, {
                 action: 'task_auto_approved',
-                message: `Task completed and auto-approved by admin.`,
+                message: `Task completed and auto-approved by admin, now awaiting client approval.`,
                 actor: req.user,
                 metadata: {
                     githubBranch: nextGithubBranch || null,
                     isMergedToDev: true,
                     elapsedSeconds: elapsed,
+                    clientApprovalStatus: 'pending'
                 }
             });
             res.json(toTaskResponse(updated, req.user));
@@ -1445,6 +1469,148 @@ const fixTaskBranch = async (req, res) => {
 };
 exports.fixTaskBranch = fixTaskBranch;
 exports.stopTaskWork = exports.pauseTaskWork;
+const startTaskVerification = async (req, res) => {
+    try {
+        if (!INTERNAL_ROLES.includes(req.user.role)) {
+            return res.status(403).json({ message: 'Only admin and team members can start verification' });
+        }
+        const task = await Task_1.default.findById(req.params.id);
+        if (!task)
+            return res.status(404).json({ message: 'Task not found' });
+        if (task.status !== 'under_verification' || task.verificationStatus !== 'pending') {
+            return res.status(400).json({ message: 'Task is not pending verification' });
+        }
+        const verifierId = task.verifierId?._id?.toString?.() || task.verifierId?.toString?.();
+        const canVerify = verifierId === req.user.userId || ['admin', 'manager'].includes(req.user.role);
+        if (!canVerify) {
+            return res.status(403).json({ message: 'Only the assigned verifier, manager, or admin can start verification' });
+        }
+        const currentActive = task.activeVerifierId;
+        const currentActiveId = currentActive?._id?.toString?.() || currentActive?.toString?.();
+        if (currentActiveId && currentActiveId !== req.user.userId) {
+            return res.status(409).json({ message: 'Verification is already in progress by another user' });
+        }
+        const now = new Date();
+        const patch = {
+            activeVerifierId: req.user.userId,
+            isVerificationPaused: false,
+        };
+        if (!task.verificationStartedAt)
+            patch.verificationStartedAt = now;
+        if (task.isVerificationPaused || !task.lastVerificationStartedAt)
+            patch.lastVerificationStartedAt = now;
+        const updated = await Task_1.default.findByIdAndUpdate(req.params.id, patch, { new: true })
+            .populate('assigneeId', 'firstName lastName email')
+            .populate('activeWorkerId', 'firstName lastName email role')
+            .populate('verifierId', 'firstName lastName email role')
+            .populate('workLogs.userId', 'firstName lastName email role');
+        if (!updated)
+            return res.status(404).json({ message: 'Task not found' });
+        await appendTaskActivity(updated._id, {
+            action: 'verification_started',
+            message: `${req.user?.firstName || 'A team member'} started verifying task.`,
+            actor: req.user,
+        });
+        res.json(toTaskResponse(updated, req.user));
+        emitTaskEvent('task:updated', updated);
+    }
+    catch (error) {
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+exports.startTaskVerification = startTaskVerification;
+const pauseTaskVerification = async (req, res) => {
+    try {
+        if (!INTERNAL_ROLES.includes(req.user.role)) {
+            return res.status(403).json({ message: 'Only admin and team members can pause verification' });
+        }
+        const task = await Task_1.default.findById(req.params.id);
+        if (!task)
+            return res.status(404).json({ message: 'Task not found' });
+        const currentActive = task.activeVerifierId;
+        const currentActiveId = currentActive?._id?.toString?.() || currentActive?.toString?.();
+        if (!currentActiveId) {
+            return res.status(400).json({ message: 'Task verification is not currently active' });
+        }
+        const canPause = currentActiveId === req.user.userId || ['admin', 'manager'].includes(req.user.role);
+        if (!canPause) {
+            return res.status(403).json({ message: 'Only the active verifier, manager, or admin can pause verification' });
+        }
+        if (task.isVerificationPaused) {
+            return res.status(400).json({ message: 'Verification is already paused' });
+        }
+        const elapsed = getElapsedSeconds(task.lastVerificationStartedAt);
+        const verificationLogs = mergeWorkLog(task.verificationLogs, currentActiveId, elapsed);
+        const updated = await Task_1.default.findByIdAndUpdate(req.params.id, {
+            isVerificationPaused: true,
+            totalVerificationSeconds: Number(task.totalVerificationSeconds || 0) + elapsed,
+            verificationLogs,
+        }, { new: true })
+            .populate('assigneeId', 'firstName lastName email')
+            .populate('activeWorkerId', 'firstName lastName email role')
+            .populate('verifierId', 'firstName lastName email role')
+            .populate('workLogs.userId', 'firstName lastName email role');
+        if (!updated)
+            return res.status(404).json({ message: 'Task not found' });
+        await appendTaskActivity(updated._id, {
+            action: 'verification_paused',
+            message: `${req.user?.firstName || 'A team member'} paused verification.`,
+            actor: req.user,
+        });
+        res.json(toTaskResponse(updated, req.user));
+        emitTaskEvent('task:updated', updated);
+    }
+    catch (error) {
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+exports.pauseTaskVerification = pauseTaskVerification;
+const resumeTaskVerification = async (req, res) => {
+    try {
+        if (!INTERNAL_ROLES.includes(req.user.role)) {
+            return res.status(403).json({ message: 'Only admin and team members can resume verification' });
+        }
+        const task = await Task_1.default.findById(req.params.id);
+        if (!task)
+            return res.status(404).json({ message: 'Task not found' });
+        if (task.status !== 'under_verification' || task.verificationStatus !== 'pending') {
+            return res.status(400).json({ message: 'Task is not under verification' });
+        }
+        const currentActive = task.activeVerifierId;
+        const currentActiveId = currentActive?._id?.toString?.() || currentActive?.toString?.();
+        if (!currentActiveId) {
+            return res.status(400).json({ message: 'Task verification is not assigned to an active verifier' });
+        }
+        const canResume = currentActiveId === req.user.userId || ['admin', 'manager'].includes(req.user.role);
+        if (!canResume) {
+            return res.status(403).json({ message: 'Only the active verifier, manager, or admin can resume verification' });
+        }
+        if (!task.isVerificationPaused) {
+            return res.status(400).json({ message: 'Verification is not paused' });
+        }
+        const updated = await Task_1.default.findByIdAndUpdate(req.params.id, {
+            isVerificationPaused: false,
+            lastVerificationStartedAt: new Date()
+        }, { new: true })
+            .populate('assigneeId', 'firstName lastName email')
+            .populate('activeWorkerId', 'firstName lastName email role')
+            .populate('verifierId', 'firstName lastName email role')
+            .populate('workLogs.userId', 'firstName lastName email role');
+        if (!updated)
+            return res.status(404).json({ message: 'Task not found' });
+        await appendTaskActivity(updated._id, {
+            action: 'verification_resumed',
+            message: `${req.user?.firstName || 'A team member'} resumed verification.`,
+            actor: req.user,
+        });
+        res.json(toTaskResponse(updated, req.user));
+        emitTaskEvent('task:updated', updated);
+    }
+    catch (error) {
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+exports.resumeTaskVerification = resumeTaskVerification;
 const approveTaskVerification = async (req, res) => {
     try {
         if (!INTERNAL_ROLES.includes(req.user.role)) {
@@ -1481,12 +1647,26 @@ const approveTaskVerification = async (req, res) => {
                 }
             }
         }
+        let verificationLogs = task.verificationLogs || [];
+        let totalVerificationSeconds = Number(task.totalVerificationSeconds || 0);
+        const currentActiveId = task.activeVerifierId?.toString?.();
+        if (currentActiveId) {
+            const elapsed = task.isVerificationPaused ? 0 : getElapsedSeconds(task.lastVerificationStartedAt);
+            verificationLogs = mergeWorkLog(verificationLogs, currentActiveId, elapsed);
+            totalVerificationSeconds += elapsed;
+        }
         const updated = await Task_1.default.findByIdAndUpdate(req.params.id, {
-            status: 'done',
+            status: 'client_approval',
             verificationStatus: 'approved',
             verificationComment: req.body?.comment || null,
             verificationDecidedAt: new Date(),
+            clientApprovalStatus: 'pending',
             githubBranch: nextGithubBranch,
+            activeVerifierId: null,
+            lastVerificationStartedAt: null,
+            isVerificationPaused: false,
+            verificationLogs,
+            totalVerificationSeconds,
         }, { new: true })
             .populate('assigneeId', 'firstName lastName email')
             .populate('activeWorkerId', 'firstName lastName email role')
@@ -1509,7 +1689,7 @@ const approveTaskVerification = async (req, res) => {
             actorUserId: req.user.userId,
             type: 'task_verification_approved',
             title: 'Task Verified',
-            message: `"${updated.title}" was approved in verification.`,
+            message: `"${updated.title}" was approved in verification and sent for client approval.`,
         });
         emitTaskEvent('task:updated', updated);
     }
@@ -1534,6 +1714,14 @@ const rejectTaskVerification = async (req, res) => {
         if (!canVerify) {
             return res.status(403).json({ message: 'Only assigned verifier can reject this task' });
         }
+        let verificationLogs = task.verificationLogs || [];
+        let totalVerificationSeconds = Number(task.totalVerificationSeconds || 0);
+        const currentActiveId = task.activeVerifierId?.toString?.();
+        if (currentActiveId) {
+            const elapsed = task.isVerificationPaused ? 0 : getElapsedSeconds(task.lastVerificationStartedAt);
+            verificationLogs = mergeWorkLog(verificationLogs, currentActiveId, elapsed);
+            totalVerificationSeconds += elapsed;
+        }
         const updated = await Task_1.default.findByIdAndUpdate(req.params.id, {
             verificationStatus: 'rejected',
             verificationComment: req.body?.comment || null,
@@ -1541,6 +1729,11 @@ const rejectTaskVerification = async (req, res) => {
             status: 'review',
             isMergedToDev: false,
             finishedAt: null,
+            activeVerifierId: null,
+            lastVerificationStartedAt: null,
+            isVerificationPaused: false,
+            verificationLogs,
+            totalVerificationSeconds,
         }, { new: true })
             .populate('assigneeId', 'firstName lastName email')
             .populate('activeWorkerId', 'firstName lastName email role')
@@ -1572,3 +1765,91 @@ const rejectTaskVerification = async (req, res) => {
     }
 };
 exports.rejectTaskVerification = rejectTaskVerification;
+const approveTaskClient = async (req, res) => {
+    try {
+        if (req.user.role !== 'client' && req.user.role !== 'client_assistant' && req.user.role !== 'admin') {
+            return res.status(403).json({ message: 'Only clients, their assistants, or admins can approve tasks for clients' });
+        }
+        const task = await Task_1.default.findById(req.params.id);
+        if (!task)
+            return res.status(404).json({ message: 'Task not found' });
+        if (task.clientApprovalStatus !== 'pending' || task.status !== 'client_approval') {
+            return res.status(400).json({ message: 'Task is not pending client approval' });
+        }
+        const updated = await Task_1.default.findByIdAndUpdate(req.params.id, {
+            status: 'done',
+            clientApprovalStatus: 'approved',
+            clientApprovalComment: req.body?.comment || null,
+            clientApprovalDecidedAt: new Date(),
+        }, { new: true })
+            .populate('assigneeId', 'firstName lastName email')
+            .populate('activeWorkerId', 'firstName lastName email role')
+            .populate('verifierId', 'firstName lastName email role')
+            .populate('workLogs.userId', 'firstName lastName email role');
+        if (!updated)
+            return res.status(404).json({ message: 'Task not found' });
+        await appendTaskActivity(updated._id, {
+            action: 'task_client_approved',
+            message: `Task client approval received.`,
+            actor: req.user,
+            metadata: { comment: req.body?.comment || null }
+        });
+        res.json(toTaskResponse(updated, req.user));
+        await notifyTaskAudience({
+            task: updated,
+            actorUserId: req.user.userId,
+            type: 'task_client_approved',
+            title: 'Task Client Approved',
+            message: `"${updated.title}" was approved by the client!`,
+        });
+        emitTaskEvent('task:updated', updated);
+    }
+    catch (error) {
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+exports.approveTaskClient = approveTaskClient;
+const rejectTaskClient = async (req, res) => {
+    try {
+        if (req.user.role !== 'client' && req.user.role !== 'client_assistant' && req.user.role !== 'admin') {
+            return res.status(403).json({ message: 'Only clients, their assistants, or admins can reject tasks for clients' });
+        }
+        const task = await Task_1.default.findById(req.params.id);
+        if (!task)
+            return res.status(404).json({ message: 'Task not found' });
+        if (task.clientApprovalStatus !== 'pending' || task.status !== 'client_approval') {
+            return res.status(400).json({ message: 'Task is not pending client approval' });
+        }
+        const updated = await Task_1.default.findByIdAndUpdate(req.params.id, {
+            status: 'review',
+            clientApprovalStatus: 'rejected',
+            clientApprovalComment: req.body?.comment || null,
+            clientApprovalDecidedAt: new Date(),
+        }, { new: true })
+            .populate('assigneeId', 'firstName lastName email')
+            .populate('activeWorkerId', 'firstName lastName email role')
+            .populate('verifierId', 'firstName lastName email role')
+            .populate('workLogs.userId', 'firstName lastName email role');
+        if (!updated)
+            return res.status(404).json({ message: 'Task not found' });
+        await appendTaskActivity(updated._id, {
+            action: 'task_client_rejected',
+            message: `Task client approval rejected, moving to review.`,
+            actor: req.user,
+            metadata: { comment: req.body?.comment || null }
+        });
+        res.json(toTaskResponse(updated, req.user));
+        await notifyTaskAudience({
+            task: updated,
+            actorUserId: req.user.userId,
+            type: 'task_client_rejected',
+            title: 'Task Client Rejected',
+            message: `"${updated.title}" was rejected by the client! Requires review.`,
+        });
+        emitTaskEvent('task:updated', updated);
+    }
+    catch (error) {
+        res.status(500).json({ message: 'Server error' });
+    }
+};
+exports.rejectTaskClient = rejectTaskClient;

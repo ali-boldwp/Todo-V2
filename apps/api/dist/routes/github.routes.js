@@ -8,6 +8,7 @@ router.use(auth_1.authenticate);
 router.use(auth_1.requireProfileImageSetup);
 router.get('/config', (0, auth_1.authorize)(['admin']), github_controller_1.getGithubConfig);
 router.post('/config', (0, auth_1.authorize)(['admin']), github_controller_1.saveGithubConfig);
+router.delete('/config', (0, auth_1.authorize)(['admin']), github_controller_1.disconnectGithub);
 router.post('/sync', (0, auth_1.authorize)(['admin']), github_controller_1.syncIssues);
 router.get('/auth/url', (0, auth_1.authorize)(['admin']), github_controller_1.getGithubAuthUrl);
 router.post('/auth/callback', (0, auth_1.authorize)(['admin']), github_controller_1.handleGithubCallback);

@@ -26,6 +26,7 @@ const attendance_routes_1 = __importDefault(require("./routes/attendance.routes"
 const payroll_routes_1 = __importDefault(require("./routes/payroll.routes"));
 const github_routes_1 = __importDefault(require("./routes/github.routes"));
 const client_routes_1 = __importDefault(require("./routes/client.routes"));
+const assistant_routes_1 = __importDefault(require("./routes/assistant.routes"));
 const chat_routes_1 = __importDefault(require("./routes/chat.routes"));
 const notification_routes_1 = __importDefault(require("./routes/notification.routes"));
 const ide_routes_1 = __importDefault(require("./routes/ide.routes"));
@@ -63,6 +64,7 @@ app.use('/api/attendance', attendance_routes_1.default);
 app.use('/api/payroll', payroll_routes_1.default);
 app.use('/api/github', github_routes_1.default);
 app.use('/api/clients', client_routes_1.default);
+app.use('/api/assistants', assistant_routes_1.default);
 app.use('/api/chat', chat_routes_1.default);
 app.use('/api/notifications', notification_routes_1.default);
 app.use('/api/ide', ide_routes_1.default);

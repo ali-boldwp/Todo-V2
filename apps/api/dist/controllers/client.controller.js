@@ -3,11 +3,12 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteClient = exports.resetClientPassword = exports.toggleClientStatus = exports.createClient = exports.getClient = exports.getClients = void 0;
+exports.autoLoginClient = exports.deleteClient = exports.resetClientPassword = exports.toggleClientStatus = exports.createClient = exports.getClient = exports.getClients = void 0;
 const bcrypt_1 = __importDefault(require("bcrypt"));
 const Client_1 = __importDefault(require("../models/Client"));
 const User_1 = __importDefault(require("../models/User"));
 const client_schema_1 = require("@devmanager/shared/dist/client.schema");
+const auth_controller_1 = require("./auth.controller");
 const getClients = async (_req, res) => {
     try {
         const clients = await Client_1.default.find({});
@@ -126,3 +127,22 @@ const deleteClient = async (req, res) => {
     }
 };
 exports.deleteClient = deleteClient;
+const autoLoginClient = async (req, res) => {
+    try {
+        const client = await Client_1.default.findById(req.params.id);
+        if (!client)
+            return res.status(404).json({ message: 'Client not found' });
+        if (!client.userId)
+            return res.status(400).json({ message: 'Client has no associated user account' });
+        const user = await User_1.default.findById(client.userId);
+        if (!user)
+            return res.status(404).json({ message: 'User account not found for this client' });
+        if (user.isActive === false)
+            return res.status(403).json({ message: 'Client user account is suspended' });
+        res.json((0, auth_controller_1.buildAuthResponse)(user));
+    }
+    catch (error) {
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
+exports.autoLoginClient = autoLoginClient;

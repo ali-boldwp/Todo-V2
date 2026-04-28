@@ -54,7 +54,7 @@ const sanitizeProjectForViewer = (project, role) => {
     const obj = typeof project?.toObject === 'function' ? project.toObject() : project;
     if (role === 'admin')
         return obj;
-    if (role === 'client') {
+    if (role === 'client' || role === 'client_assistant') {
         const { devWebsiteUrl, accessAccounts, ...rest } = obj || {};
         return rest;
     }
@@ -68,7 +68,7 @@ const ensureProjectAccess = (project, user) => {
         return true;
     if (user.role === 'client')
         return project.clientId?.toString?.() === user.clientId;
-    if (user.role === 'manager' || user.role === 'member') {
+    if (user.role === 'manager' || user.role === 'member' || user.role === 'client_assistant') {
         return project.members?.some?.((member) => member?.toString?.() === user.userId);
     }
     return false;
@@ -388,8 +388,8 @@ const addProjectMember = async (req, res) => {
         if (!user)
             return res.status(404).json({ message: 'User not found' });
         const needsGithubSetup = ['manager', 'member'].includes(user.role || '');
-        if (needsGithubSetup && (!user.githubUsername || !user.githubUserId || !user.githubConnectedAt)) {
-            return res.status(400).json({ message: 'This team member must complete GitHub setup before being assigned to projects.' });
+        if (needsGithubSetup && !user.githubUsername) {
+            return res.status(400).json({ message: 'This team member must have a GitHub username configured before being assigned to projects.' });
         }
         const project = await Project_1.default.findByIdAndUpdate(req.params.id, { $addToSet: { members: userId } }, { new: true }).populate('members', 'firstName lastName email role githubUsername');
         if (!project)
