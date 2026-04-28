@@ -265,6 +265,7 @@ export function PremiumLayout() {
           <SidebarItem to="/verifications" icon={CheckSquare} label="Verifications" alert={myPendingVerifications > 0} />
           <SidebarItem to="/team" icon={Users} label="Team" />
           {user?.role === 'admin' && <SidebarItem to="/clients" icon={Briefcase} label="Clients" />}
+          {user?.role === 'client' && <SidebarItem to="/assistants" icon={Users} label="Assistants" />}
           {user?.role !== 'client' && <SidebarItem to="/time" icon={Clock} label="Time Tracking" />}
           {user?.role !== 'client' && <SidebarItem to="/chat" icon={MessageCircle} label="Chat" />}
           {user?.role === 'admin' && <SidebarItem to="/github-settings" icon={Github} label="GitHub" />}

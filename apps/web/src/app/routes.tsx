@@ -30,6 +30,7 @@ import { ProjectBacklogPage } from "./pages/ProjectBacklogPage";
 import { SprintsPage } from "./pages/SprintsPage";
 import { ProjectAccessPage } from "./pages/ProjectAccessPage";
 import { ProjectVerificationsPage } from "./pages/ProjectVerificationsPage";
+import { AssistantsPage } from "./pages/AssistantsPage";
 
 export const router = createBrowserRouter([
   {
@@ -97,6 +98,10 @@ export const router = createBrowserRouter([
       {
         path: "clients/:id",
         element: <ProtectedRoute requireAdmin><ClientDetailPage /></ProtectedRoute>
+      },
+      {
+        path: "assistants",
+        element: <AssistantsPage />
       },
       {
         path: "github-integration",
