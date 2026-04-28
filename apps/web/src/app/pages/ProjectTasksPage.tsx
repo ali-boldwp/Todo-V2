@@ -19,6 +19,7 @@ import {
 import { TaskPreviewDrawer } from '../components/TaskPreviewDrawer';
 import { TaskChatbot } from '../components/TaskChatbot';
 import CreateTaskDrawer from '../components/CreateTaskDrawer';
+import { useAuth } from '../../context/AuthContext';
 
 const STATUS_LABELS: any = {
   todo: 'To Do',
@@ -43,6 +44,9 @@ export function ProjectTasksPage() {
   const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false);
   const [createTaskStatus, setCreateTaskStatus] = useState<string>('todo');
   const [viewMode, setViewMode] = useState<'board' | 'table'>('table');
+
+  const { user } = useAuth();
+  const isClientOrAssistant = user?.role === 'client' || user?.role === 'client_assistant';
 
   const { data: projectTasks = [] } = useQuery({ 
     queryKey: ['tasks', projectId], 
@@ -269,14 +273,18 @@ export function ProjectTasksPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         {task.assigneeId ? (
-                          <div className="flex items-center gap-2">
-                            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 text-white text-[10px] font-bold flex items-center justify-center shadow-sm">
-                              {task.assigneeId.firstName?.[0]}{task.assigneeId.lastName?.[0]}
+                          isClientOrAssistant ? (
+                            <span className="text-sm text-slate-600 font-medium">Development Team</span>
+                          ) : (
+                            <div className="flex items-center gap-2">
+                              <div className="w-6 h-6 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 text-white text-[10px] font-bold flex items-center justify-center shadow-sm">
+                                {task.assigneeId.firstName?.[0]}{task.assigneeId.lastName?.[0]}
+                              </div>
+                              <span className="text-sm text-slate-600">
+                                {task.assigneeId.firstName} {task.assigneeId.lastName}
+                              </span>
                             </div>
-                            <span className="text-sm text-slate-600">
-                              {task.assigneeId.firstName} {task.assigneeId.lastName}
-                            </span>
-                          </div>
+                          )
                         ) : (
                           <span className="text-sm text-slate-400 italic">Unassigned</span>
                         )}
@@ -410,12 +418,18 @@ export function ProjectTasksPage() {
                                 {/* Assignee */}
                                 {task.assigneeId && (
                                   <div className="flex items-center gap-1.5">
-                                    <div className="w-5 h-5 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 text-white text-[9px] font-bold flex items-center justify-center">
-                                      {task.assigneeId.firstName?.[0]}{task.assigneeId.lastName?.[0]}
-                                    </div>
-                                    <span className="text-xs text-slate-500">
-                                      {task.assigneeId.firstName} {task.assigneeId.lastName}
-                                    </span>
+                                    {isClientOrAssistant ? (
+                                      <span className="text-xs text-slate-500 font-medium">Development Team</span>
+                                    ) : (
+                                      <>
+                                        <div className="w-5 h-5 rounded-full bg-gradient-to-br from-blue-400 to-indigo-500 text-white text-[9px] font-bold flex items-center justify-center">
+                                          {task.assigneeId.firstName?.[0]}{task.assigneeId.lastName?.[0]}
+                                        </div>
+                                        <span className="text-xs text-slate-500">
+                                          {task.assigneeId.firstName} {task.assigneeId.lastName}
+                                        </span>
+                                      </>
+                                    )}
                                   </div>
                                 )}
                               </div>

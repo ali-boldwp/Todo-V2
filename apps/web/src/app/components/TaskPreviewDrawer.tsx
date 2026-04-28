@@ -181,6 +181,7 @@ export function TaskPreviewDrawer({ isOpen, onClose, task }: TaskPreviewDrawerPr
   const { data: projects = [] } = useQuery({ queryKey: ['projects'], queryFn: getProjects });
   const { user: currentUser } = useAuth();
   const isAdmin = currentUser?.role === 'admin';
+  const isClientOrAssistant = currentUser?.role === 'client' || currentUser?.role === 'client_assistant';
 
   const deleteMutation = useMutation({
     mutationFn: () => deleteTask(task._id),
@@ -665,12 +666,16 @@ export function TaskPreviewDrawer({ isOpen, onClose, task }: TaskPreviewDrawerPr
             </div>
             <div className="w-2/3 flex items-center">
               {assignee ? (
-                <div className="inline-flex items-center gap-2 px-2 py-1 rounded-md hover:bg-slate-200 transition-colors cursor-pointer -ml-2">
-                  <div className="w-5 h-5 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-[10px]">
-                    {assignee.firstName[0]}{assignee.lastName[0]}
+                isClientOrAssistant ? (
+                  <span className="text-sm font-medium text-slate-700">Development Team</span>
+                ) : (
+                  <div className="inline-flex items-center gap-2 px-2 py-1 rounded-md hover:bg-slate-200 transition-colors cursor-pointer -ml-2">
+                    <div className="w-5 h-5 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-[10px]">
+                      {assignee.firstName[0]}{assignee.lastName[0]}
+                    </div>
+                    <span className="text-sm font-medium text-slate-700">{assignee.firstName} {assignee.lastName}</span>
                   </div>
-                  <span className="text-sm font-medium text-slate-700">{assignee.firstName} {assignee.lastName}</span>
-                </div>
+                )
               ) : (
                 <span className="text-sm text-slate-400 italic">Unassigned</span>
               )}
@@ -685,12 +690,16 @@ export function TaskPreviewDrawer({ isOpen, onClose, task }: TaskPreviewDrawerPr
             </div>
             <div className="w-2/3 flex items-center">
               {verifier ? (
-                <div className="inline-flex items-center gap-2 px-2 py-1 rounded-md hover:bg-slate-200 transition-colors cursor-pointer -ml-2">
-                  <div className="w-5 h-5 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white font-bold text-[10px]">
-                    {verifier.firstName[0]}{verifier.lastName[0]}
+                isClientOrAssistant ? (
+                  <span className="text-sm font-medium text-slate-700">Development Team</span>
+                ) : (
+                  <div className="inline-flex items-center gap-2 px-2 py-1 rounded-md hover:bg-slate-200 transition-colors cursor-pointer -ml-2">
+                    <div className="w-5 h-5 rounded-full bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center text-white font-bold text-[10px]">
+                      {verifier.firstName[0]}{verifier.lastName[0]}
+                    </div>
+                    <span className="text-sm font-medium text-slate-700">{verifier.firstName} {verifier.lastName}</span>
                   </div>
-                  <span className="text-sm font-medium text-slate-700">{verifier.firstName} {verifier.lastName}</span>
-                </div>
+                )
               ) : (
                 <span className="text-sm text-slate-400 italic">Unassigned</span>
               )}
