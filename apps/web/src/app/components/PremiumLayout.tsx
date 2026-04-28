@@ -263,7 +263,7 @@ export function PremiumLayout() {
           <SidebarItem to="/" icon={LayoutDashboard} label="Dashboard" exact />
           <SidebarItem to="/projects" icon={Star} label="All Projects" />
           <SidebarItem to="/verifications" icon={CheckSquare} label="Verifications" alert={myPendingVerifications > 0} />
-          <SidebarItem to="/team" icon={Users} label="Team" />
+          {user?.role !== 'client' && user?.role !== 'client_assistant' && <SidebarItem to="/team" icon={Users} label="Team" />}
           {user?.role === 'admin' && <SidebarItem to="/clients" icon={Briefcase} label="Clients" />}
           {user?.role === 'client' && <SidebarItem to="/assistants" icon={Users} label="Assistants" />}
           {user?.role !== 'client' && <SidebarItem to="/time" icon={Clock} label="Time Tracking" />}
