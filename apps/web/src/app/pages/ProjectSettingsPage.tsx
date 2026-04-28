@@ -3,6 +3,8 @@ import { useParams, useNavigate } from 'react-router';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getProject, getClients, addProjectMember, removeProjectMember } from '../../services/core';
 import { getTeamMembers } from '../../services/team';
+import { useAuth } from '../../context/AuthContext';
+import { getAssistants, assignAssistantToProject, unassignAssistantFromProject } from '../../services/assistant';
 import {
   Settings,
   Save,
@@ -30,10 +32,23 @@ export function ProjectSettingsPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const isClient = user?.role === 'client';
   
   const { data: project } = useQuery({ queryKey: ['project', id], queryFn: () => getProject(id!), enabled: !!id });
   const { data: mockTeamMembers = [] } = useQuery({ queryKey: ['teamMembers'], queryFn: getTeamMembers });
   const { data: mockClients = [] } = useQuery({ queryKey: ['clients'], queryFn: getClients });
+  const { data: myAssistants = [] } = useQuery({ queryKey: ['assistants'], queryFn: getAssistants, enabled: isClient });
+
+  const assignAssistantMutation = useMutation({
+    mutationFn: (assistantId: string) => assignAssistantToProject(assistantId, id!),
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['project', id] }); setIsAddMemberOpen(false); },
+  });
+
+  const unassignAssistantMutation = useMutation({
+    mutationFn: (assistantId: string) => unassignAssistantFromProject(assistantId, id!),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['project', id] }),
+  });
 
   const [projectName, setProjectName] = useState('');
   const [projectDescription, setProjectDescription] = useState<OutputData | any>({ blocks: [] });
@@ -47,7 +62,7 @@ export function ProjectSettingsPage() {
     verificationNeeded: true,
     dailyDigest: false,
   });
-  const [activeTab, setActiveTab] = useState('general');
+  const [activeTab, setActiveTab] = useState(isClient ? 'assistants' : 'general');
   const [isAddMemberOpen, setIsAddMemberOpen] = useState(false);
   const [memberError, setMemberError] = useState('');
 
@@ -145,7 +160,9 @@ export function ProjectSettingsPage() {
     }
   };
 
-  const tabs = [
+  const tabs = isClient ? [
+    { id: 'assistants', label: 'Project Assistants', icon: Users },
+  ] : [
     { id: 'general', label: 'General', icon: Settings },
     { id: 'team', label: 'Team & Access', icon: Users },
     { id: 'integrations', label: 'Integrations', icon: Code },
@@ -170,7 +187,9 @@ export function ProjectSettingsPage() {
   const projectMembers: any[] = project?.members || [];
   const projectMemberIds = new Set(projectMembers.map((m: any) => m._id?.toString()));
   // Team members not yet in this project
-  const availableToAdd = (mockTeamMembers as any[]).filter(
+  const availableToAdd = isClient ? (myAssistants as any[]).filter(
+    (a: any) => !projectMemberIds.has(a._id?.toString())
+  ) : (mockTeamMembers as any[]).filter(
     (m: any) => !projectMemberIds.has(m._id?.toString()) && m.role !== 'client'
   );
 
@@ -357,8 +376,70 @@ export function ProjectSettingsPage() {
         </div>
       )}
 
+      {/* Assistants */}
+      {activeTab === 'assistants' && isClient && (
+        <div className="space-y-6">
+          <div className="bg-white rounded-2xl border-2 border-slate-200 p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <Users className="w-5 h-5 text-indigo-600" />
+                Project Assistants
+              </h3>
+              <button
+                onClick={() => { setIsAddMemberOpen(true); setMemberError(''); }}
+                className="px-4 py-2 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white text-sm font-semibold flex items-center gap-2 shadow-md hover:shadow-lg transition-all"
+              >
+                <UserPlus className="w-4 h-4" />
+                Assign Assistant
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              {projectMembers.filter((m: any) => m.role === 'client_assistant').length === 0 && (
+                <div className="text-sm text-slate-500 p-4 bg-slate-50 rounded-xl border-2 border-dashed border-slate-200 text-center">
+                  No assistants assigned yet. Click "Assign Assistant" to delegate project tasks.
+                </div>
+              )}
+              {projectMembers.filter((m: any) => m.role === 'client_assistant').map((member: any) => (
+                <div
+                  key={member._id}
+                  className="flex items-center gap-4 p-4 rounded-xl border-2 border-slate-200 hover:border-indigo-200 transition-all"
+                >
+                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-white text-sm font-bold flex items-center justify-center shrink-0">
+                    {member.firstName?.[0]?.toUpperCase() || member.email?.[0]?.toUpperCase() || 'A'}
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-slate-900">
+                      {member.firstName} {member.lastName}
+                    </p>
+                    <p className="text-xs text-slate-500">{member.email}</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="px-3 py-1.5 rounded-lg bg-slate-100 border border-slate-200 text-xs font-bold text-slate-600 uppercase">
+                      Assistant
+                    </span>
+                    <button
+                      onClick={() => {
+                        if (window.confirm(`Unassign ${member.firstName} from this project?`)) {
+                          unassignAssistantMutation.mutate(member._id);
+                        }
+                      }}
+                      disabled={unassignAssistantMutation.isPending}
+                      className="p-2 rounded-lg hover:bg-rose-50 text-slate-400 hover:text-rose-600 transition-all disabled:opacity-50"
+                      title="Unassign from project"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Team & Access */}
-      {activeTab === 'team' && (
+      {activeTab === 'team' && !isClient && (
         <div className="space-y-6">
           <div className="bg-white rounded-2xl border-2 border-slate-200 p-6">
             <div className="flex items-center justify-between mb-6">
@@ -682,15 +763,15 @@ export function ProjectSettingsPage() {
               {availableToAdd.length === 0 ? (
                 <div className="text-center py-8 text-slate-500">
                   <Users className="w-10 h-10 mx-auto mb-3 text-slate-300" />
-                  <p className="text-sm font-medium">All team members are already in this project.</p>
+                  <p className="text-sm font-medium">{isClient ? 'All your assistants are already in this project.' : 'All team members are already in this project.'}</p>
                 </div>
               ) : (
                 <div className="space-y-2">
                   {availableToAdd.map((member: any) => (
                     <button
                       key={member._id}
-                      onClick={() => addMemberMutation.mutate(member._id)}
-                      disabled={addMemberMutation.isPending}
+                      onClick={() => isClient ? assignAssistantMutation.mutate(member._id) : addMemberMutation.mutate(member._id)}
+                      disabled={isClient ? assignAssistantMutation.isPending : addMemberMutation.isPending}
                       className="w-full flex items-center gap-3 p-3 rounded-xl border-2 border-slate-200 hover:border-indigo-300 hover:bg-indigo-50 transition-all text-left disabled:opacity-50"
                     >
                       <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-white text-sm font-bold flex items-center justify-center shrink-0">
@@ -709,7 +790,7 @@ export function ProjectSettingsPage() {
                         )}
                       </div>
                       <span className="px-2 py-1 rounded-lg bg-slate-100 text-xs font-bold text-slate-600 uppercase shrink-0">
-                        {member.role}
+                        {isClient ? 'Assistant' : member.role}
                       </span>
                     </button>
                   ))}

@@ -149,7 +149,7 @@ export const router = createBrowserRouter([
       },
       {
         path: "project/:id/settings",
-        element: <ProtectedRoute requireAdmin><ProjectSettingsPage /></ProtectedRoute>
+        element: <ProjectSettingsPage />
       },
       {
         path: "github-settings",

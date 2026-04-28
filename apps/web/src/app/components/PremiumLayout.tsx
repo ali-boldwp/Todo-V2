@@ -153,7 +153,7 @@ const ProjectItem = ({ project, isOpen, onToggle }: { project: any; isOpen: bool
       {isOpen && (
         <div className="ml-8 mr-3 mt-1 mb-2 space-y-0.5 pl-3 border-l-2 border-slate-100">
           {PROJECT_SUB_ITEMS.map((item) => {
-            if (item.path === 'settings' && user?.role !== 'admin') return null;
+            if (item.path === 'settings' && user?.role !== 'admin' && user?.role !== 'client') return null;
             const to = `${basePath}/${item.path}`;
             const isActive = location.pathname === to || location.pathname.startsWith(`${to}/`);
             const hasAlert = item.path === 'verifications' && projectPendingForMe > 0;
