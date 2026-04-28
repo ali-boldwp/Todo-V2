@@ -2059,8 +2059,8 @@ export const rejectTaskVerification = async (req: AuthRequest, res: Response) =>
 
 export const approveTaskClient = async (req: AuthRequest, res: Response) => {
     try {
-        if (req.user!.role !== 'client' && req.user!.role !== 'admin') {
-            return res.status(403).json({ message: 'Only clients or admins can approve tasks for clients' });
+        if (req.user!.role !== 'client' && req.user!.role !== 'client_assistant' && req.user!.role !== 'admin') {
+            return res.status(403).json({ message: 'Only clients, their assistants, or admins can approve tasks for clients' });
         }
 
         const task = await Task.findById(req.params.id);
@@ -2107,8 +2107,8 @@ export const approveTaskClient = async (req: AuthRequest, res: Response) => {
 
 export const rejectTaskClient = async (req: AuthRequest, res: Response) => {
     try {
-        if (req.user!.role !== 'client' && req.user!.role !== 'admin') {
-            return res.status(403).json({ message: 'Only clients or admins can reject tasks for clients' });
+        if (req.user!.role !== 'client' && req.user!.role !== 'client_assistant' && req.user!.role !== 'admin') {
+            return res.status(403).json({ message: 'Only clients, their assistants, or admins can reject tasks for clients' });
         }
 
         const task = await Task.findById(req.params.id);

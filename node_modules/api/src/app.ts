@@ -24,6 +24,7 @@ import payrollRoutes from './routes/payroll.routes';
 import githubRoutes from './routes/github.routes';
 
 import clientRoutes from './routes/client.routes';
+import assistantRoutes from './routes/assistant.routes';
 import chatRoutes from './routes/chat.routes';
 import notificationRoutes from './routes/notification.routes';
 import ideRoutes from './routes/ide.routes';
@@ -65,6 +66,7 @@ app.use('/api/payroll', payrollRoutes);
 app.use('/api/github', githubRoutes);
 
 app.use('/api/clients', clientRoutes);
+app.use('/api/assistants', assistantRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/ide', ideRoutes);

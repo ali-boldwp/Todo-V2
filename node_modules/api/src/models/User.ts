@@ -10,7 +10,7 @@ export interface IUser extends Document {
     githubConnectedAt?: Date;
     canVerifyTasks: boolean;
     passwordHash: string;
-    role: 'admin' | 'manager' | 'member' | 'client';
+    role: 'admin' | 'manager' | 'member' | 'client' | 'client_assistant';
     clientId?: mongoose.Types.ObjectId;
     firstName: string;
     lastName: string;
@@ -27,7 +27,7 @@ const UserSchema: Schema = new Schema({
     githubConnectedAt: { type: Date },
     canVerifyTasks: { type: Boolean, default: false },
     passwordHash: { type: String, required: true },
-    role: { type: String, enum: ['admin', 'manager', 'member', 'client'], default: 'member' },
+    role: { type: String, enum: ['admin', 'manager', 'member', 'client', 'client_assistant'], default: 'member' },
     clientId: { type: Schema.Types.ObjectId, ref: 'Client' },
     firstName: { type: String, required: true },
     lastName: { type: String, required: true },

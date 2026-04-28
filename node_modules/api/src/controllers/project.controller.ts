@@ -21,7 +21,7 @@ const hasAnyKeyOutsideAllowList = (payload: Record<string, any>, allowed: readon
 const sanitizeProjectForViewer = (project: any, role?: string) => {
     const obj = typeof project?.toObject === 'function' ? project.toObject() : project;
     if (role === 'admin') return obj;
-    if (role === 'client') {
+    if (role === 'client' || role === 'client_assistant') {
         const { devWebsiteUrl, accessAccounts, ...rest } = obj || {};
         return rest;
     }
@@ -33,7 +33,7 @@ const ensureProjectAccess = (project: any, user: AuthRequest['user']) => {
     if (!project || !user) return false;
     if (user.role === 'admin') return true;
     if (user.role === 'client') return project.clientId?.toString?.() === user.clientId;
-    if (user.role === 'manager' || user.role === 'member') {
+    if (user.role === 'manager' || user.role === 'member' || user.role === 'client_assistant') {
         return project.members?.some?.((member: any) => member?.toString?.() === user.userId);
     }
     return false;
