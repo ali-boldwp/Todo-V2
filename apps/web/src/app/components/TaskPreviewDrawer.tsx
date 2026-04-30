@@ -81,6 +81,7 @@ interface TaskPreviewDrawerProps {
 export function TaskPreviewDrawer({ isOpen, onClose, task }: TaskPreviewDrawerProps) {
   const queryClient = useQueryClient();
   const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const isClientOrAssistant = user?.role === 'client' || user?.role === 'client_assistant';
   const [description, setDescription] = useState<OutputData>(task?.description || { blocks: [] });
   const [prevTaskId, setPrevTaskId] = useState(task?._id);
@@ -198,9 +199,6 @@ export function TaskPreviewDrawer({ isOpen, onClose, task }: TaskPreviewDrawerPr
 
   const { data: teamMembers = [] } = useQuery({ queryKey: ['teamMembers'], queryFn: getTeamMembers });
   const { data: projects = [] } = useQuery({ queryKey: ['projects'], queryFn: getProjects });
-  const { user: currentUser } = useAuth();
-  const isAdmin = currentUser?.role === 'admin';
-  const isClientOrAssistant = currentUser?.role === 'client' || currentUser?.role === 'client_assistant';
 
   const deleteMutation = useMutation({
     mutationFn: () => deleteTask(task._id),
@@ -536,7 +534,6 @@ export function TaskPreviewDrawer({ isOpen, onClose, task }: TaskPreviewDrawerPr
 
   if (!task) return null;
 
-  const isClientOrAssistant = user?.role === 'client' || user?.role === 'client_assistant';
   const assignee = [...teamMembers, ...(isClientOrAssistant && user ? [{ _id: user.id, firstName: user.firstName, lastName: user.lastName }] : [])]
     .find((m: any) => m._id === task.assigneeId?._id || m._id === task.assigneeId);
   const verifier = teamMembers.find((m: any) => m._id === task.verifierId?._id || m._id === task.verifierId);
