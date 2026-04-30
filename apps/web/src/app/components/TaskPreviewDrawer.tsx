@@ -26,9 +26,9 @@ import {
   Plus,
 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '../../context/AuthContext';
 import { getProjects } from '../../services/core';
 import { getTeamMembers } from '../../services/team';
-import { useAuth } from '../../context/AuthContext';
 import { startTaskWork, pauseTaskWork, resumeTaskWork, finishTaskWork, updateTask, approveTaskClient, rejectTaskClient, deleteTask, approveTaskVerification, rejectTaskVerification, startTaskVerification, pauseTaskVerification, resumeTaskVerification, uploadAttachment, deleteAttachment } from '../../services/task';
 import { OutputData } from '@editorjs/editorjs';
 import { CodexTaskChat } from './CodexTaskChat';
@@ -80,6 +80,8 @@ interface TaskPreviewDrawerProps {
 
 export function TaskPreviewDrawer({ isOpen, onClose, task }: TaskPreviewDrawerProps) {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const isClientOrAssistant = user?.role === 'client' || user?.role === 'client_assistant';
   const [description, setDescription] = useState<OutputData>(task?.description || { blocks: [] });
   const [prevTaskId, setPrevTaskId] = useState(task?._id);
   const [isTaskRunning, setIsTaskRunning] = useState(task?.activeWorkerId ? true : false);
@@ -534,7 +536,9 @@ export function TaskPreviewDrawer({ isOpen, onClose, task }: TaskPreviewDrawerPr
 
   if (!task) return null;
 
-  const assignee = teamMembers.find((m: any) => m._id === task.assigneeId?._id || m._id === task.assigneeId);
+  const isClientOrAssistant = user?.role === 'client' || user?.role === 'client_assistant';
+  const assignee = [...teamMembers, ...(isClientOrAssistant && user ? [{ _id: user.id, firstName: user.firstName, lastName: user.lastName }] : [])]
+    .find((m: any) => m._id === task.assigneeId?._id || m._id === task.assigneeId);
   const verifier = teamMembers.find((m: any) => m._id === task.verifierId?._id || m._id === task.verifierId);
   const project = projects.find((p: any) => p._id === task.projectId?._id || p._id === task.projectId);
 
@@ -683,7 +687,7 @@ export function TaskPreviewDrawer({ isOpen, onClose, task }: TaskPreviewDrawerPr
             </div>
             <div className="w-2/3 flex items-center">
               {assignee ? (
-                isClientOrAssistant ? (
+                isClientOrAssistant && (task.assigneeId?._id || task.assigneeId) !== user?.id ? (
                   <span className="text-sm font-medium text-slate-700">Development Team</span>
                 ) : (
                   <div className="inline-flex items-center gap-2 px-2 py-1 rounded-md hover:bg-slate-200 transition-colors cursor-pointer -ml-2">
@@ -707,7 +711,7 @@ export function TaskPreviewDrawer({ isOpen, onClose, task }: TaskPreviewDrawerPr
             </div>
             <div className="w-2/3 flex items-center">
               {verifier ? (
-                isClientOrAssistant ? (
+                isClientOrAssistant && (task.verifierId?._id || task.verifierId) !== user?.id ? (
                   <span className="text-sm font-medium text-slate-700">Development Team</span>
                 ) : (
                   <div className="inline-flex items-center gap-2 px-2 py-1 rounded-md hover:bg-slate-200 transition-colors cursor-pointer -ml-2">

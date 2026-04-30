@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { X, Save, Loader2 } from 'lucide-react';
 import { createTask, updateTask } from '../../services/task';
 import { getTeamMembers } from '../../services/team';
 import RichTextEditor from './RichTextEditor';
 import { OutputData } from '@editorjs/editorjs';
+import { useAuth } from '../../context/AuthContext';
 
 interface CreateTaskDrawerProps {
     isOpen: boolean;
@@ -36,11 +37,32 @@ export function CreateTaskDrawer({ isOpen, onClose, task, initialProjectId, init
     const [estimatedHours, setEstimatedHours] = useState('');
     const [description, setDescription] = useState<OutputData | any>({ blocks: [] });
 
+    const { user: currentUser } = useAuth();
+
     const { data: teamMembers = [] } = useQuery({
         queryKey: ['teamMembers'],
         queryFn: getTeamMembers,
         enabled: isOpen,
     });
+
+    const assignableUsers = useMemo(() => {
+        const isClientOrAssistant = currentUser?.role === 'client' || currentUser?.role === 'client_assistant';
+        const inList = teamMembers.some((m: any) => m._id === currentUser?.id);
+        
+        if (isClientOrAssistant && !inList && currentUser) {
+            return [
+                ...teamMembers,
+                {
+                    _id: currentUser.id,
+                    firstName: currentUser.firstName || 'Me',
+                    lastName: currentUser.lastName || '',
+                    email: currentUser.email,
+                    role: currentUser.role
+                }
+            ];
+        }
+        return teamMembers;
+    }, [teamMembers, currentUser]);
 
     // Populate form when editing
     useEffect(() => {
@@ -190,9 +212,9 @@ export function CreateTaskDrawer({ isOpen, onClose, task, initialProjectId, init
                                     className="w-full h-10 px-3 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-400 bg-white"
                                 >
                                     <option value="">Unassigned</option>
-                                    {teamMembers.map((m: any) => (
+                                    {assignableUsers.map((m: any) => (
                                         <option key={m._id} value={m._id}>
-                                            {m.firstName} {m.lastName}
+                                            {m.firstName} {m.lastName} {m._id === currentUser?.id ? '(Me)' : ''}
                                         </option>
                                     ))}
                                 </select>

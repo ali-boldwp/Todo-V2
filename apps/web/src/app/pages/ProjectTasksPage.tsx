@@ -273,7 +273,7 @@ export function ProjectTasksPage() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         {task.assigneeId ? (
-                          isClientOrAssistant ? (
+                          isClientOrAssistant && task.assigneeId._id !== user?.id ? (
                             <span className="text-sm text-slate-600 font-medium">Development Team</span>
                           ) : (
                             <div className="flex items-center gap-2">
@@ -418,7 +418,7 @@ export function ProjectTasksPage() {
                                 {/* Assignee */}
                                 {task.assigneeId && (
                                   <div className="flex items-center gap-1.5">
-                                    {isClientOrAssistant ? (
+                                    {isClientOrAssistant && task.assigneeId._id !== user?.id ? (
                                       <span className="text-xs text-slate-500 font-medium">Development Team</span>
                                     ) : (
                                       <>

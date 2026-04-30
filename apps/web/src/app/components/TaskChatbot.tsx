@@ -327,7 +327,9 @@ export function TaskChatbot({ isOpen, onClose, onTaskCreated, initialProjectId }
     }
   };
 
-  const assignee = teamMembers.find((member: any) => member._id === taskDraft.assigneeId);
+  const isClientOrAssistant = user?.role === 'client' || user?.role === 'client_assistant';
+  const assignee = [...teamMembers, ...(isClientOrAssistant && user ? [{ _id: user.id, firstName: user.firstName, lastName: user.lastName }] : [])]
+    .find((member: any) => member._id === taskDraft.assigneeId);
   const project = projects.find((item: any) => item._id === selectedProjectId);
 
   return (
