@@ -490,6 +490,7 @@ export function PremiumLayout() {
 
       {selectedVerificationTask && (
         <TaskPreviewDrawer
+          key={selectedVerificationTask?._id}
           isOpen={!!selectedVerificationTask}
           onClose={() => setSelectedVerificationTask(null)}
           task={selectedVerificationTask}

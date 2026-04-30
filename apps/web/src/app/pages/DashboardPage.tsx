@@ -279,9 +279,13 @@ export function DashboardPage() {
       </button>
       
       <TaskPreviewDrawer
+        key={selectedTask?._id}
         task={selectedTask}
         isOpen={isDrawerOpen}
-        onClose={() => setIsDrawerOpen(false)}
+        onClose={() => {
+          setIsDrawerOpen(false);
+          setSelectedTask(null);
+        }}
       />
       <TaskChatbot
         isOpen={isChatbotOpen}

@@ -357,6 +357,7 @@ export function VerificationsPage() {
 
         {/* Task Detail Modal */}
         <TaskPreviewDrawer
+          key={selectedTask?._id}
           task={selectedTask}
           isOpen={!!selectedTask}
           onClose={() => setSelectedTask(null)}

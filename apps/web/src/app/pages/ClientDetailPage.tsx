@@ -811,6 +811,7 @@ export function ClientDetailPage() {
 
             {/* Task Preview Drawer */}
             <TaskPreviewDrawer
+                key={selectedTask?._id}
                 task={selectedTask}
                 isOpen={!!selectedTask}
                 onClose={() => setSelectedTask(null)}

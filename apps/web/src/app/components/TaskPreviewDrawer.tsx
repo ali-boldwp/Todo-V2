@@ -81,13 +81,30 @@ interface TaskPreviewDrawerProps {
 export function TaskPreviewDrawer({ isOpen, onClose, task }: TaskPreviewDrawerProps) {
   const queryClient = useQueryClient();
   const [description, setDescription] = useState<OutputData>(task?.description || { blocks: [] });
+  const [prevTaskId, setPrevTaskId] = useState(task?._id);
   const [isTaskRunning, setIsTaskRunning] = useState(task?.activeWorkerId ? true : false);
   const [isPaused, setIsPaused] = useState(task?.isWorkPaused || false);
   const [localSeconds, setLocalSeconds] = useState<number>(task?.totalWorkedSecondsComputed || task?.totalWorkedSeconds || 0);
 
+  // Sync state if task changes while component is mounted
+  if (task?._id !== prevTaskId) {
+    setPrevTaskId(task?._id);
+    setDescription(task?.description || { blocks: [] });
+    setIsTaskRunning(task?.activeWorkerId ? true : false);
+    setIsPaused(task?.isWorkPaused || false);
+    setLocalSeconds(task?.totalWorkedSecondsComputed || task?.totalWorkedSeconds || 0);
+  }
+
   const [isVerificationRunning, setIsVerificationRunning] = useState(task?.activeVerifierId ? true : false);
   const [isVerificationPausedState, setIsVerificationPausedState] = useState(task?.isVerificationPaused || false);
   const [localVerificationSeconds, setLocalVerificationSeconds] = useState<number>(task?.totalVerificationSeconds || 0);
+
+  // Sync verification state if task changes
+  if (task?._id !== prevTaskId) {
+    setIsVerificationRunning(task?.activeVerifierId ? true : false);
+    setIsVerificationPausedState(task?.isVerificationPaused || false);
+    setLocalVerificationSeconds(task?.totalVerificationSeconds || 0);
+  }
 
   const [isClarificationModalOpen, setIsClarificationModalOpen] = useState(false);
   const [clarificationText, setClarificationText] = useState('');

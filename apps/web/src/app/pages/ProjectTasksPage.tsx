@@ -485,9 +485,13 @@ export function ProjectTasksPage() {
 
       {/* Task Preview Drawer */}
       <TaskPreviewDrawer
+        key={selectedTask?._id}
         task={selectedTask}
         isOpen={isDrawerOpen}
-        onClose={() => setIsDrawerOpen(false)}
+        onClose={() => {
+          setIsDrawerOpen(false);
+          setSelectedTask(null);
+        }}
       />
 
       {/* Create Task Drawer */}
