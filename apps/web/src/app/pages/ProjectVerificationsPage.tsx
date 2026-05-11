@@ -39,13 +39,13 @@ export function ProjectVerificationsPage() {
     });
 
     if (isLoading) return <div className="p-6 text-sm text-gray-500">Loading verifications...</div>;
-    if (!['admin', 'manager', 'member', 'client'].includes(user?.role || '')) {
+    if (!['admin', 'manager', 'member', 'client', 'client_assistant'].includes(user?.role || '')) {
         return <div className="p-6 text-sm text-gray-500">You do not have access to verifications.</div>;
     }
 
     const getId = (value: any) => value?._id?.toString?.() || value?.toString?.() || '';
     const myId = user?.id?.toString?.() || '';
-    const canSeeAll = user?.role === 'admin' || user?.role === 'client';
+    const canSeeAll = user?.role === 'admin' || user?.role === 'client' || user?.role === 'client_assistant';
     const isRelatedToMe = (task: any) => {
         if (canSeeAll) return true;
 
@@ -58,14 +58,29 @@ export function ProjectVerificationsPage() {
     };
 
     const pending = tasks.filter((task: any) => {
-        const isVerificationTask = task?.verificationStatus === 'pending' || task?.status === 'under_verification';
+        const isVerificationTask = (user?.role === 'client' || user?.role === 'client_assistant')
+            ? task?.status === 'client_approval' || task?.clientApprovalStatus === 'pending'
+            : task?.verificationStatus === 'pending' || task?.status === 'under_verification';
         return isVerificationTask && isRelatedToMe(task);
     });
     const latestApproved = tasks
-        .filter((task: any) => task?.verificationStatus === 'approved' && isRelatedToMe(task))
+        .filter((task: any) => {
+            const isApproved = (user?.role === 'client' || user?.role === 'client_assistant')
+                ? task?.clientApprovalStatus === 'approved'
+                : task?.verificationStatus === 'approved';
+            return isApproved && isRelatedToMe(task);
+        })
         .sort((a: any, b: any) => {
-            const aTime = new Date(a?.verificationDecidedAt || a?.updatedAt || 0).getTime();
-            const bTime = new Date(b?.verificationDecidedAt || b?.updatedAt || 0).getTime();
+            const aTime = new Date(
+                (user?.role === 'client' || user?.role === 'client_assistant')
+                    ? a?.clientApprovalDecidedAt || a?.updatedAt || 0
+                    : a?.verificationDecidedAt || a?.updatedAt || 0
+            ).getTime();
+            const bTime = new Date(
+                (user?.role === 'client' || user?.role === 'client_assistant')
+                    ? b?.clientApprovalDecidedAt || b?.updatedAt || 0
+                    : b?.verificationDecidedAt || b?.updatedAt || 0
+            ).getTime();
             return bTime - aTime;
         })
         .slice(0, 12);
@@ -136,8 +151,8 @@ export function ProjectVerificationsPage() {
                         {latestApproved.map((task: any) => (
                             <div key={`approved-${task._id}`} className="border border-gray-200 rounded-lg p-4 bg-white h-full">
                                 <h3 className="text-sm font-semibold text-gray-900">{task.title}</h3>
-                                <p className="text-xs text-gray-500 mt-1">Verified by: {getUserLabel(task?.verifierId)}</p>
-                                <p className="text-xs text-gray-500 mt-1">Verified at: {formatDateTime(task?.verificationDecidedAt || task?.updatedAt)}</p>
+                                <p className="text-xs text-gray-500 mt-1">Verified by: {(user?.role === 'client' || user?.role === 'client_assistant') ? 'Client' : getUserLabel(task?.verifierId)}</p>
+                                <p className="text-xs text-gray-500 mt-1">Verified at: {formatDateTime((user?.role === 'client' || user?.role === 'client_assistant') ? (task?.clientApprovalDecidedAt || task?.updatedAt) : (task?.verificationDecidedAt || task?.updatedAt))}</p>
                             </div>
                         ))}
                     </div>

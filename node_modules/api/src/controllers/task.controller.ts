@@ -187,7 +187,7 @@ const hasTaskAccess = async (task: any, user?: { userId: string; role: string; c
     if (!task || !user) return false;
     if (user.role === 'admin') return true;
     if (!task.projectId) return false;
-    if (user.role === 'client') {
+    if (user.role === 'client' || user.role === 'client_assistant') {
         const project = await Project.findOne({ _id: task.projectId, clientId: user.clientId }).select('_id').lean();
         return Boolean(project);
     }
@@ -673,7 +673,7 @@ export const getTasks = async (req: AuthRequest, res: Response) => {
             // Admin sees all tasks (optionally filtered by project)
             if (projectId) query.projectId = projectId;
 
-        } else if (req.user!.role === 'client') {
+        } else if ((req.user!.role === 'client' || req.user!.role === 'client_assistant')) {
             // Clients are linked to projects via clientId, not members[]
             const clientProjects = await Project.find({ clientId: req.user!.clientId }).select('_id');
             const allowedProjectIds = clientProjects.map(p => p._id);

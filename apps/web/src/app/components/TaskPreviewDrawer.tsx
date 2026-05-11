@@ -1192,7 +1192,7 @@ export function TaskPreviewDrawer({ isOpen, onClose, task }: TaskPreviewDrawerPr
         )}
 
         {/* Action Buttons (Client Approval) */}
-        {task.status === 'client_approval' && (currentUser?.role === 'client' || currentUser?.role === 'client_assistant' || currentUser?.role === 'admin') && (
+        {task.status === 'client_approval' && (user?.role === 'client' || user?.role === 'client_assistant' || user?.role === 'admin') && (
           <div className="pt-6 border-t-2 border-slate-200">
             <label className="text-xs font-bold text-pink-600 uppercase tracking-wide mb-3 block">
               Client Approval Required

@@ -63,7 +63,7 @@ export function VerificationsPage() {
 
   const getId = (value: any) => value?._id?.toString?.() || value?.toString?.() || '';
   const myId = user?.id?.toString?.() || '';
-  const canSeeAll = user?.role === 'admin' || user?.role === 'client';
+  const canSeeAll = user?.role === 'admin' || user?.role === 'client' || user?.role === 'client_assistant';
 
   const matchesProjectFilter = (task: any) => {
     if (selectedProjectId === 'all') return true;
@@ -83,7 +83,7 @@ export function VerificationsPage() {
   };
 
   const pending = mockTasks.filter((task: any) => {
-    const isVerificationTask = user?.role === 'client'
+    const isVerificationTask = (user?.role === 'client' || user?.role === 'client_assistant')
       ? task?.status === 'client_approval' || task?.clientApprovalStatus === 'pending'
       : task?.verificationStatus === 'pending' || task?.status === 'under_verification';
     return isVerificationTask && isRelatedToMe(task) && matchesProjectFilter(task);
@@ -92,23 +92,23 @@ export function VerificationsPage() {
   const latestApproved = mockTasks
     .filter(
       (task: any) => {
-        const isApproved = user?.role === 'client'
+        const isApproved = (user?.role === 'client' || user?.role === 'client_assistant')
           ? task?.clientApprovalStatus === 'approved'
           : task?.verificationStatus === 'approved';
         return isApproved && isRelatedToMe(task) && matchesProjectFilter(task);
       }
     )
     .sort((a: any, b: any) => {
-      const aTime = new Date(
-        user?.role === 'client'
-          ? a?.clientApprovalDecidedAt || a?.updatedAt || 0
-          : a?.verificationDecidedAt || a?.updatedAt || 0
-      ).getTime();
-      const bTime = new Date(
-        user?.role === 'client'
-          ? b?.clientApprovalDecidedAt || b?.updatedAt || 0
-          : b?.verificationDecidedAt || b?.updatedAt || 0
-      ).getTime();
+        const aTime = new Date(
+          (user?.role === 'client' || user?.role === 'client_assistant')
+            ? a?.clientApprovalDecidedAt || a?.updatedAt || 0
+            : a?.verificationDecidedAt || a?.updatedAt || 0
+        ).getTime();
+        const bTime = new Date(
+          (user?.role === 'client' || user?.role === 'client_assistant')
+            ? b?.clientApprovalDecidedAt || b?.updatedAt || 0
+            : b?.verificationDecidedAt || b?.updatedAt || 0
+        ).getTime();
       return bTime - aTime;
     })
     .slice(0, 12);
@@ -339,12 +339,12 @@ export function VerificationsPage() {
                       </div>
                       <div className="flex items-center gap-2">
                         <User className="w-4 h-4 text-slate-400" />
-                        <span>Verified by: {user?.role === 'client' ? 'Client' : getUserLabel(task?.verifierId)}</span>
+                        <span>Verified by: {(user?.role === 'client' || user?.role === 'client_assistant') ? 'Client' : getUserLabel(task?.verifierId)}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <Clock className="w-4 h-4 text-slate-400" />
                         <span>
-                          {formatDateTime(user?.role === 'client' ? (task?.clientApprovalDecidedAt || task?.updatedAt) : (task?.verificationDecidedAt || task?.updatedAt))}
+                          {formatDateTime((user?.role === 'client' || user?.role === 'client_assistant') ? (task?.clientApprovalDecidedAt || task?.updatedAt) : (task?.verificationDecidedAt || task?.updatedAt))}
                         </span>
                       </div>
                     </div>

@@ -32,7 +32,7 @@ const sanitizeProjectForViewer = (project: any, role?: string) => {
 const ensureProjectAccess = (project: any, user: AuthRequest['user']) => {
     if (!project || !user) return false;
     if (user.role === 'admin') return true;
-    if (user.role === 'client') return project.clientId?.toString?.() === user.clientId;
+    if (user.role === 'client' || user.role === 'client_assistant') return project.clientId?.toString?.() === user.clientId;
     if (user.role === 'manager' || user.role === 'member' || user.role === 'client_assistant') {
         return project.members?.some?.((member: any) => member?.toString?.() === user.userId);
     }
@@ -129,7 +129,7 @@ export const getProjects = async (req: AuthRequest, res: Response) => {
         const query: any = {};
 
         if (req.user!.role !== 'admin') {
-            if (req.user!.role === 'client' && req.user!.clientId) {
+            if ((req.user!.role === 'client' || req.user!.role === 'client_assistant') && req.user!.clientId) {
                 query.clientId = req.user!.clientId;
             } else {
                 // manager/member: only projects they are explicitly assigned to
@@ -223,7 +223,7 @@ export const getProject = async (req: AuthRequest, res: Response) => {
         const query: any = { _id: req.params.id };
 
         if (req.user!.role !== 'admin') {
-            if (req.user!.role === 'client') {
+            if (req.user!.role === 'client' || req.user!.role === 'client_assistant') {
                 query.clientId = req.user!.clientId;
             } else {
                 query.members = req.user!.userId;

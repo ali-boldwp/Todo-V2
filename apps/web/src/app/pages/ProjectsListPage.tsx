@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router';
-import { useQuery } from '@tanstack/react-query';
-import { getProjects } from '../../services/core';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { getProjects, getClients, createProject } from '../../services/core';
+import { useAuth } from '../../context/AuthContext';
 import {
   FolderKanban,
   Plus,
@@ -10,13 +11,63 @@ import {
   Users,
   Calendar,
   Flag,
+  X,
+  Loader2,
 } from 'lucide-react';
+
+const EMPTY_FORM = {
+  name: '',
+  clientId: '',
+  status: 'active' as const,
+  priority: 'medium' as const,
+  startDate: '',
+  endDate: '',
+};
 
 export function ProjectsListPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [form, setForm] = useState({ ...EMPTY_FORM });
+  const [formError, setFormError] = useState('');
+
+  const canCreateProject = user?.role === 'admin' || user?.role === 'client';
 
   const { data: projects = [] } = useQuery({ queryKey: ['projects'], queryFn: getProjects });
+  const { data: clients = [] } = useQuery({
+    queryKey: ['clients'],
+    queryFn: getClients,
+    enabled: user?.role === 'admin',
+  });
+
+  const createMutation = useMutation({
+    mutationFn: createProject,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      setIsModalOpen(false);
+      setForm({ ...EMPTY_FORM });
+      setFormError('');
+    },
+    onError: (err: any) => {
+      setFormError(err?.response?.data?.message || 'Failed to create project');
+    },
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setFormError('');
+    if (!form.name.trim()) { setFormError('Project name is required'); return; }
+    createMutation.mutate({
+      name: form.name.trim(),
+      clientId: form.clientId || undefined,
+      status: form.status,
+      priority: form.priority,
+      startDate: form.startDate || undefined,
+      endDate: form.endDate || undefined,
+    } as any);
+  };
 
   const filteredProjects = projects.filter((project: any) =>
     project.name?.toLowerCase().includes(searchTerm.toLowerCase())
@@ -62,10 +113,15 @@ export function ProjectsListPage() {
                 Manage and organize all your projects in one place
               </p>
             </div>
-            <button className="h-11 px-6 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-semibold flex items-center gap-2 shadow-md hover:shadow-lg transition-all">
-              <Plus size={18} strokeWidth={2.5} />
-              New Project
-            </button>
+            {canCreateProject && (
+              <button
+                onClick={() => { setIsModalOpen(true); setForm({ ...EMPTY_FORM }); setFormError(''); }}
+                className="h-11 px-6 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white font-semibold flex items-center gap-2 shadow-md hover:shadow-lg transition-all"
+              >
+                <Plus size={18} strokeWidth={2.5} />
+                New Project
+              </button>
+            )}
           </div>
 
           {/* Search Bar */}
@@ -243,16 +299,148 @@ export function ProjectsListPage() {
 
       <style>{`
         @keyframes fadeIn {
-          from {
-            opacity: 0;
-            transform: translateY(15px);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0);
-          }
+          from { opacity: 0; transform: translateY(15px); }
+          to   { opacity: 1; transform: translateY(0); }
         }
       `}</style>
     </div>
+
+    {/* ── Create Project Modal ── */}
+    {isModalOpen && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+        <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg">
+          {/* Header */}
+          <div className="flex items-center justify-between p-6 border-b border-slate-100">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center">
+                <FolderKanban className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">New Project</h2>
+                <p className="text-sm text-slate-500">Fill in the details to get started</p>
+              </div>
+            </div>
+            <button
+              onClick={() => setIsModalOpen(false)}
+              className="p-2 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Form */}
+          <form onSubmit={handleSubmit} className="p-6 space-y-5">
+
+            {/* Project Name */}
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-1.5">Project Name <span className="text-rose-500">*</span></label>
+              <input
+                type="text"
+                value={form.name}
+                onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                placeholder="e.g. E-Commerce Platform"
+                className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-200 focus:border-indigo-400 focus:outline-none text-sm text-slate-800 placeholder:text-slate-400 transition-colors"
+                autoFocus
+              />
+            </div>
+
+            {/* Client (admin only) */}
+            {user?.role === 'admin' && (
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">Client</label>
+                <select
+                  value={form.clientId}
+                  onChange={e => setForm(f => ({ ...f, clientId: e.target.value }))}
+                  className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-200 focus:border-indigo-400 focus:outline-none text-sm text-slate-800 bg-white transition-colors"
+                >
+                  <option value="">No client</option>
+                  {(clients as any[]).map((c: any) => (
+                    <option key={c._id} value={c._id}>{c.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Status + Priority */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">Status</label>
+                <select
+                  value={form.status}
+                  onChange={e => setForm(f => ({ ...f, status: e.target.value as any }))}
+                  className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-200 focus:border-indigo-400 focus:outline-none text-sm text-slate-800 bg-white transition-colors"
+                >
+                  <option value="active">Active</option>
+                  <option value="draft">Draft</option>
+                  <option value="on_hold">On Hold</option>
+                  <option value="completed">Completed</option>
+                  <option value="archived">Archived</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">Priority</label>
+                <select
+                  value={form.priority}
+                  onChange={e => setForm(f => ({ ...f, priority: e.target.value as any }))}
+                  className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-200 focus:border-indigo-400 focus:outline-none text-sm text-slate-800 bg-white transition-colors"
+                >
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Dates */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">Start Date</label>
+                <input
+                  type="date"
+                  value={form.startDate}
+                  onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))}
+                  className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-200 focus:border-indigo-400 focus:outline-none text-sm text-slate-800 bg-white transition-colors"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold text-slate-700 mb-1.5">End Date</label>
+                <input
+                  type="date"
+                  value={form.endDate}
+                  onChange={e => setForm(f => ({ ...f, endDate: e.target.value }))}
+                  className="w-full px-4 py-2.5 rounded-xl border-2 border-slate-200 focus:border-indigo-400 focus:outline-none text-sm text-slate-800 bg-white transition-colors"
+                />
+              </div>
+            </div>
+
+            {/* Error */}
+            {formError && (
+              <div className="px-4 py-3 rounded-xl bg-rose-50 border border-rose-200 text-sm text-rose-700 font-medium">
+                {formError}
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex justify-end gap-3 pt-1">
+              <button
+                type="button"
+                onClick={() => setIsModalOpen(false)}
+                disabled={createMutation.isPending}
+                className="px-5 py-2.5 rounded-xl border-2 border-slate-200 text-slate-600 text-sm font-semibold hover:bg-slate-50 transition-colors disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={createMutation.isPending}
+                className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-700 hover:to-purple-700 text-white text-sm font-semibold shadow-md hover:shadow-lg transition-all disabled:opacity-50 flex items-center gap-2"
+              >
+                {createMutation.isPending ? <><Loader2 className="w-4 h-4 animate-spin" /> Creating...</> : <><Plus className="w-4 h-4" /> Create Project</>}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    )}
   );
 }
