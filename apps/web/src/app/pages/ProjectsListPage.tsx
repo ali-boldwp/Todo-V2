@@ -100,6 +100,7 @@ export function ProjectsListPage() {
   };
 
   return (
+    <>
     <div className="min-h-full p-8">
       <div className="max-w-7xl mx-auto">
         {/* Page Header */}
@@ -442,5 +443,5 @@ export function ProjectsListPage() {
         </div>
       </div>
     )}
-  );
+  </>);
 }
