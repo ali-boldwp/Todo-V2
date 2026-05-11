@@ -673,8 +673,8 @@ export const getTasks = async (req: AuthRequest, res: Response) => {
             // Admin sees all tasks (optionally filtered by project)
             if (projectId) query.projectId = projectId;
 
-        } else if ((req.user!.role === 'client' || req.user!.role === 'client_assistant')) {
-            // Clients are linked to projects via clientId, not members[]
+        } else if (req.user!.role === 'client') {
+            // Client sees tasks from all projects under their clientId
             const clientProjects = await Project.find({ clientId: req.user!.clientId }).select('_id');
             const allowedProjectIds = clientProjects.map(p => p._id);
 
@@ -687,7 +687,7 @@ export const getTasks = async (req: AuthRequest, res: Response) => {
             }
 
         } else {
-            // manager/member: projects where they are in members[]
+            // manager / member / client_assistant: only projects in members[]
             const memberProjects = await Project.find({ members: req.user!.userId }).select('_id');
             const allowedProjectIds = memberProjects.map(p => p._id);
 
