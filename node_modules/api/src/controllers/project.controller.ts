@@ -129,10 +129,11 @@ export const getProjects = async (req: AuthRequest, res: Response) => {
         const query: any = {};
 
         if (req.user!.role !== 'admin') {
-            if ((req.user!.role === 'client' || req.user!.role === 'client_assistant') && req.user!.clientId) {
+            if (req.user!.role === 'client' && req.user!.clientId) {
+                // Client sees all projects belonging to their account
                 query.clientId = req.user!.clientId;
             } else {
-                // manager/member: only projects they are explicitly assigned to
+                // manager / member / client_assistant: only explicitly assigned projects
                 query.members = req.user!.userId;
             }
         }
