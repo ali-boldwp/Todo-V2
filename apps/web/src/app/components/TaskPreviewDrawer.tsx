@@ -199,8 +199,7 @@ export function TaskPreviewDrawer({ isOpen, onClose, task }: TaskPreviewDrawerPr
 
   const { data: teamMembers = [] } = useQuery({ queryKey: ['teamMembers'], queryFn: getTeamMembers });
   const { data: projects = [] } = useQuery({ queryKey: ['projects'], queryFn: getProjects });
-  const { user: currentUser } = useAuth();
-  const isAdmin = currentUser?.role === 'admin';
+  const currentUser = user;
 
   const deleteMutation = useMutation({
     mutationFn: () => deleteTask(task._id),
